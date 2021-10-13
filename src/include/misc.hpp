@@ -21,6 +21,18 @@ void applyHt(bool inv, bool add, const data_t * in, data_t * out, int nx, int nt
 // The adjoint here is actually Ht^-1.Dt^T.Ht in reverse time, to be used in adjoint wave propagation only
 void Dt(bool adj, bool add, const data_t * in, data_t * out, int nx, int nt, data_t dt, int ixmin, int ixmax);
 
+// normalize a data trace by trace, store the norms in a vector
+void ttnormalize(data_t * d, data_t * norms, int nt, int ntr, data_t zero=1e-16);
+
+// compute the Hilbert transform of a group of traces
+void hilbert(std::shared_ptr<vecReg<data_t> > input);
+
+// compute the envelop of a signal
+void envelop1(std::shared_ptr<vecReg<data_t> > in);
+
+// compute the envelop squared of a signal
+void envelop2(std::shared_ptr<vecReg<data_t> > in);
+
 // Perform in-place LU factorization without pivoting
 // The size of the matrix A is n x n, stored in column major
 // L has 1s on the diagonal

@@ -278,35 +278,79 @@ public:
     }
 };
 
-// Non-linear least-squares problem with time quadrature, data weighting and gradient mask for FWI: f(m)=1/2.(L(m)-d)'.W'.Ht.W.(L(m)-d)
+// Non-linear least-squares problem with time quadrature, data weighting and gradient mask for FWI
+// f(m)=1/2.(L(m)-d)'.Ht.(L(m)-d) = 1/2.r'.Ht.r
+// optionally other functional may be considered:
+// 1) with weighting: r <- W.r
+// 2) with trace normalization: r <- (u/|u| - d/|d|) where u = L(m)
+// 3) envelop or envelop squared: r <- E(u) - E(d)
 class nlls_fwi : public optimization{
 protected:
     nloper * _L; // non-linear WE operator
     std::shared_ptr<vecReg<data_t> > _gmask; // gradient mask vector
     std::shared_ptr<vecReg<data_t> > _w; // residual weighting vector
+    bool _normalize; // apply or not trace normalization
+    std::shared_ptr<vecReg<data_t> > _norms; // traces norm needed for the Jacobian of the normalization
+    std::shared_ptr<vecReg<data_t> > _syn1; // synthetic data needed for the Jacobian of the normalization
+    int _envelop; // compute or not the envelop (or envelop squared) of the data
+    std::shared_ptr<vecReg<data_t> > _syn2; // synthetic data needed for the Jacobian of the envelop
 
 public:
     nlls_fwi(){}
     virtual ~nlls_fwi(){}
-    nlls_fwi(nloper * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr){
+    nlls_fwi(nloper * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr, bool normalize=false, int envelop=0){
        successCheck(L->checkDomainRange(m,d),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
         if (gmask != nullptr) {
             successCheck(m->getN123()==gmask->getN123(),__FILE__,__LINE__,"The gradient mask and model vectors must have the same size\n");
             successCheck(gmask->min()>=0,__FILE__,__LINE__,"Gradient mask must be non-negative\n");
         }
-        if (w != nullptr) successCheck(d->getN123()==w->getN123(),__FILE__,__LINE__,"The residual weighting and data vectors must have the same size\n");
+        if (w != nullptr) {
+            successCheck(d->getN123()==w->getN123(),__FILE__,__LINE__,"The weighting and data vectors must have the same size\n");
+            successCheck(w->min()>=0,__FILE__,__LINE__,"Data weights  must be non-negative\n");
+            _d->mult(w);
+        }
         _L = L;
         _m = m;
         _d = d;
         _gmask = gmask;
         _w = w;
+        _normalize=normalize;
+        if (envelop==1 || envelop==2) _envelop = envelop;
+        else _envelop=0;
+        if (_normalize) {
+            int nt=_d->getHyper()->getAxis(1).n;
+            int ntr=_d->getN123()/nt;
+            data_t * norms = new data_t[ntr];
+            ttnormalize(_d->getVals(), norms, nt, ntr);
+            delete [] norms;
+            _norms = std::make_shared<vecReg<data_t> >(hypercube<data_t>(ntr));
+            _syn1 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(_d->getN123()));
+        }
+        if (_envelop==1) envelop1(_d);
+        else if (_envelop==2) envelop2(_d);
+        if (_envelop!=0) _syn2 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(_d->getN123()));
     }
 
-    // W.(L(m) - d)
+    // r = (L(m) - d) = u - d or W.(u-d) or (u/|u|-d/|d|) or (E(u)-E(d)) 
     void res(){
         _L->forward(false,_m,_r);
-        _r->scaleAdd(_d,1,-1);
+
         if (_w != nullptr) _r->mult(_w);
+
+        if (_normalize){
+            int ntr = _norms->getN123();
+            int nt = _r->getN123()/ntr;
+            memcpy(_syn1->getVals(), _r->getVals(), _r->getN123()*sizeof(data_t));
+            ttnormalize(_r->getVals(), _norms->getVals(), nt, ntr);
+        }
+
+        if (_envelop != 0){
+            memcpy(_syn2->getVals(), _r->getVals(), _r->getN123()*sizeof(data_t));
+            if (_envelop==1) envelop1(_r);
+            else envelop2(_r);
+        }
+
+        _r->scaleAdd(_d,1,-1);
     }
     data_t getFunc(){
         int n123 = _r->getN123();
@@ -318,7 +362,10 @@ public:
         for (int i=0; i<nx; i++) f = f - 0.5*(pr[i*nt]*pr[i*nt] + pr[i*nt+nt-1]*pr[i*nt+nt-1]);
         return 0.5*dt*f;
     }
-    // (dL(m)/dm)'.W'.Ht.W.(Lm-d)
+    // (dL(m)/dm)'.Ht.r or (dL(m)/dm)'.W'.Ht.r
+    // or (dL(m)/dm)'.( I/||u|| - uu'/||u||^3 ).Ht.r  u = syn1
+    // or  (dL(m)/dm)'.[Diag(u/E(u)) - H.Diag((H.u)/E(u))].Ht.r for envelop or (dL(m)/dm)'.2[Diag(u) - H.Diag(H.u)].Ht.r for squared envelop
+    // H. is the Hilbert transform operator ; E is the envelop ; u = syn2
     void grad() {
         int n123 = _r->getN123();
         int nt = _r->getHyper()->getAxis(1).n;
@@ -327,8 +374,58 @@ public:
         std::shared_ptr<vecReg<data_t> > r = _r->clone();
         data_t * pr = r->getVals();
         applyHt(false, false, pr, pr, nx, nt, dt, 0, nx);
+
+        if (_envelop != 0){
+            std::shared_ptr<vecReg<data_t> > temp = _syn2->clone();
+            hilbert(temp);
+            std::shared_ptr<vecReg<data_t> > temp2;
+            data_t * ptemp = temp->getVals();
+            data_t * psyn = _syn2->getVals();
+            if (_envelop==1) {
+                temp2 = temp->clone();
+                data_t * ptemp2 = temp2->getVals();
+                for (int i=0; i<temp->getN123(); i++) {
+                    ptemp2[i] = std::max(ZERO,sqrt(ptemp[i]*ptemp[i]+psyn[i]*psyn[i]));
+                    ptemp[i] *= pr[i]/ptemp2[i];
+                }
+            }
+            else{
+                for (int i=0; i<temp->getN123(); i++) ptemp[i] *= pr[i];
+            }
+            hilbert(temp);
+            ptemp = temp->getVals();
+            if (_envelop==1) {
+                data_t * ptemp2 = temp2->getVals();
+                for (int i=0; i<temp->getN123(); i++) pr[i] = psyn[i]/ptemp2[i] * pr[i] - ptemp[i];
+            }
+            else {
+                for (int i=0; i<temp->getN123(); i++) pr[i] = 2*(psyn[i]*pr[i]-ptemp[i]);
+            }
+        }
+
+        if (_normalize){
+            int ntr = _norms->getN123();
+            int nt = _r->getN123()/ntr;
+            data_t * psyn = _syn1->getVals();
+            data_t * pnorm = _norms->getVals();
+            for (int ix=0; ix<ntr; ix++){
+                data_t val = 0;
+                int i;
+                for (int it=0; it<nt; it++){
+                    i = ix*nt+it;
+                    val += pr[i] * psyn[i]; // u'.r
+                }
+                for (int it=0; it<nt; it++){
+                    i = ix*nt+it;
+                    pr[i] = pr[i]/pnorm[ix] - val/(pnorm[ix]*pnorm[ix]*pnorm[ix]) * psyn[i];
+                }
+            }
+        }
+
         if (_w != nullptr) r->mult(_w);
+
         _L->jacobianT(false,_g,_m,r);
+
         if (_gmask != nullptr) _g->mult(_gmask);
     }
 };

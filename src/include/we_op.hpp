@@ -10,6 +10,9 @@ std::shared_ptr<vecReg<data_t> > analyzeWavelet(std::shared_ptr<vecReg<data_t> >
 // Analyze model, sources,, and receiver geomtery, as well as boundary conditions
 void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose=true);
 
+// Analyze model and modify as necessary
+void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par);
+
 // non-linear elastic wave equation operator: taking an elastic model and computing data
 class nl_we_op_e : virtual public nloper {
     
@@ -20,15 +23,14 @@ public:
 
     nl_we_op_e(){}
     virtual ~nl_we_op_e(){}
-    nl_we_op_e(const hypercube<data_t> &domain, const std::shared_ptr<vecReg<data_t> > src, param &par){
-        _allsrc = analyzeWavelet(src,par);
-        analyzeGeometry(domain,par);
+    nl_we_op_e(const hypercube<data_t> &domain, const std::shared_ptr<vecReg<data_t> > allsrc, param &par){
+        _allsrc = allsrc;
         _domain = domain;
         _par = par;
         axis<data_t> X(par.nr,0,1);
         axis<data_t> C(2,0,1);
         if (par.gl>0) C.n = 1;
-        _range = hypercube<data_t>(src->getHyper()->getAxis(1),X,C);
+        _range = hypercube<data_t>(allsrc->getHyper()->getAxis(1),X,C);
     }
     void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
         
@@ -48,7 +50,6 @@ public:
         nl_we_op_e * op = new nl_we_op_e(_domain,_allsrc,par);
         return op;
     }
-    void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par);
     
     // convert Vp, Vs, rho to lambda, mu, rho and vice versa
     // mu = rho.vs2
@@ -59,24 +60,12 @@ public:
 
     void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<vecReg<data_t> > dat) {
         successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
-        
-        std::shared_ptr<vecReg<data_t> > model = mod->clone();
-        analyzeModel(*_allsrc->getHyper(),model,_par);
-        convert_model(model->getVals(), model->getN123()/3, true);
-
-        if (_par.sub>0) _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2),axis<data_t>(2,0,1), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
-
-        apply_forward(add, model->getCVals(), dat->getVals());
+        apply_forward(add, mod->getCVals(), dat->getVals());
     }
     virtual void jacobianT(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > mod0, const std::shared_ptr<vecReg<data_t> > dat) {
         successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
         successCheck(mod->getHyper()->isCompatible(*mod0->getHyper()),__FILE__,__LINE__,"Input and background models hypercubes are not compatible\n");
-        
-        std::shared_ptr<vecReg<data_t> > model0 = mod0->clone();
-        analyzeModel(*_allsrc->getHyper(),model0,_par);
-        convert_model(model0->getVals(), model0->getN123()/3, true);
-        
-        apply_jacobianT(add, mod->getVals(), model0->getCVals(), dat->getCVals());
+        apply_jacobianT(add, mod->getVals(), mod0->getCVals(), dat->getCVals());
     }
     void apply_forward(bool add, const data_t * pmod, data_t * pdat);
     void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
@@ -92,8 +81,6 @@ public:
     virtual ~l_we_op_e(){}
     l_we_op_e(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par){
         _model = model->clone();
-        analyzeGeometry(*model->getHyper(),par);
-        analyzeModel(domain,_model,par);
         _par = par;
         convert_model(_model->getVals(), _model->getN123()/3, true);
         _domain = domain; // domain assumed to have come from the output of analyzeWavelet

@@ -190,7 +190,7 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
     }
 }
 
-void nl_we_op_e::analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par)
+void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par)
 {
     successCheck(model->getHyper()->getNdim()==3,__FILE__,__LINE__,"The model must have three axes\n");
     successCheck(model->getHyper()->getAxis(3).n==3,__FILE__,__LINE__,"The model must contain three parameters, Vp, Vs, and density\n");
@@ -666,6 +666,14 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 {
     if (_par.verbose) fprintf(stderr,"\n==========================\n Start forward propagation\n==========================\n");
 
+    std::shared_ptr<vecReg<data_t> > model = std::make_shared<vecReg<data_t> >(_domain);
+    memcpy(model->getVals(), pmod, _domain.getN123()*sizeof(data_t));
+    analyzeModel(*_allsrc->getHyper(),model,_par);
+    convert_model(model->getVals(), model->getN123()/3, true);
+    const data_t * pm = model->getCVals();
+
+    if (_par.sub>0) _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2),axis<data_t>(2,0,1), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
+
     int nx = _domain.getAxis(2).n;
     int nz = _domain.getAxis(1).n;
     data_t dx = _domain.getAxis(2).d;
@@ -720,7 +728,7 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         // perform the wave propagation
         data_t * full = nullptr;
         if (_par.sub>0) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
-        propagate(false, pmod, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
 
         if (_par.verbose) fprintf(stderr,"Finish propagating shot %d\n",s);
 
@@ -756,6 +764,12 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat)
 {
     if (_par.verbose) fprintf(stderr,"\n==========================\n Start adjoint propagation\n==========================\n");
+
+    std::shared_ptr<vecReg<data_t> > model0 = std::make_shared<vecReg<data_t> >(_domain);
+    memcpy(model0->getVals(), pmod0, _domain.getN123()*sizeof(data_t));
+    analyzeModel(*_allsrc->getHyper(),model0,_par);
+    convert_model(model0->getVals(), model0->getN123()/3, true);
+    const data_t * pm0 = model0->getCVals();
 
     int nx = _domain.getAxis(2).n;
     int nz = _domain.getAxis(1).n;
@@ -837,7 +851,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
         // perform the wave propagation
         data_t * full = nullptr;
         if (_par.sub>0) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
-        propagate(true, pmod0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz);
+        propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz);
 
         if (_par.verbose) fprintf(stderr,"Finish back-propagating shot %d with gradient computation\n",s);
 
@@ -859,7 +873,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     // Grad_vs = 2.rho.vs.(Grad_mu - 2.Grad_lambda) = 2.sqrt(rho.mu).(Grad_mu - 2.Grad_lambda)
     // Grad_rho = (vp2 - 2.vs2).Grad_lambda + vs2.Grad_mu + Grad_rho = (lambda/rho).Grad_lambda + (mu/rho).Grad_mu + Grad_rho
     data_t (*g) [nxz] = (data_t (*)[nxz]) pmod;
-    data_t (*pm) [nxz] = (data_t (*)[nxz]) pmod0;
+    data_t (*pm) [nxz] = (data_t (*)[nxz]) pm0;
     #pragma omp parallel for
     for(int i=0; i<nxz; i++)
     {

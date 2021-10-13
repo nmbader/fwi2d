@@ -38,11 +38,17 @@ struct param{
     // model bounds
     data_t vpmin=0.2, vpmax=7, vsmin=0.2, vsmax=7, rhomin=0, rhomax=7;
 
+    // model parameterization
+    bool bsplines=false;
+    int bs_nx=3, bs_nz=3;
+    std::vector<int> bs_mx, bs_mz;
+    std::vector<data_t> bs_controlx, bs_controlz;
+
     // inversion parameters
-    std::string nlsolver="lbfgs", lsearch="regular_wolfe";
+    std::string nlsolver="lbfgs", lsearch="regular_wolfe", mask_file="none", weights_file="none";
     data_t threshold=0;
-    int niter=0, max_trial=10, isave=10;
-    bool  solver_verbose=1;
+    int niter=0, max_trial=10, isave=10, envelop=0;
+    bool solver_verbose=true, normalize=0;
 
     // miscallenous
     int version=1;
@@ -114,3 +120,4 @@ void readParam(std::string parfile, param &par);
 void readParameters(int argc, char **argv, param &par);
 
 void analyzeNLInversion(param &par);
+void analyzeBsplines(const hypercube<data_t> &domain, param &par);

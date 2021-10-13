@@ -787,8 +787,8 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
             }
         }
 
@@ -818,15 +818,15 @@ fprintf(stderr,"################################################################
         k++;
 
         if (output!="none" && k % isave==0){
-            sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
         }
     }
     if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
     }
 
     fprintf(stderr,"\n==============================\n");
@@ -897,8 +897,8 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
             }
         }
 
@@ -945,15 +945,15 @@ fprintf(stderr,"################################################################
         k++;
 
         if (output!="none" && k % isave==0){
-            sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
         }
     }
     if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
     }
 
     fprintf(stderr,"\n==============================\n");
@@ -1031,8 +1031,8 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
             }
         }
 
@@ -1082,15 +1082,15 @@ fprintf(stderr,"################################################################
         k++;
 
         if (output!="none" && k % isave==0){
-            sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
         }
     }
     if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
     }
 
     fprintf(stderr,"\n==============================\n");
@@ -1236,8 +1236,8 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
             }
         }
 
@@ -1280,15 +1280,15 @@ fprintf(stderr,"################################################################
         k++;
 
         if (output!="none" && k % isave==0){
-            sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
         }
     }
     if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
     }
 
     fprintf(stderr,"\n==============================\n");
@@ -1426,8 +1426,8 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
             }
         }
 
@@ -1470,15 +1470,15 @@ fprintf(stderr,"################################################################
         k++;
 
         if (output!="none" && k % isave==0){
-            sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
         }
     }
     if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"_model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"_gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"_residual_iter_"+std::to_string(k)+".H");
+        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
+        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
+        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
     }
 
     fprintf(stderr,"\n==============================\n");

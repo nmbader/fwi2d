@@ -37,8 +37,10 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> src = sepRead<data_t>(source_file);
     std::shared_ptr<vec> model = sepRead<data_t>(model_file);
     
-    // Analyze the input source time function and duplicate if necessary
+    // Analyze the input source time function and duplicate if necessary, analyse geometry and model
     std::shared_ptr<vec> allsrc = analyzeWavelet(src, par);
+    analyzeGeometry(*model->getHyper(),par);
+    analyzeModel(*allsrc->getHyper(),model,par);
 
     l_we_op_e op(*allsrc->getHyper(),model,par);
     std::shared_ptr<vec> allrcv = std::make_shared<vec> (*op.getRange());

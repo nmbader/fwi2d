@@ -45,9 +45,10 @@ endif()
 
 #Include default directory
 include_directories(/usr/local/include)
+include_directories(/usr/include)
 
 #Include SEPLIB directory
-include_directories(/net/server2/opt_local/SEP/SEP7.0/include)
+include_directories(/opt/SEP/SEP7.0/include)
 
 #Include CUDA directory
 include_directories(/usr/local/cuda/include)
@@ -56,10 +57,10 @@ include_directories(/usr/local/cuda/include)
 link_directories(/usr/local/lib)
 
 #Adding path to link SEPLIB library
-link_directories(/net/server2/opt_local/SEP/SEP7.0/lib)
+link_directories(/opt/SEP/SEP7.0/lib)
 
 #Adding path to link tcmalloc library
-#link_directories(/opt/gperftools/local/lib)
+link_directories(/opt/gperftools/local/lib)
 
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 #set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")

@@ -50,9 +50,9 @@ endif()
 
 #building the project library
 add_library(fwi2d spatial_operators_ISPC.o ${SRC_FWI2D})
+target_link_libraries(fwi2d fftw3f fftw3)
 
 add_library(nlsolvers ${SRC_NLSOLVER})
-target_link_libraries(nlsolvers)
 
 #building the executables
 #add_executable(TEST.x ${MAIN_DIR}/test.cpp)
@@ -67,15 +67,19 @@ target_link_libraries(WE_MODELING.x fwi2d sep)
 add_executable(FWI2D.x ${MAIN_DIR}/fwi2d.cpp)
 target_link_libraries(FWI2D.x fwi2d sep)
 
-add_executable(FWI2D0.x ${MAIN_DIR}/fwi2d0.cpp)
-target_link_libraries(FWI2D0.x fwi2d nlsolvers sep)
+#add_executable(FWI2D0.x ${MAIN_DIR}/fwi2d0.cpp)
+#target_link_libraries(FWI2D0.x fwi2d nlsolvers sep)
+
+add_executable(BSPLINES.x ${MAIN_DIR}/bsplines.cpp)
+target_link_libraries(BSPLINES.x fwi2d sep)
 
 #installing libraries and executables
 install(FILES ${HEADERS} DESTINATION include)
 install(TARGETS fwi2d DESTINATION lib)
 install(TARGETS WE_MODELING.x
                 FWI2D.x
-                FWI2D0.x
+                #FWI2D0.x
+                BSPLINES.x
                 TEST_FD.x
                 #TEST.x
         DESTINATION bin)
