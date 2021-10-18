@@ -13,7 +13,7 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose=tr
 // Analyze model and modify as necessary
 void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par);
 
-// non-linear elastic wave equation operator: taking an elastic model and computing data
+// non-linear isotropic elastic wave equation operator: taking an elastic model and computing data
 class nl_we_op_e : virtual public nloper {
     
 public:
@@ -54,11 +54,11 @@ public:
     // convert Vp, Vs, rho to lambda, mu, rho and vice versa
     // mu = rho.vs2
     // lambda = rho.(vp2 - 2.vs2)
-    void convert_model(data_t * m, int n, bool forward) const;
-    void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
-    void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
+    virtual void convert_model(data_t * m, int n, bool forward) const;
+    virtual void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
+    virtual void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
 
-    void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<vecReg<data_t> > dat) {
+    virtual void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<vecReg<data_t> > dat) {
         successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
         apply_forward(add, mod->getCVals(), dat->getVals());
     }
@@ -67,12 +67,12 @@ public:
         successCheck(mod->getHyper()->isCompatible(*mod0->getHyper()),__FILE__,__LINE__,"Input and background models hypercubes are not compatible\n");
         apply_jacobianT(add, mod->getVals(), mod0->getCVals(), dat->getCVals());
     }
-    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
-    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+    virtual void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    virtual void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
 };
 
-// linear elastic wave equation operator: taking a source function and computing data
-class l_we_op_e : public loper, public nl_we_op_e {
+// linear isotropic elastic wave equation operator: taking a source function and computing data
+class l_we_op_e : virtual public loper, virtual public nl_we_op_e {
     
 public:
     std::shared_ptr<vecReg<data_t> > _model;
@@ -82,7 +82,7 @@ public:
     l_we_op_e(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par){
         _model = model->clone();
         _par = par;
-        convert_model(_model->getVals(), _model->getN123()/3, true);
+        convert_model(_model->getVals(), _model->getN123()/par.nmodels, true);
         _domain = domain; // domain assumed to have come from the output of analyzeWavelet
         axis<data_t> X(par.nr,0,1);
         axis<data_t> C(2,0,1);
@@ -108,7 +108,7 @@ public:
     l_we_op_e * clone() const {
         param par = _par;
         std::shared_ptr<vecReg<data_t> > model = _model->clone();
-        convert_model(model->getVals(), model->getN123()/3, false);
+        convert_model(model->getVals(), model->getN123()/par.nmodels, false);
         l_we_op_e * op = new l_we_op_e(_domain,model,par);
         return op;
     }
@@ -117,7 +117,7 @@ public:
         successCheck(*model->getHyper()==*_model->getHyper(),__FILE__,__LINE__,"Models must have the same hypercube\n");
         _model = model->clone();
         analyzeModel(_domain,_model,_par);
-        convert_model(_model->getVals(), _model->getN123()/3, true);
+        convert_model(_model->getVals(), _model->getN123()/_par.nmodels, true);
     }
 
     void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<vecReg<data_t> > dat){
@@ -130,4 +130,77 @@ public:
     
     void apply_forward(bool add, const data_t * pmod, data_t * pdat);
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};
+
+// non-linear VTI elastic wave equation operator: taking an elastic model and computing data
+class nl_we_op_vti : virtual public nl_we_op_e {
+    
+public:
+    using nl_we_op_e::nl_we_op_e;
+    ~nl_we_op_vti(){}
+    
+    // convert Vp, Vs, rho, delta, epsilon to generalized lambda, generalized mu, rho, c13, eps and vice versa
+    // c33 = lambda+2.mu
+    // c11 = (1+2.eps).c33
+    // c55 = mu
+    // c13 = sqrt[2.c33.(c33-c55).del + (c33-c55)^2] - c55
+    // mu = rho.vs2
+    // lambda = rho.(vp2 - 2.vs2)
+    void convert_model(data_t * m, int n, bool forward) const;
+    //void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
+    void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
+};
+
+// linear isotropic elastic wave equation operator: taking a source function and computing data
+class l_we_op_vti : public l_we_op_e, public nl_we_op_vti {
+    
+public:
+    l_we_op_vti(){}
+    virtual ~l_we_op_vti(){}
+    l_we_op_vti(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par){
+        _model = model->clone();
+        _par = par;
+        nl_we_op_vti::convert_model(_model->getVals(), _model->getN123()/par.nmodels, true);
+        _domain = domain; // domain assumed to have come from the output of analyzeWavelet
+        axis<data_t> X(par.nr,0,1);
+        axis<data_t> C(2,0,1);
+        if (par.gl>0) C.n = 1;
+        _range = hypercube<data_t>(domain.getAxis(1),X,C);
+        if (par.sub>0) _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_model->getHyper()->getAxis(1),_model->getHyper()->getAxis(2),axis<data_t>(2,0,1), axis<data_t>(1+par.nt/par.sub,0,par.dt*par.sub)));
+    }
+    void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
+        l_we_op_e::setDomainRange(domain, range);
+    }
+    bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > dat) const {
+        return l_we_op_e::checkDomainRange(mod, dat);
+    }
+    l_we_op_vti * clone() const {
+        param par = _par;
+        std::shared_ptr<vecReg<data_t> > model = _model->clone();
+        nl_we_op_vti::convert_model(model->getVals(), model->getN123()/par.nmodels, false);
+        l_we_op_vti * op = new l_we_op_vti(_domain,model,par);
+        return op;
+    }
+
+    void setModel(std::shared_ptr<vecReg<data_t> > model){
+        successCheck(*model->getHyper()==*_model->getHyper(),__FILE__,__LINE__,"Models must have the same hypercube\n");
+        _model = model->clone();
+        analyzeModel(_domain,_model,_par);
+        nl_we_op_vti::convert_model(_model->getVals(), _model->getN123()/_par.nmodels, true);
+    }
+
+    void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<vecReg<data_t> > dat){
+        successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+        l_we_op_e::forward(add, mod, dat);
+    }
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat) {
+        l_we_op_e::apply_jacobianT(add, pmod, pmod0, pdat);
+    }
+    
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat){
+        l_we_op_e::apply_forward(add, pmod, pdat);
+    }
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+        l_we_op_e::apply_adjoint(add, pmod, pdat);
+    }
 };

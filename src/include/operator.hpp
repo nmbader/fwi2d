@@ -103,23 +103,66 @@ public:
     void dotProduct();
 };
 
+// identity operator used for testing
+class identity : public loper {
+protected:
+
+public:
+    identity(){}
+    ~identity(){}
+    identity(const hypercube<data_t> &domain){
+        _domain = domain;
+        _range = domain;
+    }
+    identity * clone() const {
+        identity * op = new identity(_domain);
+        return op;
+    }
+    void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
+        successCheck(domain.getN123()==_domain.getN123(),__FILE__,__LINE__,"The new domain must have the same number of samples\n");
+        successCheck(range.getN123()==_range.getN123(),__FILE__,__LINE__,"The new range must have the same number of samples\n");
+        successCheck(domain.getN123()==range.getN123(),__FILE__,__LINE__,"The new domain and range must have the same number of samples\n");
+        _domain = domain;
+        _range = range;
+    }
+    bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > dat) const {
+        bool ans1 = (mod->getN123()==_domain.getN123());
+        bool ans2 = (dat->getN123()==_range.getN123());
+        bool ans3 = (dat->getN123()==mod->getN123());
+        return (ans1 && ans2 && ans3);
+    }
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat) {
+        for (int i=0; i<_domain.getN123(); i++) pdat[i] = add*pdat[i] + pmod[i];
+    }
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat) {
+        for (int i=0; i<_domain.getN123(); i++) pmod[i] = add*pmod[i] + pdat[i];
+    }
+};
+
 // Chain of two non-linear (or linear) operators L(R(m))
 class chainNLOper : public nloper {
 protected:
     nloper * _L; // left operator
     nloper * _R; // right operator
+    std::shared_ptr<vecReg<data_t> > _m0; // intermediate vectors used for chained forward and jacobian
+    std::shared_ptr<vecReg<data_t> > _v;
+
 public:
     chainNLOper(){}
-    virtual ~chainNLOper(){}
+    ~chainNLOper(){delete _L; delete _R;}
     chainNLOper(nloper * L, nloper * R){
         successCheck(R->getRange()->getN123()==L->getDomain()->getN123(),__FILE__,__LINE__,"Number of samples in range of R must be the same as the one in domain of L\n");
         _domain = *R->getDomain();
         _range = *L->getRange();
         _L=L->clone();
         _R=R->clone();
+        _m0 = std::make_shared<vecReg<data_t> >(*_R->getRange());
+        _v = std::make_shared<vecReg<data_t> >(*_R->getRange());
+        _m0->zero();
+        _v->zero();
     }
-    nloper * clone() const {
-        nloper * op = new chainNLOper(_L, _R);
+    chainNLOper * clone() const {
+        chainNLOper * op = new chainNLOper(_L, _R);
         return op;
     }
     void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
@@ -132,21 +175,15 @@ public:
         bool ans1 = (mod->getN123()==_domain.getN123());
         bool ans2 = (dat->getN123()==_range.getN123());
         return (ans1 && ans2);
-    }
+    }    
     void apply_forward(bool add, const data_t * pmod, data_t * pdat) {
-        std::shared_ptr<vecReg<data_t> > v = std::make_shared<vecReg<data_t> >(*_R->getRange());
-        v->zero();
-        _R->apply_forward(false, pmod, v->getVals());
-        _L->apply_forward(add, v->getCVals(), pdat);
+        _R->apply_forward(false, pmod, _v->getVals());
+        _L->apply_forward(add, _v->getCVals(), pdat);
     }
     void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat) {
-        std::shared_ptr<vecReg<data_t> > m0 = std::make_shared<vecReg<data_t> >(*_L->getRange());
-        std::shared_ptr<vecReg<data_t> > v = std::make_shared<vecReg<data_t> >(*_L->getDomain());
-        m0->zero();        
-        v->zero();
-        _R->apply_forward(false, pmod0, m0->getVals());
-        _L->apply_jacobianT(false, v->getVals(), m0->getCVals(), pdat);
-        _R->apply_jacobianT(add, pmod, pmod0, v->getCVals());
+        _R->apply_forward(false, pmod0, _m0->getVals());
+        _L->apply_jacobianT(false, _v->getVals(), _m0->getCVals(), pdat);
+        _R->apply_jacobianT(add, pmod, pmod0, _v->getCVals());
     }
 };
 
@@ -155,31 +192,30 @@ class chainLOper : public loper {
 protected:
     loper * _L; // left operator
     loper * _R; // right operator
+    std::shared_ptr<vecReg<data_t> > _v;
 public:
     chainLOper(){}
-    virtual ~chainLOper(){}
+    ~chainLOper(){delete _L; delete _R;}
     chainLOper(loper * L, loper * R){
         successCheck(R->getRange()->getN123()==L->getDomain()->getN123(),__FILE__,__LINE__,"Number of samples in range of R must be the same as the one in domain of L\n");
         _domain = *R->getDomain();
         _range = *L->getRange();
         _L=L->clone();
         _R=R->clone();
+        _v = std::make_shared<vecReg<data_t> >(*_R->getRange());
+        _v->zero();
     }
-    loper * clone() const {
-        loper * op = new chainLOper(_L, _R);
+    chainLOper * clone() const {
+        chainLOper * op = new chainLOper(_L, _R);
         return op;
     }
     void apply_forward(bool add, const data_t * pmod, data_t * pdat) {
-        std::shared_ptr<vecReg<data_t> > v = std::make_shared<vecReg<data_t> >(*_R->getRange());
-        v->zero();
-        _R->apply_forward(false, pmod, v->getVals());
-        _L->apply_forward(false, v->getVals(), pdat);
+        _R->apply_forward(false, pmod, _v->getVals());
+        _L->apply_forward(false, _v->getCVals(), pdat);
     }
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat) {
-        std::shared_ptr<vecReg<data_t> > v = std::make_shared<vecReg<data_t> >(*_R->getRange());
-        v->zero();
-        _L->apply_adjoint(false, v->getVals(), pdat);
-        _R->apply_adjoint(add, pmod, v->getCVals());
+        _L->apply_adjoint(false, _v->getVals(), pdat);
+        _R->apply_adjoint(add, pmod, _v->getCVals());
     }
 };
 

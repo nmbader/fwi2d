@@ -37,17 +37,26 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> src = sepRead<data_t>(source_file);
     std::shared_ptr<vec> model = sepRead<data_t>(model_file);
     
-    // Analyze the input source time function and duplicate if necessary, analyse geometry and model
+    // Analyze the input source time function and duplicate if necessary, analyze geometry
     std::shared_ptr<vec> allsrc = analyzeWavelet(src, par);
     analyzeGeometry(*model->getHyper(),par);
-    analyzeModel(*allsrc->getHyper(),model,par);
 
-    l_we_op_e op(*allsrc->getHyper(),model,par);
-    std::shared_ptr<vec> allrcv = std::make_shared<vec> (*op.getRange());
-    op.forward(false,allsrc,allrcv);
+    // If more than one shot is modeled, don't save the wavefield
+    if (par.ns>1) par.sub=0;
 
-    if ((wavefield_file!="none") && (op._par.sub)>0) sepWrite<data_t>(op._full_wfld, wavefield_file);
+    // Build the appropriate wave equation operator
+    nl_we_op_e * op;
+    if (par.nmodels==3) op=new nl_we_op_e(*model->getHyper(),allsrc,par);
+    else if (par.nmodels==5) op=new nl_we_op_vti(*model->getHyper(),allsrc,par);
+
+    // Run the forward modeling
+    std::shared_ptr<vec> allrcv = std::make_shared<vec> (*op->getRange());
+    op->forward(false,model,allrcv);
+
+    if ((wavefield_file!="none") && (op->_par.sub)>0) sepWrite<data_t>(op->_full_wfld, wavefield_file);
     if (output_file!="none") sepWrite<data_t>(allrcv, output_file);
+
+    delete op;
 
 return 0;
 }

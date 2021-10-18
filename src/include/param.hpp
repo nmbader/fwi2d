@@ -33,12 +33,14 @@ struct param{
     int bc_top=1, bc_bottom=1, bc_left=1, bc_right=1, taper_top=0, taper_bottom=0, taper_left=0, taper_right=0;
     data_t alpha=0.2508560249/1.05, taper_strength=0.05;
     bool pml=false, pml_T=false, pml_B=false, pml_L=false, pml_R=false;
-    data_t R = 1e-3, vmax=7; int p=2; 
+    data_t R = 1e-3; int p=2; 
 
     // model bounds
-    data_t vpmin=0.2, vpmax=7, vsmin=0.2, vsmax=7, rhomin=0, rhomax=7;
+    data_t vpmin=0.2, vpmax=7, vsmin=0.2, vsmax=7, rhomin=0, rhomax=7, deltamin=-0.5, deltamax=1, epsilonmin=0, epsilonmax=1;
+    data_t vmax=7, vmin=0.3;
 
     // model parameterization
+    int nmodels=3;
     bool bsplines=false;
     int bs_nx=3, bs_nz=3;
     std::vector<int> bs_mx, bs_mz;
@@ -51,9 +53,9 @@ struct param{
     bool solver_verbose=true, normalize=0;
 
     // miscallenous
-    int version=1;
+    int version=2;
     std::vector<int> device;
-    bool verbose=true;
+    bool verbose=false;
 };
 
 template <typename T> T convert_to (const std::string &str)

@@ -307,7 +307,7 @@ public:
         if (w != nullptr) {
             successCheck(d->getN123()==w->getN123(),__FILE__,__LINE__,"The weighting and data vectors must have the same size\n");
             successCheck(w->min()>=0,__FILE__,__LINE__,"Data weights  must be non-negative\n");
-            _d->mult(w);
+            d->mult(w);
         }
         _L = L;
         _m = m;

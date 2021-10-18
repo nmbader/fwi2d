@@ -13,13 +13,15 @@ void readCoord(std::string srcoord, param &par){
         int counter=0;
         int shot_counter=0;
         int curr=0, prev=0;
+        data_t sid = 0;
         while ( getline (ifs, line) )
         {
             if (line[0] != '#')
             {
                 std::istringstream ss(line);
 
-                ss >> curr; // read shot id
+                ss >> sid; // read shot id and convert to integer
+                curr = (int)sid;
                 if (counter==0) // first line
                 {
                     // read shot x z coordinates
@@ -83,6 +85,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<std::string>(argc, argv, "weights", par.weights_file);
     readParam<data_t>(argc, argv, "courant", par.courant);
     readParam<data_t>(argc, argv, "dt", par.dt);
+    readParam<data_t>(argc, argv, "fmax", par.fmax);
     readParam<data_t>(argc, argv, "sx0", par.sx0);
     readParam<data_t>(argc, argv, "sz0", par.sz0);
     readParam<data_t>(argc, argv, "rx0", par.rx0);
@@ -243,7 +246,7 @@ void analyzeBsplines(const hypercube<data_t> &domain, param &par)
             par.bs_nz = std::max(3,par.bs_nz);
             fprintf(stderr,"The B-spline nodes are regularly spaced with %d nodes in z\n",par.bs_nz);
 
-            axis<data_t> Z = domain.getAxis(2);
+            axis<data_t> Z = domain.getAxis(1);
             par.bs_controlz.resize(par.bs_nz); par.bs_mz.resize(par.bs_nz);
             par.bs_controlz[0] = Z.o;
             data_t dz = Z.d*(Z.n-1)/(par.bs_nz-1);

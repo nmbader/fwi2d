@@ -58,8 +58,8 @@ add_library(nlsolvers ${SRC_NLSOLVER})
 #add_executable(TEST.x ${MAIN_DIR}/test.cpp)
 #target_link_libraries(TEST.x fwi2d sep)
 
-add_executable(TEST_FD.x ${MAIN_DIR}/test_fd.cpp)
-target_link_libraries(TEST_FD.x fwi2d sep)
+#add_executable(TEST_FD.x ${MAIN_DIR}/test_fd.cpp)
+#target_link_libraries(TEST_FD.x fwi2d sep)
 
 add_executable(WE_MODELING.x ${MAIN_DIR}/we_modeling.cpp)
 target_link_libraries(WE_MODELING.x fwi2d sep)
@@ -79,7 +79,7 @@ install(TARGETS fwi2d DESTINATION lib)
 install(TARGETS WE_MODELING.x
                 FWI2D.x
                 #FWI2D0.x
-                BSPLINES.x
-                TEST_FD.x
+                #BSPLINES.x
+                #TEST_FD.x
                 #TEST.x
         DESTINATION bin)

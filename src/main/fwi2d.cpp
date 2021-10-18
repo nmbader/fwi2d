@@ -47,7 +47,7 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> w = nullptr;
     if (par.mask_file!="none") gmask = sepRead<data_t>(par.mask_file);
     if (par.weights_file!="none") w = sepRead<data_t>(par.weights_file);
-    
+
 // Analyze the inputs and parameters and modify if necessary
     std::shared_ptr<vec> allsrc = analyzeWavelet(src, par);
     analyzeGeometry(*model->getHyper(),par);
@@ -59,6 +59,7 @@ int main(int argc, char **argv){
     std::shared_ptr<vecReg<data_t> > bsmodel = model;
     std::shared_ptr<vecReg<data_t> > bsmask = gmask;
     chainLOper * BD;
+
 if (par.bsplines)
 {
     std::vector<data_t> kx;
@@ -81,7 +82,8 @@ if (par.bsplines)
 }    
 // ----------------------------------------------------------------------------------------//
     nloper * op;
-    nloper * L  = new nl_we_op_e(*model->getHyper(),allsrc,par);
+    nl_we_op_e * L  = new nl_we_op_e(*model->getHyper(),allsrc,par);
+
     if (par.bsplines)
     {
         op  = new chainNLOper(L,BD);
@@ -89,7 +91,7 @@ if (par.bsplines)
     }
     else
     {
-        op= L;
+        op=L;
     }
     
     nlls_fwi prob(op, bsmodel, data, bsmask, w, par.normalize, par.envelop);
@@ -120,7 +122,7 @@ if (par.bsplines)
         sepWrite(func,obj_func_file);
     }
 
-    delete op;
+    //delete op;
 
 return 0;
 }

@@ -239,7 +239,7 @@ void esat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, in
         in[0][0] = in[0][0] / (1+sc1x);
         in[1][0] = in[1][0] / (1+sc1z);
         sc1x = sqrt((par[0][nz-1]+2*par[1][nz-1])/par[2][nz-1])*dt / (2 * dx * h0); // bottom left
-        sc1z = sc1x*sqrt(par[1][nz-1]/(par[0][nz-1]+2*par[0][nz-1]));
+        sc1z = sc1x*sqrt(par[1][nz-1]/(par[0][nz-1]+2*par[1][nz-1]));
         if (ixmin==0){
             for (int iz = std::max(1,izmin); iz < std::min(nz-1,izmax); iz++){
                 scalerx = sqrt((par[0][iz]+2*par[1][iz])/par[2][iz])*dt / (2 * dx * h0);
@@ -299,6 +299,114 @@ void esat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, in
             }
         }
         sc2x += sqrt((par[0][(nx-1)*nz]+2*par[1][(nx-1)*nz])/par[2][(nx-1)*nz])*dt / (2 * dx *h0); // top right
+        sc2z += sqrt(par[1][(nx-1)*nz]/par[2][(nx-1)*nz])*dt / (2 * dx * h0);
+        if (izmin==0 && ixmax==nx){
+            in[0][(nx-1)*nz] = in[0][(nx-1)*nz] / (1+sc2x);
+            in[1][(nx-1)*nz] = in[1][(nx-1)*nz] / (1+sc2z);
+        }
+    }
+    else {
+        if (izmax==nz && ixmax==nx){
+            in[0][(nx-1)*nz+nz-1] = in[0][(nx-1)*nz+nz-1] / (1+sc1x); // bottom right
+            in[1][(nx-1)*nz+nz-1] = in[1][(nx-1)*nz+nz-1] / (1+sc1z);
+        }
+        if (izmin==0 && ixmax==nx){
+            in[0][(nx-1)*nz] = in[0][(nx-1)*nz] / (1+sc2x); // top right
+            in[1][(nx-1)*nz] = in[1][(nx-1)*nz] / (1+sc2z);
+        }
+    }
+}
+
+void vtisat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, data_t dt, bool top, bool bottom, bool left, bool right){
+
+    // par must at least contain lambda, mu, rho, c13, eps in this order
+    data_t h0 = 17.0/48;
+    data_t scalerx, scalerz;
+    data_t sc1x=0, sc1z=0, sc2x=0, sc2z=0, sc3x=0, sc3z=0, sc4x=0, sc4z=0;
+
+    // scale the top boundary without the corners
+    if (top){
+        sc1x = sqrt(par[1][0]/par[2][0])*dt / (2  * dz * h0); // top left
+        sc1z = sc1x*sqrt((par[0][0]+2*par[1][0])/par[1][0]);
+        sc2x = sqrt(par[1][(nx-1)*nz]/par[2][(nx-1)*nz])*dt / (2 * dz * h0); // top right
+        sc2z = sc1x*sqrt((par[0][(nx-1)*nz]+2*par[1][(nx-1)*nz])/par[1][(nx-1)*nz]);
+        if (izmin==0){
+            for (int ix = std::max(1,ixmin); ix < std::min(nx-1,ixmax); ix++){
+                scalerx = sqrt(par[1][ix*nz]/par[2][ix*nz])*dt / (2 * dz * h0);
+                scalerz = scalerx*sqrt((par[0][ix*nz]+2*par[1][ix*nz])/par[1][ix*nz]);
+                in[0][ix*nz] = in[0][ix*nz] / (1+scalerx);
+                in[1][ix*nz] = in[1][ix*nz] / (1+scalerz);
+            }
+        }
+    }
+
+    // scale the left boundary
+    if (left){
+        sc1x += sqrt((1+2*par[4][0])*(par[0][0]+2*par[1][0])/par[2][0])*dt / (2 * dx * h0); // top left
+        sc1z += sqrt(par[1][0]/par[2][0])*dt / (2 * dx * h0);
+        in[0][0] = in[0][0] / (1+sc1x);
+        in[1][0] = in[1][0] / (1+sc1z);
+        sc1x = sqrt((1+2*par[4][nz-1])*(par[0][nz-1]+2*par[1][nz-1])/par[2][nz-1])*dt / (2 * dx * h0); // bottom left
+        sc1z = sc1x*sqrt(par[1][nz-1]/((1+2*par[4][nz-1])*(par[0][nz-1]+2*par[1][nz-1])));
+        if (ixmin==0){
+            for (int iz = std::max(1,izmin); iz < std::min(nz-1,izmax); iz++){
+                scalerx = sqrt((1+2*par[4][iz])*(par[0][iz]+2*par[1][iz])/par[2][iz])*dt / (2 * dx * h0);
+                scalerz = scalerx*sqrt(par[1][iz]/((1+2*par[4][iz])*(par[0][iz]+2*par[1][iz])));
+                in[0][iz] = in[0][iz] / (1+scalerx);
+                in[1][iz] = in[1][iz] / (1+scalerz);
+            }
+        }
+    }
+    else{
+        if (izmin==0 && ixmin==0){
+            in[0][0] = in[0][0] / (1+sc1x); // top left
+            in[1][0] = in[1][0] / (1+sc1z);
+        }
+        sc1x = 0; // bottom left
+        sc1z = 0;
+    }
+
+    // scale the bottom boundary
+    if (bottom){
+        sc1x += sqrt(par[1][nz-1]/par[2][nz-1])*dt / (2 * dz * h0); // bottom left
+        sc1z += sqrt((par[0][nz-1]+2*par[1][nz-1])/par[2][nz-1])*dt / (2 * dz * h0);
+        in[0][nz-1] = in[0][nz-1] / (1+sc1x);
+        in[1][nz-1] = in[1][nz-1] / (1+sc1z);
+        sc1x = sqrt(par[1][(nx-1)*nz+nz-1]/par[2][(nx-1)*nz+nz-1])*dt / (2 * dz * h0); // bottom right
+        sc1z = sc1x*sqrt((par[0][(nx-1)*nz+nz-1]+2*par[1][(nx-1)*nz+nz-1])/par[1][(nx-1)*nz+nz-1]);
+        if (izmax==nz){
+            for (int ix = std::max(1,ixmin); ix < std::min(nx-1,ixmax); ix++){
+                scalerx = sqrt(par[1][ix*nz+nz-1]/par[2][ix*nz+nz-1])*dt / (2 * dz * h0);
+                scalerz = scalerx*sqrt((par[0][ix*nz+nz-1]+2*par[1][ix*nz+nz-1])/par[1][ix*nz+nz-1]);
+                in[0][ix*nz+nz-1] = in[0][ix*nz+nz-1] / (1+scalerx);
+                in[1][ix*nz+nz-1] = in[1][ix*nz+nz-1] / (1+scalerz);
+            }
+        }
+    }
+    else {
+        if (izmax==nz && ixmin==0){
+            in[0][nz-1] = in[0][nz-1] / (1+sc1x); // bottom left
+            in[1][nz-1] = in[1][nz-1] / (1+sc1z);
+        }
+        sc1x = 0; // bottom right
+        sc1z = 0;
+    }
+
+    // scale the right boundary
+    if (right){
+        sc1x += sqrt((1+2*par[4][(nx-1)*nz+nz-1])*(par[0][(nx-1)*nz+nz-1]+2*par[1][(nx-1)*nz+nz-1])/par[2][(nx-1)*nz+nz-1])*dt / (2 * dx * h0); // bottom right
+        sc1z += sqrt(par[1][(nx-1)*nz+nz-1]/par[2][(nx-1)*nz+nz-1])*dt / (2 * dx * h0);
+        in[0][(nx-1)*nz+nz-1] = in[0][(nx-1)*nz+nz-1] / (1+sc1x);
+        in[1][(nx-1)*nz+nz-1] = in[1][(nx-1)*nz+nz-1] / (1+sc1z);
+        if (ixmax==nx){
+            for (int iz = std::max(1,izmin); iz < std::min(nz-1,izmax); iz++){
+                scalerx = sqrt((1+2*par[4][(nx-1)*nz+iz])*(par[0][(nx-1)*nz+iz]+2*par[1][(nx-1)*nz+iz])/par[2][(nx-1)*nz+iz])*dt / (2 * dx * h0);
+                scalerz = scalerx*sqrt(par[1][(nx-1)*nz+iz]/((1+2*par[4][(nx-1)*nz+iz])*(par[0][(nx-1)*nz+iz]+2*par[1][(nx-1)*nz+iz])));
+                in[0][(nx-1)*nz+iz] = in[0][(nx-1)*nz+iz] / (1+scalerx);
+                in[1][(nx-1)*nz+iz] = in[1][(nx-1)*nz+iz] / (1+scalerz);
+            }
+        }
+        sc2x += sqrt((1+2*par[4][(nx-1)*nz])*(par[0][(nx-1)*nz]+2*par[1][(nx-1)*nz])/par[2][(nx-1)*nz])*dt / (2 * dx *h0); // top right
         sc2z += sqrt(par[1][(nx-1)*nz]/par[2][(nx-1)*nz])*dt / (2 * dx * h0);
         if (izmin==0 && ixmax==nx){
             in[0][(nx-1)*nz] = in[0][(nx-1)*nz] / (1+sc2x);

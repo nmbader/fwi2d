@@ -807,6 +807,7 @@ void esat_Dx_right(bool add, const data_t * in, data_t * out, int nx, int nz, da
 
 // Scale boundaries when absorbing SAT is used. This is needed for the time recursion of wavefields
 void esat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, data_t dt, bool top, bool bottom, bool left, bool right);
+void vtisat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, data_t dt, bool top, bool bottom, bool left, bool right);
 
 // Apply cosine^2 taper to damp the wavefield (to use in conjunction with absorbing SAT)
 // taper = cos[a * pi/2 * (i - istart)/(iend-istart)]^2 ; 0 <= a <= 1
