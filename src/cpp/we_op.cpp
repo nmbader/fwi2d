@@ -111,10 +111,10 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
     std::string bc[3] = {"none","free surface","locally absorbing"};
     std::string taper_type[3] = {"none","cosine squared","PML"};
     if (verbose){
-        fprintf(stderr,"Top boundary condition = %s\t\t taper type = %s\n",bc[par.bc_top].c_str(),taper_type[(par.taper_top>0)*(1+par.pml)].c_str()); 
-        fprintf(stderr,"Bottom boundary condition = %s\t taper type = %s\n",bc[par.bc_bottom].c_str(),taper_type[(par.taper_bottom>0)*(1+par.pml)].c_str());
-        fprintf(stderr,"Left boundary condition = %s\t\t taper type = %s\n",bc[par.bc_left].c_str(),taper_type[(par.taper_left>0)*(1+par.pml)].c_str()); 
-        fprintf(stderr,"Right boundary condition = %s\t\t taper type = %s\n",bc[par.bc_right].c_str(),taper_type[(par.taper_right>0)*(1+par.pml)].c_str());
+        fprintf(stderr,"Top boundary condition = %s\t taper size = %d\t taper type = %s\n",bc[par.bc_top].c_str(), par.taper_top, taper_type[(par.taper_top>0)*(1+par.pml)].c_str()); 
+        fprintf(stderr,"Bottom boundary condition = %s\t taper size = %d\t taper type = %s\n",bc[par.bc_bottom].c_str(), par.taper_bottom, taper_type[(par.taper_bottom>0)*(1+par.pml)].c_str());
+        fprintf(stderr,"Left boundary condition = %s\t taper size = %d\t taper type = %s\n",bc[par.bc_left].c_str(), par.taper_left, taper_type[(par.taper_left>0)*(1+par.pml)].c_str()); 
+        fprintf(stderr,"Right boundary condition = %s\t taper size = %d\t taper type = %s\n",bc[par.bc_right].c_str(), par.taper_right, taper_type[(par.taper_right>0)*(1+par.pml)].c_str());
     }
 
     if (verbose) {
@@ -1162,9 +1162,48 @@ static inline data_t vtiexpr8(const data_t ** par, int i){return 0.5*sqrt(par[1]
 static inline data_t vtiexpr9(const data_t ** par, int i){return 0.5*sqrt((par[0][i]+2*par[1][i])*par[2][i]);} // e.g. = 1/2 sqrt(rho.(lambda+2.mu))
 static inline data_t vtiexpr10(const data_t ** par, int i){return 0.5*sqrt((1+2*par[4][i])*(par[0][i]+2*par[1][i])*par[2][i]);} // e.g. = 1/2 sqrt(rho.(1+2.eps).(lambda+2.mu))
 
+void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const
+{
+    // Grad_lambda for wide stencil = (1+2.epsilon).(adjointx_x).H.Ht.(forwardx_x) + (adjointz_z).H.Ht.(forwardz_z) + d(C13)/d(lambda).(adjointx_x.H.Ht.forwardz_z + adjointz_z.H.Ht.forwardx_x)
+    // Grad_mu for wide stencil = (adjointx_z+adjointz_x).H.Ht.(forwardx_z+forwardz_x) + 2.(1+2.epsilon).adjointx_x.H.Ht.forwardx_x + 2.adjointz_z.H.Ht.forwardz_z + d(C13)/d(mu).(adjointx_x.H.Ht.forwardz_z + adjointz_z.H.Ht.forwardx_x)
+    // Grad_rho = adjointx.H.Ht.forwardx_tt + adjointz.H.Ht.forwardz_tt
+    // d(C13)/d(lambda) = ((1+2.delta).lambda + (1+3.delta).mu)/sqrt(2.(lambda+2.mu).(lambda+mu).delta + (lambda+mu)^2)
+    // d(C13)/d(mu) = ((1+3.delta).lambda + (1+4.delta).mu)/sqrt(2.(lambda+2.mu).(lambda+mu).delta + (lambda+mu)^2) - 1
+    // The H quadrature will be applied elsewhere to the final gradients (all shots included)
+
+    int nxz = nx*nz;
+    data_t (*pm) [nxz] = (data_t (*)[nxz]) model;
+    data_t (*pfor) [2][nxz] = (data_t (*) [2][nxz]) u_full;
+    data_t (*padj) [nxz] = (data_t (*)[nxz]) curr;
+    data_t (*padj_x) [nxz] = (data_t (*)[nxz]) u_x;
+    data_t (*padj_z) [nxz] = (data_t (*)[nxz]) u_z;
+    data_t (*temp) [nxz] = (data_t (*)[nxz]) tmp;
+    data_t (*g) [nxz] = (data_t (*)[nxz]) grad;
+
+    Dx(false, pfor[par.nt/par.sub+1-it-1][0], temp[0], nx, nz, dx, 0, nx, 0, nz); // forwardx_x
+    Dz(false, pfor[par.nt/par.sub+1-it-1][1], temp[1], nx, nz, dz, 0, nx, 0, nz); // forwardz_z
+    Dx(false, pfor[par.nt/par.sub+1-it-1][1], temp[2], nx, nz, dx, 0, nx, 0, nz); // forwardz_x
+    Dz(false, pfor[par.nt/par.sub+1-it-1][0], temp[3], nx, nz, dz, 0, nx, 0, nz); // forwardx_z
+
+    data_t val1=0, val2=0, val3=0, del=0;
+
+    #pragma omp parallel for private(val1,val2,val3,del)
+    for (int i=0; i<nxz; i++) 
+    {
+        del = ((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));
+        val1 = sqrt(2*(pm[0][i]+2*pm[1][i])*(pm[0][i]+pm[1][i])*del + (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i]));
+        val2 = ((1+2*del)*pm[0][i] + (1+3*del)*pm[1][i])/val1; // d(C13)/d(lambda)
+        val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
+        g[0][i] += dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
+        g[1][i] += dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
+        g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+        g[3][i] = 0;
+        g[4][i] = 0;
+    }
+}
+
 void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
 {
-
     // wavefields allocations and pointers
     data_t * u  = new data_t[6*nx*nz];
     data_t * dux  = new data_t[2*nx*nz];

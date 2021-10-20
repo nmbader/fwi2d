@@ -55,6 +55,7 @@ public:
     // mu = rho.vs2
     // lambda = rho.(vp2 - 2.vs2)
     virtual void convert_model(data_t * m, int n, bool forward) const;
+    // refer to the SBP notes for gradients expression
     virtual void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
     virtual void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
 
@@ -138,6 +139,12 @@ class nl_we_op_vti : virtual public nl_we_op_e {
 public:
     using nl_we_op_e::nl_we_op_e;
     ~nl_we_op_vti(){}
+
+    nl_we_op_vti * clone() const {
+        param par = _par;
+        nl_we_op_vti * op = new nl_we_op_vti(_domain,_allsrc,par);
+        return op;
+    }
     
     // convert Vp, Vs, rho, delta, epsilon to generalized lambda, generalized mu, rho, c13, eps and vice versa
     // c33 = lambda+2.mu
@@ -147,7 +154,8 @@ public:
     // mu = rho.vs2
     // lambda = rho.(vp2 - 2.vs2)
     void convert_model(data_t * m, int n, bool forward) const;
-    //void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
+    // refer to the SBP notes for gradients expression
+    void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
     void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
 };
 

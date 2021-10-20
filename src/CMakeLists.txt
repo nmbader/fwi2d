@@ -52,7 +52,7 @@ endif()
 add_library(fwi2d spatial_operators_ISPC.o ${SRC_FWI2D})
 target_link_libraries(fwi2d fftw3f fftw3)
 
-add_library(nlsolvers ${SRC_NLSOLVER})
+#add_library(nlsolvers ${SRC_NLSOLVER})
 
 #building the executables
 #add_executable(TEST.x ${MAIN_DIR}/test.cpp)

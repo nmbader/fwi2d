@@ -82,7 +82,9 @@ if (par.bsplines)
 }    
 // ----------------------------------------------------------------------------------------//
     nloper * op;
-    nl_we_op_e * L  = new nl_we_op_e(*model->getHyper(),allsrc,par);
+    nl_we_op_e * L;
+    if (par.nmodels==3) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
+    else if (par.nmodels==5) L=new nl_we_op_vti(*model->getHyper(),allsrc,par);
 
     if (par.bsplines)
     {
@@ -93,7 +95,7 @@ if (par.bsplines)
     {
         op=L;
     }
-    
+
     nlls_fwi prob(op, bsmodel, data, bsmask, w, par.normalize, par.envelop);
 
     lsearch * ls;
@@ -122,7 +124,7 @@ if (par.bsplines)
         sepWrite(func,obj_func_file);
     }
 
-    //delete op;
+    delete op;
 
 return 0;
 }
