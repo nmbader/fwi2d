@@ -96,7 +96,7 @@ if (par.bsplines)
         op=L;
     }
 
-    nlls_fwi prob(op, bsmodel, data, bsmask, w, par.normalize, par.envelop);
+    nlls_fwi prob(op, bsmodel, data, bsmask, w, par.normalize, par.integrate, par.envelop);
 
     lsearch * ls;
     if (par.lsearch=="weak_wolfe") ls = new weak_wolfe();

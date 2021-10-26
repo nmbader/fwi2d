@@ -140,6 +140,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<bool>(argc, argv, "verbose", par.verbose);
     readParam<bool>(argc, argv, "solver_verbose", par.solver_verbose);
     readParam<bool>(argc, argv, "normalize", par.normalize);
+    readParam<bool>(argc, argv, "integrate", par.integrate);
     readParam<int>(argc, argv, "bs_mx", par.bs_mx);
     readParam<int>(argc, argv, "bs_mz", par.bs_mz);
     readParam<int>(argc, argv, "device", par.device);

@@ -427,9 +427,14 @@ public:
         long num = _hyper.getN123()*sizeof(std::complex<T1>);
         std::memcpy(_vals,vec->getCVals(),num);
 	}
+    cvecReg(const cvecReg<T1> &  vec){
+		_hyper = *(vec.getHyper());
+		_vals = new std::complex<T1>[_hyper.getN123()];
+        long num = _hyper.getN123()*sizeof(std::complex<T1>);
+        std::memcpy(_vals,vec.getCVals(),num);
+	}
     std::shared_ptr<cvecReg<T1> > clone() const{
-        std::shared_ptr<cvecReg<T1> > newvec;
-        newvec = std::make_shared<cvecReg<T1> > (*this);
+        std::shared_ptr<cvecReg<T1> > newvec = std::make_shared<cvecReg<T1> > (*this);
         return newvec;
     }
 	const hypercube<T1> * getHyper() const {return &_hyper;}
@@ -500,7 +505,7 @@ public:
         #pragma omp parallel for reduction(+: real,imag)
         for (long i=0; i<n123; i++) {
             real += _vals[i].real()*pvec[i].real()+_vals[i].imag()*pvec[i].imag();
-            imag += _vals[i].imag()*pvec[i].real()-_vals[i].real()*pvec[i].imag();
+            imag += _vals[i].real()*pvec[i].imag()-_vals[i].imag()*pvec[i].real();
         }
         return std::complex<T1>(real,imag);
     }

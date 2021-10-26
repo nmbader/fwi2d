@@ -146,6 +146,7 @@ void hilbert(std::shared_ptr<vecReg<data_t> > input){
         fftw_destroy_plan(p1);
         fftw_destroy_plan(p2);
         fftw_free(in);
+        fftw_cleanup();
     }
 
     // single precision
@@ -177,6 +178,7 @@ void hilbert(std::shared_ptr<vecReg<data_t> > input){
         fftwf_destroy_plan(p1);
         fftwf_destroy_plan(p2);
         fftwf_free(in);
+        fftwf_cleanup();
     }
 }
 

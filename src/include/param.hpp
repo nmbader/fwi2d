@@ -50,7 +50,7 @@ struct param{
     std::string nlsolver="lbfgs", lsearch="regular_wolfe", mask_file="none", weights_file="none";
     data_t threshold=0;
     int niter=0, max_trial=10, isave=10, envelop=0;
-    bool solver_verbose=true, normalize=0;
+    bool solver_verbose=true, normalize=0, integrate=0;
 
     // miscallenous
     int version=2;

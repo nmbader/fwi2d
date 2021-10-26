@@ -290,6 +290,7 @@ protected:
     std::shared_ptr<vecReg<data_t> > _gmask; // gradient mask vector
     std::shared_ptr<vecReg<data_t> > _w; // residual weighting vector
     bool _normalize; // apply or not trace normalization
+    bool _integrate; // apply or not time integration
     std::shared_ptr<vecReg<data_t> > _norms; // traces norm needed for the Jacobian of the normalization
     std::shared_ptr<vecReg<data_t> > _syn1; // synthetic data needed for the Jacobian of the normalization
     int _envelop; // compute or not the envelop (or envelop squared) of the data
@@ -298,7 +299,7 @@ protected:
 public:
     nlls_fwi(){}
     virtual ~nlls_fwi(){}
-    nlls_fwi(nloper * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr, bool normalize=false, int envelop=0){
+    nlls_fwi(nloper * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr, bool normalize=false, bool integrate=false, int envelop=0){
        successCheck(L->checkDomainRange(m,d),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
         if (gmask != nullptr) {
             successCheck(m->getN123()==gmask->getN123(),__FILE__,__LINE__,"The gradient mask and model vectors must have the same size\n");
@@ -315,6 +316,7 @@ public:
         _gmask = gmask;
         _w = w;
         _normalize=normalize;
+        _integrate=integrate;
         if (envelop==1 || envelop==2) _envelop = envelop;
         else _envelop=0;
         if (_normalize) {
@@ -342,6 +344,11 @@ public:
             int nt = _r->getN123()/ntr;
             memcpy(_syn1->getVals(), _r->getVals(), _r->getN123()*sizeof(data_t));
             ttnormalize(_r->getVals(), _norms->getVals(), nt, ntr);
+        }
+
+        if (_integrate){
+            integral S(*_r->getHyper());
+            S.forward(false, _r, _r);
         }
 
         if (_envelop != 0){
@@ -401,6 +408,11 @@ public:
             else {
                 for (int i=0; i<temp->getN123(); i++) pr[i] = 2*(psyn[i]*pr[i]-ptemp[i]);
             }
+        }
+
+        if (_integrate){
+            integral S(*_r->getHyper());
+            S.adjoint(false, _r, _r);
         }
 
         if (_normalize){

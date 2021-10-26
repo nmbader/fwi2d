@@ -59,7 +59,9 @@ public:
         successCheck(mod->getHyper()->isCompatible(*mod0->getHyper()),__FILE__,__LINE__,"Input and background models hypercubes are not compatible\n");
         apply_jacobianT(add, mod->getVals(), mod0->getCVals(), dat->getCVals());
     }
-    virtual void apply_forward(bool add, const data_t * pmod, data_t * pdat) = 0;
+    virtual void apply_forward(bool add, const data_t * pmod, data_t * pdat) {
+        successCheck(false,__FILE__,__LINE__,"This function from the abstract non-linear operator must not be called\n");
+    }
     virtual void apply_inverse(bool add, data_t * mod, const data_t * dat) {
         successCheck(false,__FILE__,__LINE__,"This function from the abstract non-linear operator must not be called\n");
     }
@@ -263,14 +265,16 @@ public:
 class sinc_resampler : public resampler{
 protected:
     int _hl;
+    data_t _alpha;
 
 public:
     sinc_resampler(){}
     ~sinc_resampler(){}
-    sinc_resampler(const hypercube<data_t> &domain, const hypercube<data_t> &range, int half_length):resampler(domain, range){
+    sinc_resampler(const hypercube<data_t> &domain, const hypercube<data_t> &range, int half_length, data_t alpha=0.5):resampler(domain, range){
    
         successCheck(half_length>0,__FILE__,__LINE__,"The half length of the sinc filter must be larger than 0\n");
         _hl = half_length;
+        _alpha = alpha;
     }
     sinc_resampler * clone() const{
         sinc_resampler * resampler = new sinc_resampler(_domain, _range, _hl);
@@ -287,7 +291,7 @@ protected:
 public:
     matrix(){}
     ~matrix(){}
-    matrix(const std::shared_ptr<vecReg<data_t> > mat, const hypercube<data_t> domain, const hypercube<data_t> range){
+    matrix(const std::shared_ptr<vecReg<data_t> > mat, const hypercube<data_t> &domain, const hypercube<data_t> &range){
         successCheck(mat->getHyper()->getNdim()==2,__FILE__,__LINE__,"The matrix must be 2D\n");
         successCheck(mat->getHyper()->getAxis(1).n==domain.getN123(),__FILE__,__LINE__,"The domain dimension must match the matrix row size\n");
         successCheck(mat->getHyper()->getAxis(2).n==range.getN123(),__FILE__,__LINE__,"The range dimension must match the matrix column size\n");
@@ -351,4 +355,182 @@ public:
             pmod[j] = add*pmod[j] + val;
         }
     }
+};
+
+// Integral operator along the fast axis using the Trapezoidal quadrature
+// The add option is inactive
+class integral : public loper {
+public:
+    integral(){}
+    ~integral(){}
+    integral(const hypercube<data_t> &domain){
+        _domain = domain;
+        _range = domain;
+    }
+    integral * clone() const {
+        integral * op = new integral(_domain);
+        return op;
+    }    
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat){
+        int nt = _domain.getAxis(1).n;
+        int nx = _domain.getN123() / nt;
+        data_t dt = _domain.getAxis(1).d;
+        #pragma omp parallel for
+        for (int ix=0; ix<nx; ix++){
+            int i1=ix*nt;
+            pdat[i1] = 0.5*pmod[i1]*dt;
+            for (int it=1; it<nt-1; it++){
+                pdat[i1+it] = pdat[i1+it-1] + pmod[i1+it]*dt;
+            }
+            pdat[i1+nt-1] = pdat[i1+nt-2] + 0.5*pmod[i1+nt-1]*dt;
+        }
+    }
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+        int nt = _domain.getAxis(1).n;
+        int nx = _domain.getN123() / nt;
+        data_t dt = _domain.getAxis(1).d;
+        for (int ix=0; ix<nx; ix++){
+            int i1=ix*nt;
+            pmod[i1+nt-1] = pdat[i1+nt-1]*dt;
+            for (int it=nt-2; it>=0; it--){
+                pmod[i1+it] = pmod[i1+it+1] + pdat[i1+it]*dt;
+            }
+            pmod[i1+nt-1] *= 0.5;
+            pmod[i1] *= 0.5; 
+        }
+    }
+};
+
+// class to tranform from t-x (or z-x) to f-x space and vice versa
+class fxTransform{
+protected:
+    hypercube<data_t> _domain;
+    hypercube<data_t> _range;
+    hypercube<data_t> _crange;
+
+public:
+	fxTransform(){}
+    ~fxTransform(){}
+    fxTransform(const hypercube<data_t> &domain){
+        _domain = domain;
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        axis<data_t> Z = axes[0];
+        Z.n = Z.n/2 + 1;
+        Z.d = 1.0/((domain.getAxis(1).n-1)*Z.d);
+        Z.o = 0.0;
+        axes[0] = Z;
+        _range = hypercube<data_t>(axes);
+        Z.n = domain.getAxis(1).n;
+        Z.o = -(Z.n-1)/2 * Z.d;
+        axes[0] = Z;
+        _crange = hypercube<data_t> (axes);
+    }
+    fxTransform * clone() const{
+        fxTransform * op = new fxTransform(_domain);
+        return op;
+    }
+    const hypercube<data_t> * getDomain() const {return &_domain;}
+    const hypercube<data_t> * getRange() const {return &_range;}
+    const hypercube<data_t> * getCRange() const {return &_crange;}
+    void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
+        successCheck(domain.getN123()==_domain.getN123(),__FILE__,__LINE__,"The new domain must have the same number of samples\n");
+        successCheck(range.getN123()==_range.getN123(),__FILE__,__LINE__,"The new range must have the same number of samples\n");
+        successCheck(domain.getAxis(1)==_domain.getAxis(1),__FILE__,__LINE__,"The first axis in the domain must be the same\n");
+        successCheck(range.getAxis(1)==_range.getAxis(1),__FILE__,__LINE__,"The first axis in the range must be the same\n");
+        _domain = domain;
+        _range = range;
+    }
+    bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat) const {
+        bool ans1 = (mod->getN123()==_domain.getN123());
+        bool ans2 = (dat->getN123()==_range.getN123());
+        bool ans3 = (mod->getHyper()->getAxis(1)==_domain.getAxis(1));
+        bool ans4 = (dat->getHyper()->getAxis(1)==_range.getAxis(1));
+        return (ans1 && ans2 && ans3 && ans4);
+    }
+    bool checkCDomainRange(const std::shared_ptr<cvecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat) const {
+        bool ans1 = (mod->getN123()==_domain.getN123());
+        bool ans2 = (dat->getN123()==_crange.getN123());
+        bool ans3 = (mod->getHyper()->getAxis(1)==_domain.getAxis(1));
+        bool ans4 = (dat->getHyper()->getAxis(1)==_crange.getAxis(1));
+        return (ans1 && ans2 && ans3 && ans4);
+    }
+    void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<cvecReg<data_t> > dat);
+    void inverse(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat);
+    void adjoint(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat){
+        inverse(add, mod, dat);
+    }
+    void cforward(bool add, const std::shared_ptr<cvecReg<data_t> > mod, std::shared_ptr<cvecReg<data_t> > dat);
+    void cinverse(bool add, std::shared_ptr<cvecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat);
+    void cadjoint(bool add, std::shared_ptr<cvecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat){
+        cinverse(add, mod, dat);
+    }
+
+    void testInverse();
+    void testCInverse();
+    void testAdjoint();
+    void testCAdjoint();
+};
+
+// class to tranform from t-x (or z-x) to f-k space and vice versa
+class fkTransform : public fxTransform{
+protected:
+
+public:
+	fkTransform(){}
+    ~fkTransform(){}
+    fkTransform(const hypercube<data_t> &domain){
+        successCheck(domain.getNdim()>1,__FILE__,__LINE__,"The domain must contain at least 2 dimensions\n");
+        _domain = domain;
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        axis<data_t> Z = axes[0];
+        axis<data_t> X = axes[1];
+        Z.n = Z.n/2 + 1;
+        Z.d = 1.0/((domain.getAxis(1).n-1)*Z.d);
+        Z.o = 0.0;
+        X.d = 2*M_PI/((X.n-1)*X.d);
+        X.o = - X.d * floor((X.n-1)/2);
+        axes[0] = Z;
+        axes[1] = X;
+        _range = hypercube<data_t>(axes);
+        Z.n = domain.getAxis(1).n;
+        Z.o = -(Z.n-1)/2 * Z.d;
+        axes[0] = Z;
+        _crange = hypercube<data_t> (axes);
+    }
+    fkTransform * clone() const{
+        fkTransform * op = new fkTransform(_domain);
+        return op;
+    }
+    void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
+        successCheck(domain.getN123()==_domain.getN123(),__FILE__,__LINE__,"The new domain must have the same number of samples\n");
+        successCheck(range.getN123()==_range.getN123(),__FILE__,__LINE__,"The new range must have the same number of samples\n");
+        successCheck(domain.getAxis(1)==_domain.getAxis(1),__FILE__,__LINE__,"The first axis in the domain must be the same\n");
+        successCheck(domain.getAxis(2)==_domain.getAxis(2),__FILE__,__LINE__,"The second axis in the domain must be the same\n");
+        successCheck(range.getAxis(1)==_range.getAxis(1),__FILE__,__LINE__,"The first axis in the range must be the same\n");
+        successCheck(range.getAxis(2)==_range.getAxis(2),__FILE__,__LINE__,"The second axis in the range must be the same\n");
+        _domain = domain;
+        _range = range;
+    }
+    bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat) const {
+        bool ans1 = (mod->getN123()==_domain.getN123());
+        bool ans2 = (dat->getN123()==_range.getN123());
+        bool ans3 = (mod->getHyper()->getAxis(1)==_domain.getAxis(1));
+        bool ans4 = (dat->getHyper()->getAxis(1)==_range.getAxis(1));
+        bool ans5 = (mod->getHyper()->getAxis(2)==_domain.getAxis(2));
+        bool ans6 = (dat->getHyper()->getAxis(2)==_range.getAxis(2));
+        return (ans1 && ans2 && ans3 && ans4 && ans5 && ans6);
+    }
+    bool checkCDomainRange(const std::shared_ptr<cvecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat) const {
+        bool ans1 = (mod->getN123()==_domain.getN123());
+        bool ans2 = (dat->getN123()==_crange.getN123());
+        bool ans3 = (mod->getHyper()->getAxis(1)==_domain.getAxis(1));
+        bool ans4 = (dat->getHyper()->getAxis(1)==_crange.getAxis(1));
+        bool ans5 = (mod->getHyper()->getAxis(2)==_domain.getAxis(2));
+        bool ans6 = (dat->getHyper()->getAxis(2)==_crange.getAxis(2));
+        return (ans1 && ans2 && ans3 && ans4 && ans5 && ans6);
+    }
+    void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<cvecReg<data_t> > dat);
+    void inverse(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat);
+    void cforward(bool add, const std::shared_ptr<cvecReg<data_t> > mod, std::shared_ptr<cvecReg<data_t> > dat);
+    void cinverse(bool add, std::shared_ptr<cvecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat);
 };
