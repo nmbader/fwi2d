@@ -38,8 +38,8 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> model = sepRead<data_t>(model_file);
     
     // Analyze the input source time function and duplicate if necessary, analyze geometry
-    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par);
-    analyzeGeometry(*model->getHyper(),par);
+    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
+    analyzeGeometry(*model->getHyper(),par, par.verbose>0);
 
     // If more than one shot is modeled, don't save the wavefield
     if (par.ns>1) par.sub=0;

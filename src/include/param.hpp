@@ -41,7 +41,7 @@ struct param{
 
     // model parameterization
     int nmodels=3;
-    bool bsplines=false;
+    bool bsplines=false, soft_clip=false;
     int bs_nx=3, bs_nz=3;
     std::vector<int> bs_mx, bs_mz;
     std::vector<data_t> bs_controlx, bs_controlz;
@@ -50,12 +50,16 @@ struct param{
     std::string nlsolver="lbfgs", lsearch="regular_wolfe", mask_file="none", weights_file="none";
     data_t threshold=0;
     int niter=0, max_trial=10, isave=10, envelop=0;
-    bool solver_verbose=true, normalize=0, integrate=0;
+    bool normalize=0, integrate=0;
+
+    // advances line search parameters (check nlsolver.hpp)
+    data_t ls_a0=1, ls_a1=0, ls_c1=1e-4, ls_c2=0.5, ls_max_step=1e6;
+    bool ls_version=0;
 
     // miscallenous
-    int version=2;
-    std::vector<int> device;
-    bool verbose=false;
+    int version=2; // spatial operators version (1 or 2)
+    std::vector<int> device; // list of gpu devices to use
+    int verbose=1;
 };
 
 template <typename T> T convert_to (const std::string &str)

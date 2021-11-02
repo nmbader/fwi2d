@@ -24,7 +24,7 @@ void nloper::dotProduct(){
     forward(false,m1,dtilde); // f(m + eps.dm)
     dtilde->scaleAdd(d1,1,-1); // f(m + eps.dm) - f(m)
     dtilde->scale(1.0/eps); // (df/dm).dm
-    jacobian(false,mtilde,m,d); // (df/dm)'.d
+    jacobianT(false,mtilde,m,d); // (df/dm)'.d
 
     data_t sum1 = d->dot(dtilde);
     data_t sum2 = dm->dot(mtilde);
@@ -32,14 +32,14 @@ void nloper::dotProduct(){
     fprintf(stderr,"Dot product with eps = %f:\n",eps);
     fprintf(stderr,"sum1 = %f\nsum2 = %f\ndiff (x1000) = %f\n",sum1,sum2,1000*(sum1 - sum2));
 
-    eps = 0.01;
+    eps = 0.001;
 
     m1 = dm->clone();
     m1->scaleAdd(m,eps,1); // m + eps.dm
     forward(false,m1,dtilde); // f(m + eps.dm)
     dtilde->scaleAdd(d1,1,-1); // f(m + eps.dm) - f(m)
     dtilde->scale(1.0/eps); // (df/dm).dm
-    jacobian(false,mtilde,m,d); // (df/dm)'.d
+    jacobianT(false,mtilde,m,d); // (df/dm)'.d
 
     sum1 = d->dot(dtilde);
     sum2 = dm->dot(mtilde);
@@ -47,14 +47,14 @@ void nloper::dotProduct(){
     fprintf(stderr,"Dot product with eps = %f:\n",eps);
     fprintf(stderr,"sum1 = %f\nsum2 = %f\ndiff (x1000) = %f\n",sum1,sum2,1000*(sum1 - sum2));
 
-    eps = 0.001;
+    eps = 0.00001;
     
     m1 = dm->clone();
     m1->scaleAdd(m,eps,1); // m + eps.dm
     forward(false,m1,dtilde); // f(m + eps.dm)
     dtilde->scaleAdd(d1,1,-1); // f(m + eps.dm) - f(m)
     dtilde->scale(1.0/eps); // (df/dm).dm
-    jacobian(false,mtilde,m,d); // (df/dm)'.d
+    jacobianT(false,mtilde,m,d); // (df/dm)'.d
 
     sum1 = d->dot(dtilde);
     sum2 = dm->dot(mtilde);
@@ -92,6 +92,161 @@ void loper::dotProduct(){
 
     fprintf(stderr,"Dot product with add=true:\n");
     fprintf(stderr,"sum1 = %f\nsum2 = %f\ndiff (x1000) = %f\n",sum1,sum2,1000*(sum1 - sum2));
+}
+
+void softClip::apply_forward(bool add, const data_t * pmod, data_t * pdat) {
+    
+    int n = _domain.getN123();
+    data_t xbar = 0.5*(_xmax+_xmin);
+    data_t dx = 2*(_xmax-xbar)*std::pow(1.0*_q/(_q-1),1.0/_p);
+    data_t xmax = xbar + dx;
+    data_t xmin = xbar - dx;
+    data_t g = 0;
+
+    #pragma omp parallel for private(g)
+    for (int i=0; i<n; i++)
+    {
+        g = std::pow(2*(pmod[i]-xbar)/dx,_p);
+        if (std::abs(g) < 1) {
+            if (g>0) pdat[i] = add*pdat[i] + xbar + 0.5*dx*std::pow(g-std::pow(g,_q)/_q,1.0/_p);
+            else if (g<0) pdat[i] = add*pdat[i] + xbar - 0.5*dx*std::pow(-g+std::pow(g,_q)/_q,1.0/_p);
+            else pdat[i] = add*pdat[i] + xbar;
+        }
+        else if (g>=1) pdat[i] = add*pdat[i] + xbar + 0.5*dx*std::pow(1.0*(_q-1)/_q,1.0/_p);
+        else pdat[i] = add*pdat[i] + xbar - 0.5*dx*std::pow(1.0*(_q-1)/_q,1.0/_p);
+    }
+}
+void softClip::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat) {
+
+    int n = _domain.getN123();
+    data_t xbar = 0.5*(_xmax+_xmin);
+    data_t dx = 2*(_xmax-xbar)*std::pow(1.0*_q/(_q-1),1.0/_p);
+    data_t g = 0;
+    #pragma omp parallel for private(g)
+    for (int i=0; i<n; i++)
+    {
+        g = std::pow(2*(pmod0[i]-xbar)/dx,_p);
+        if (std::abs(g) < 1 && g!=0) {
+            if  (g>0) pmod[i] = add*pmod[i] + std::pow(2*(pmod0[i]-xbar)/dx,_p-1)*(1-std::pow(g,_q-1))*std::pow(g-std::pow(g,_q)/_q,1.0*(1-_p)/_p)*pdat[i];
+            else pmod[i] = add*pmod[i] + std::pow(2*(pmod0[i]-xbar)/dx,_p-1)*(1-std::pow(g,_q-1))*std::pow(-g+std::pow(g,_q)/_q,1.0*(1-_p)/_p)*pdat[i];
+        }
+        else pmod[i] = add*pmod[i];
+    }
+}
+
+void emodelSoftClip::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+    
+    hypercube<data_t> hyper(_domain.getAxis(1),_domain.getAxis(2));
+    softClip vpClip(hyper, _vpmin, _vpmax, _p, _q);
+    softClip vsClip(hyper, _vsmin, _vsmax, _p, _q);
+    softClip rhoClip(hyper, _rhomin, _rhomax, _p, _q);
+    softClip spratioClip(hyper, -_spratio, _spratio, _p, _q);
+
+    int n = hyper.getN123();
+
+    data_t (* pm) [n] = (data_t (*) [n]) pmod;
+    data_t (* pd) [n] = (data_t (*) [n]) pdat;
+
+    data_t * v0;
+    if (add) {
+        v0 = new data_t [n];
+        memcpy(v0, pd[1], sizeof(data_t)*n);
+    }
+
+    // vp, vs, rho clip
+    vpClip.apply_forward(add, pm[0], pd[0]);
+    vsClip.apply_forward(false, pm[1], pd[1]);
+    rhoClip.apply_forward(add, pm[2], pd[2]);
+
+    // vs/vp ratio clip
+    #pragma omp parallel for
+    for (int i=0; i<n; i++) pd[1][i] = pd[1][i] / pd[0][i];
+
+    spratioClip.apply_forward(false, pd[1], pd[1]);
+    
+    #pragma omp parallel for
+    for (int i=0; i<n; i++) {
+        pd[1][i] = pd[1][i] * pd[0][i];
+    }
+
+    if (add){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++) {
+            pd[1][i] += v0[i];
+        }
+        delete [] v0;
+    }
+
+    // copy other parameters if any
+    #pragma omp parallel for
+    for (int i=3*n; i<_domain.getN123(); i++){
+        pdat[i] = add*pdat[i] + pmod[i];
+    }
+}
+
+void emodelSoftClip::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    hypercube<data_t> hyper(_domain.getAxis(1),_domain.getAxis(2));
+    softClip vpClip(hyper, _vpmin, _vpmax, _p, _q);
+    softClip vsClip(hyper, _vsmin, _vsmax, _p, _q);
+    softClip rhoClip(hyper, _rhomin, _rhomax, _p, _q);
+    softClip spratioClip(hyper, -_spratio, _spratio, _p, _q);
+
+    int n = hyper.getN123();
+
+    data_t (* pm) [n] = (data_t (*) [n]) pmod;
+    const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
+    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
+
+    // rho jacobian
+    rhoClip.apply_jacobianT(add, pm[2], pm0[2], pd[2]);
+
+    // adjoint for other parameters if any
+    #pragma omp parallel for
+    for (int i=3*n; i<_domain.getN123(); i++){
+        pmod[i] = add*pmod[i] + pdat[i];
+    }
+
+    // forward vp,vs clip -> vp,spratio -> spratio clip
+    data_t * v0 = new data_t [2*n];
+    data_t * v1 = new data_t [n];
+    data_t * m0 = new data_t [2*n];
+    memset(v0, 0, sizeof(data_t)*2*n);
+    memset(m0, 0, sizeof(data_t)*2*n);
+    vpClip.apply_forward(false, pmod0, v0);
+    vsClip.apply_forward(false, pmod0+n, v0+n);
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++) v0[n+i] = v0[n+i] / v0[i];
+
+    memcpy(v1, v0+n, sizeof(data_t)*n);
+
+    spratioClip.apply_forward(false, v1, v1);
+
+    // jacobian of vp,spratio -> vp,vs
+    #pragma omp parallel for
+    for (int i=0; i<n; i++) {
+        m0[i] = pd[0][i] + v1[i]*pd[1][i];
+        m0[n+i] = v0[i]*pd[1][i];
+    }
+
+    // jacobian of spratio clip
+    spratioClip.apply_jacobianT(false,m0+n, v0+n, m0+n);
+
+    // jacobian of vp,vs -> vp,spratio
+    #pragma omp parallel for
+    for (int i=0; i<n; i++) {
+        m0[i] = m0[i] - v0[n+i]/v0[i]*m0[n+i];
+        m0[n+i] /= v0[i];
+    }
+
+    // jacobian of vp,vs clip
+    vpClip.apply_jacobianT(add, pm[0], pm0[0], m0);
+    vsClip.apply_jacobianT(add, pm[1], pm0[1], m0+n);
+
+    delete [] v0;
+    delete [] v1;
+    delete [] m0;
 }
 
 inline data_t sinc(data_t x){

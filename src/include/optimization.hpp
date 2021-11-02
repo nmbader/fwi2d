@@ -4,6 +4,7 @@
 #define M_INF -1e+16
 
 #include "operator.hpp"
+#include "we_op.hpp"
 
 // General class for optimization problems: min(f(m))
 class optimization {
@@ -308,7 +309,6 @@ public:
         if (w != nullptr) {
             successCheck(d->getN123()==w->getN123(),__FILE__,__LINE__,"The weighting and data vectors must have the same size\n");
             successCheck(w->min()>=0,__FILE__,__LINE__,"Data weights  must be non-negative\n");
-            d->mult(w);
         }
         _L = L;
         _m = m;
@@ -319,6 +319,12 @@ public:
         _integrate=integrate;
         if (envelop==1 || envelop==2) _envelop = envelop;
         else _envelop=0;
+
+        if (_integrate){
+            integral S(*_d->getHyper());
+            S.forward(false, _d, _d);
+        }
+        if (_w != nullptr) _d->mult(_w);
         if (_normalize) {
             int nt=_d->getHyper()->getAxis(1).n;
             int ntr=_d->getN123()/nt;
@@ -337,6 +343,11 @@ public:
     void res(){
         _L->forward(false,_m,_r);
 
+        if (_integrate){
+            integral S(*_r->getHyper());
+            S.forward(false, _r, _r);
+        }
+
         if (_w != nullptr) _r->mult(_w);
 
         if (_normalize){
@@ -344,11 +355,6 @@ public:
             int nt = _r->getN123()/ntr;
             memcpy(_syn1->getVals(), _r->getVals(), _r->getN123()*sizeof(data_t));
             ttnormalize(_r->getVals(), _norms->getVals(), nt, ntr);
-        }
-
-        if (_integrate){
-            integral S(*_r->getHyper());
-            S.forward(false, _r, _r);
         }
 
         if (_envelop != 0){
@@ -410,11 +416,6 @@ public:
             }
         }
 
-        if (_integrate){
-            integral S(*_r->getHyper());
-            S.adjoint(false, _r, _r);
-        }
-
         if (_normalize){
             int ntr = _norms->getN123();
             int nt = _r->getN123()/ntr;
@@ -436,9 +437,264 @@ public:
 
         if (_w != nullptr) r->mult(_w);
 
+        if (_integrate){
+            integral S(*r->getHyper());
+            S.adjoint(false, r, r);
+        }
+
         _L->jacobianT(false,_g,_m,r);
 
         if (_gmask != nullptr) _g->mult(_gmask);
+    }
+};
+
+
+// Same class as nlls_fwi but re-written so that the gradient is computed simultaneously with the residual for better scalability over the number of shots
+// The WE operator and model preconditioner are provided separately
+class nlls_efwi : public optimization{
+protected:
+    nl_we_op_e * _L; // non-linear WE operator
+    nloper * _P; // model preconditioner
+    std::shared_ptr<vecReg<data_t> > _p; // preconditioned model
+    std::shared_ptr<vecReg<data_t> > _pg; // gradient before applying preconditioner Jacobian
+    std::shared_ptr<vecReg<data_t> > _gmask; // gradient mask vector
+    std::shared_ptr<vecReg<data_t> > _w; // residual weighting vector
+    bool _normalize; // apply or not trace normalization
+    bool _integrate; // apply or not time integration
+    int _envelop; // compute or not the envelop (or envelop squared) of the data
+
+public:
+    nlls_efwi(){}
+    virtual ~nlls_efwi(){}
+    nlls_efwi(nl_we_op_e * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr, bool normalize=false, bool integrate=false, int envelop=0){
+        _L = L;
+        _P = P;
+        _m = m;
+        _d = d;
+        _gmask = gmask;
+        _w = w;
+        _normalize=normalize;
+        _integrate=integrate;
+        if (envelop==1 || envelop==2) _envelop = envelop;
+        else _envelop=0;
+       
+        if (P!= nullptr){
+            _p = std::make_shared<vecReg<data_t> >(*P->getRange());
+            _pg = std::make_shared<vecReg<data_t> >(*P->getRange());
+            _p->zero();
+            _pg->zero();
+            successCheck(P->checkDomainRange(m,_p),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+        }
+        else{
+            _p = _m;
+            _pg = _g;
+        }
+        successCheck(L->checkDomainRange(_p,d),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+        if (gmask != nullptr) {
+            successCheck(m->getN123()==gmask->getN123(),__FILE__,__LINE__,"The gradient mask and model vectors must have the same size\n");
+            successCheck(gmask->min()>=0,__FILE__,__LINE__,"Gradient mask must be non-negative\n");
+        }
+        if (w != nullptr) {
+            successCheck(d->getN123()==w->getN123(),__FILE__,__LINE__,"The weighting and data vectors must have the same size\n");
+            successCheck(w->min()>=0,__FILE__,__LINE__,"Data weights  must be non-negative\n");
+        }
+        
+        if (_integrate){
+            integral S(*_d->getHyper());
+            S.forward(false, _d, _d);
+        }
+        if (_w != nullptr) _d->mult(_w);
+        if (_normalize) {
+            int nt=_d->getHyper()->getAxis(1).n;
+            int ntr=_d->getN123()/nt;
+            data_t * norms = new data_t[ntr];
+            ttnormalize(_d->getVals(), norms, nt, ntr);
+            delete [] norms;
+        }
+        if (_envelop==1) envelop1(_d);
+        else if (_envelop==2) envelop2(_d);
+    }
+
+    void res(){
+
+        if (_P != nullptr)  {
+            _P->forward(false, _m, _p);
+            _pg->zero();
+        }
+        _g->zero();
+
+        int ns = _L->_par.ns;
+        int nt = _d->getHyper()->getAxis(1).n;
+        data_t dt = _d->getHyper()->getAxis(1).d;
+        int nr=0;
+
+        for (int s=0; s<ns; s++)
+        {
+            
+            if (_L->_par.verbose>1) fprintf(stderr,"Start processing shot %d\n",s);
+
+            // cumulative number of receivers
+            if (s>0) nr += _L->_par.rxz[s-1].size();
+
+            // adjust param object to a single shot
+            param par = _L->_par;
+            par.sxz = {_L->_par.sxz[s]};
+            par.rxz = {_L->_par.rxz[s]};
+            par.ns=1;
+            par.nr=par.rxz[s].size();
+            par.rdip = std::vector<data_t>(_L->_par.rdip.begin()+nr, _L->_par.rdip.begin()+nr+par.nr);
+
+            if (s>0) par.verbose=0;
+
+            // extract the time functions for a single shot
+            hypercube<data_t> hyper_s = *_L->_allsrc->getHyper();
+            std::shared_ptr<vecReg<data_t> > src = std::make_shared<vecReg<data_t> > (hypercube<data_t>(hyper_s.getAxis(1),axis<data_t>(1,0,1),hyper_s.getAxis(3)));
+            memcpy(src->getVals(), _L->_allsrc->getVals() + s*nt, sizeof(data_t)*nt);
+            memcpy(src->getVals()+nt, _L->_allsrc->getVals() + (ns+s)*nt, sizeof(data_t)*nt);
+            if (par.mt) memcpy(src->getVals()+2*nt, _L->_allsrc->getVals() + (2*ns+s)*nt, sizeof(data_t)*nt);
+
+            // build the we operator for a single shot
+            nl_we_op_e * L;
+            if (par.nmodels==3) L=new nl_we_op_e(*_p->getHyper(),src,par);
+            else if (par.nmodels==5) L=new nl_we_op_vti(*_p->getHyper(),src,par);
+            std::shared_ptr<vecReg<data_t> > rs = std::make_shared<vecReg<data_t> >(*L->getRange());
+            int ntr = rs->getN123()/nt;
+            
+            L->forward(false,_p,rs);
+            data_t * pr = rs->getVals();
+
+            if (_integrate){
+                integral S(*rs->getHyper());
+                S.forward(false, rs, rs);
+            }
+
+            if (_w != nullptr) {
+                data_t * pw = _w->getVals()+nr*nt;
+                #pragma omp parallel for
+                for (int i=0; i<par.nr*nt; i++) pr[i] *= pw[i];
+
+                if (par.gl==0){
+                    #pragma omp parallel for
+                    for (int i=0; i<par.nr*nt; i++) pr[par.nr*nt+i] *= pw[_L->_par.nr*nt+i];
+                }
+            }
+
+            std::shared_ptr<vecReg<data_t> > norms;
+            std::shared_ptr<vecReg<data_t> > syn1;
+            if (_normalize){
+                norms = std::make_shared<vecReg<data_t> >(hypercube<data_t>(ntr));
+                syn1 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(rs->getN123()));
+                memcpy(syn1->getVals(), rs->getVals(), rs->getN123()*sizeof(data_t));
+                ttnormalize(rs->getVals(), norms->getVals(), nt, ntr);
+            }
+
+            std::shared_ptr<vecReg<data_t> > syn2;
+            if (_envelop != 0){
+                syn2 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(rs->getN123()));
+                memcpy(syn2->getVals(), rs->getVals(), rs->getN123()*sizeof(data_t));
+                if (_envelop==1) envelop1(rs);
+                else envelop2(rs);
+            }
+
+            // compute the residual u-d
+            data_t * pd = _d->getVals()+nr*nt;
+            #pragma omp parallel for
+            for (int i=0; i<par.nr*nt; i++) pr[i] -= pd[i];
+
+            if (par.gl==0){
+                #pragma omp parallel for
+                for (int i=0; i<par.nr*nt; i++) pr[par.nr*nt+i] -= pd[_L->_par.nr*nt+i];
+            }
+
+            memcpy(_r->getVals()+nr*nt, rs->getVals(), par.nr*nt*sizeof(data_t));
+            if (par.gl==0) memcpy(_r->getVals()+(_L->_par.nr+nr)*nt, rs->getVals()+par.nr*nt, par.nr*nt*sizeof(data_t));
+        
+            // compute the gradient per shot
+            applyHt(false, false, pr, pr, ntr, nt, dt, 0, ntr);
+
+            if (_envelop != 0){
+                std::shared_ptr<vecReg<data_t> > temp = syn2->clone();
+                hilbert(temp);
+                std::shared_ptr<vecReg<data_t> > temp2;
+                data_t * ptemp = temp->getVals();
+                data_t * psyn = syn2->getVals();
+                if (_envelop==1) {
+                    temp2 = temp->clone();
+                    data_t * ptemp2 = temp2->getVals();
+                    for (int i=0; i<temp->getN123(); i++) {
+                        ptemp2[i] = std::max(ZERO,sqrt(ptemp[i]*ptemp[i]+psyn[i]*psyn[i]));
+                        ptemp[i] *= pr[i]/ptemp2[i];
+                    }
+                }
+                else{
+                    for (int i=0; i<temp->getN123(); i++) ptemp[i] *= pr[i];
+                }
+                hilbert(temp);
+                ptemp = temp->getVals();
+                if (_envelop==1) {
+                    data_t * ptemp2 = temp2->getVals();
+                    for (int i=0; i<temp->getN123(); i++) pr[i] = psyn[i]/ptemp2[i] * pr[i] - ptemp[i];
+                }
+                else {
+                    for (int i=0; i<temp->getN123(); i++) pr[i] = 2*(psyn[i]*pr[i]-ptemp[i]);
+                }
+            }
+
+            if (_normalize){
+                data_t * psyn = syn1->getVals();
+                data_t * pnorm = norms->getVals();
+                for (int ix=0; ix<ntr; ix++){
+                    data_t val = 0;
+                    int i;
+                    for (int it=0; it<nt; it++){
+                        i = ix*nt+it;
+                        val += pr[i] * psyn[i]; // u'.r
+                    }
+                    for (int it=0; it<nt; it++){
+                        i = ix*nt+it;
+                        pr[i] = pr[i]/pnorm[ix] - val/(pnorm[ix]*pnorm[ix]*pnorm[ix]) * psyn[i];
+                    }
+                }
+            }
+
+            if (_w != nullptr) {
+                data_t * pw = _w->getVals()+nr*nt;
+                #pragma omp parallel for
+                for (int i=0; i<par.nr*nt; i++) pr[i] *= pw[i];
+
+                if (par.gl==0){
+                    #pragma omp parallel for
+                    for (int i=0; i<par.nr*nt; i++) pr[par.nr*nt+i] *= pw[_L->_par.nr*nt+i];
+                }
+            }
+
+            if (_integrate){
+                integral S(*rs->getHyper());
+                S.adjoint(false, rs, rs);
+            }
+
+            L->jacobianT(true,_pg,_p,rs);
+
+            if (_L->_par.verbose>1) fprintf(stderr,"Finish processing shot %d\n",s);
+
+        } // end of loop over shots
+
+        if (_P != nullptr) _P->jacobianT(false,_g,_m,_pg);
+
+        if (_gmask != nullptr) _g->mult(_gmask);
+    }
+    data_t getFunc(){
+        int n123 = _r->getN123();
+        int nt = _r->getHyper()->getAxis(1).n;
+        int nx = n123 / nt;
+        data_t dt = _r->getHyper()->getAxis(1).d;
+        data_t * pr = _r->getVals();
+        data_t f = _r->norm2();
+        for (int i=0; i<nx; i++) f = f - 0.5*(pr[i*nt]*pr[i*nt] + pr[i*nt+nt-1]*pr[i*nt+nt-1]);
+        return 0.5*dt*f;
+    }
+    void grad() {
+        // already computed in the res() method above
     }
 };
 

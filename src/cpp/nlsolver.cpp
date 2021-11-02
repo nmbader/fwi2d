@@ -50,7 +50,7 @@ bool weak_wolfe::lineSearch(optimization * prob,
 
     int trial=0;
     while (true){
-        if (trial >= max_trial){
+        if (trial > max_trial){
             fprintf(stderr,"==============================\nWARNING: Maximum number of trials reached before finding a satisfactory step length. Solver STOPS\n==============================\n");
             return false;
         }
@@ -98,7 +98,7 @@ bool weak_wolfe::lineSearch(optimization * prob,
             f = prob->getFunc();
             _f0=f;
 
-            if (std::isnan(f)) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+            if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
             if (verbose){
                 fprintf(stderr,"==============================\n");
                 fprintf(stderr,"Trial = %d\n",trial);
@@ -143,7 +143,7 @@ bool weak_wolfe::lineSearch(optimization * prob,
             f = prob->getFunc();
             _f1 = f;
 
-            if (std::isnan(f)) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+            if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
             if (verbose){
                 fprintf(stderr,"==============================\n");
                 fprintf(stderr,"Trial = %d\n",trial);
@@ -235,7 +235,7 @@ bool regular_wolfe::lineSearch(optimization * prob,
         trial++;
         f = prob->getFunc();
         _f1= f;
-        if (std::isnan(f)) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+        if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
 
         if (f<=ZERO){
             _stp=alpha;
@@ -347,7 +347,7 @@ bool regular_wolfe::zoom(bool reverse,
         trial++;
         f = prob->getFunc();
         _f0=_f1; _f1= f;
-        if (std::isnan(f)) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+        if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
 
         if (f<=ZERO){
             _stp=alpha;
@@ -474,7 +474,7 @@ bool strong_wolfe::lineSearch(optimization * prob,
         trial++;
         f = prob->getFunc();
         _f1= f;
-        if (std::isnan(f)) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+        if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
 
         if (f<=ZERO){
             _stp=alpha;
@@ -586,7 +586,7 @@ bool strong_wolfe::zoom(bool reverse,
         trial++;
         f = prob->getFunc();
         _f0=_f1; _f1= f;
-        if (std::isnan(f)) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+        if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
 
         if (f<=ZERO){
             _stp=alpha;
@@ -761,7 +761,7 @@ void nlsd::run(optimization * prob, const bool verbose, std::string output, int 
     data_t f = prob->getFunc();
     _func.push_back(f);
 
-    if ((_func[0] <= ZERO) || (std::isnan(_func[0]))) {
+    if ((_func[0] <= ZERO) || (_func[0]!= _func[0])) {
         fprintf(stderr,"==============================\nERROR: the initial objective function is negative or NaN.\n==============================\n");
         return;
     }
@@ -867,7 +867,7 @@ void nlcg::run(optimization * prob, const bool verbose, std::string output, int 
     data_t f = prob->getFunc();
     _func.push_back(f);
 
-    if ((_func[0] <= ZERO) || (std::isnan(_func[0]))) {
+    if ((_func[0] <= ZERO) || (_func[0] != _func[0])) {
         fprintf(stderr,"==============================\nERROR: the initial objective function is negative or NaN.\n==============================\n");
         return;
     }
@@ -993,7 +993,7 @@ void bfgs::run(optimization * prob, const bool verbose, std::string output, int 
     data_t f = prob->getFunc();
     _func.push_back(f);
 
-    if ((_func[0] <= ZERO) || (std::isnan(_func[0]))) {
+    if ((_func[0] <= ZERO) || (_func[0] != _func[0])) {
         fprintf(stderr,"==============================\nERROR: the initial objective function is negative or NaN.\n==============================\n");
         return;
     }
@@ -1199,7 +1199,7 @@ void lbfgs::run(optimization * prob, const bool verbose, std::string output, int
     data_t f = prob->getFunc();
     _func.push_back(f);
 
-    if ((_func[0] <= ZERO) || (std::isnan(_func[0]))) {
+    if ((_func[0] <= ZERO) || (_func[0] != _func[0])) {
         fprintf(stderr,"==============================\nERROR: the initial objective function is negative or NaN.\n==============================\n");
         return;
     }
@@ -1397,7 +1397,7 @@ void newton::run(optimization * prob, const bool verbose, std::string output, in
     data_t f = prob->getFunc();
     _func.push_back(f);
 
-    if ((_func[0] <= ZERO) || (std::isnan(_func[0]))) {
+    if ((_func[0] <= ZERO) || (_func[0] != _func[0])) {
         fprintf(stderr,"==============================\nERROR: the initial objective function is negative or NaN.\n==============================\n");
         return;
     }

@@ -221,6 +221,71 @@ public:
     }
 };
 
+// non-linear soft clip operator h(x) = ig(f(g(x)))
+// g(x) = (2.(x-xmean)/Dx)^p    Dx = xmax-xmin  xmean = (xmax+xmin)/2
+// f(g) = g-g^q/q if |g|<1 and = sign(g).(q-1)/q otherwise
+// ig(f) = Dx/2.f^(1/p) + xmean
+// h(x) = Dx/2.(g-g^q/q)^(1/p) + xmean if |g|<1  and = Dx/2.(sign(g).(q-1)/q)^(1/p) + xmean otherwise 
+// h'(x) = (2.(x-xmean)/Dx)^(p-1).(1-g^(q-1)).(g-g^q/q)^(1/p-1) if |g|<1 and = 0 otherwise
+// p and q are positive odd integers
+// xmax and xmin are actually re-scaled so that the final clipping is within the provided range
+class softClip : public nloper {
+protected:
+    data_t _xmin;
+    data_t _xmax;
+    int _p;
+    int _q;
+public:
+    softClip(){}
+    ~softClip(){}
+    softClip(const hypercube<data_t> &domain, data_t xmin, data_t xmax, int p=1, int q=9){
+        successCheck(xmax>xmin,__FILE__,__LINE__,"The upper bound must be strictly greater than the lower bound\n");
+        successCheck((p%2==1) && (q%2==1),__FILE__,__LINE__,"The powers p and q must be odd numbers\n");
+        _domain = domain;
+        _range = domain;
+        _xmin = xmin;
+        _xmax = xmax;
+        _p = p;
+        _q = q;
+    }
+    softClip * clone() const {
+        softClip * op = new softClip(_domain, _xmin, _xmax, _p, _q);
+        return op;
+    }   
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+};
+
+// soft clip of the elastic model and the Vs/Vp ratio
+class emodelSoftClip : public nloper {
+    data_t _vpmin;
+    data_t _vpmax;
+    data_t _vsmin;
+    data_t _vsmax;
+    data_t _rhomin;
+    data_t _rhomax;
+    data_t _spratio;
+    int _p;
+    int _q;
+public:
+    emodelSoftClip(){}
+    ~emodelSoftClip(){}
+    emodelSoftClip(const hypercube<data_t> &domain, data_t vpmin, data_t vpmax, data_t vsmin, data_t vsmax, data_t rhomin, data_t rhomax, data_t spratio=1/sqrt(2.00001), int p=9, int q=9){
+        successCheck((domain.getNdim()==3) && (domain.getAxis(3).n>=3),__FILE__,__LINE__,"The domain must be 3D with 3rd dimension containing at least 3 fields\n");
+        _domain = domain;
+        _range = domain;
+        _vpmin=vpmin; _vpmax=vpmax; _vsmin=vsmin; _vsmax=vsmax; _rhomin=rhomin; _rhomax=rhomax; _spratio=spratio;
+        _p = p;
+        _q = q;
+    }
+    emodelSoftClip * clone() const {
+        emodelSoftClip * op = new emodelSoftClip(_domain, _vpmin, _vpmax, _vsmin, _vsmax, _rhomin, _rhomax, _spratio, _p, _q);
+        return op;
+    }   
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+};
+
 // operator to resampler data in time (along the fast axis)
 class resampler : public loper {
 public:

@@ -110,9 +110,14 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "vsmax", par.vsmax);
     readParam<data_t>(argc, argv, "rhomin", par.rhomin);
     readParam<data_t>(argc, argv, "rhomax", par.rhomax);
-    readParam<data_t>(argc, argv, "threshold", par.threshold);
     readParam<data_t>(argc, argv, "bs_controlx", par.bs_controlx);
     readParam<data_t>(argc, argv, "bs_controlz", par.bs_controlz);
+    readParam<data_t>(argc, argv, "threshold", par.threshold);
+    readParam<data_t>(argc, argv, "ls_a0", par.ls_a0);
+    readParam<data_t>(argc, argv, "ls_a1", par.ls_a1);
+    readParam<data_t>(argc, argv, "ls_c1", par.ls_c1);
+    readParam<data_t>(argc, argv, "ls_c2", par.ls_c2);
+    readParam<data_t>(argc, argv, "ls_max_step", par.ls_max_step);
     readParam<int>(argc, argv, "ns", par.ns);
     readParam<int>(argc, argv, "nr", par.nr);
     readParam<int>(argc, argv, "seismotype", par.seismotype);
@@ -134,13 +139,14 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "isave", par.isave);
     readParam<int>(argc, argv, "envelop", par.envelop);
     readParam<int>(argc, argv, "version", par.version);
+    readParam<int>(argc, argv, "verbose", par.verbose);
     readParam<bool>(argc, argv, "mt", par.mt);
     readParam<bool>(argc, argv, "pml", par.pml);
     readParam<bool>(argc, argv, "bsplines", par.bsplines);
-    readParam<bool>(argc, argv, "verbose", par.verbose);
-    readParam<bool>(argc, argv, "solver_verbose", par.solver_verbose);
+    readParam<bool>(argc, argv, "soft_clip", par.soft_clip);
     readParam<bool>(argc, argv, "normalize", par.normalize);
     readParam<bool>(argc, argv, "integrate", par.integrate);
+    readParam<bool>(argc, argv, "ls_version", par.ls_version);
     readParam<int>(argc, argv, "bs_mx", par.bs_mx);
     readParam<int>(argc, argv, "bs_mz", par.bs_mz);
     readParam<int>(argc, argv, "device", par.device);
@@ -201,29 +207,32 @@ void readParameters(int argc, char **argv, param &par){
 
 void analyzeNLInversion(param &par)
 {
-    fprintf(stderr,"\n==========================\n Inversion parameters\n==========================\n");
     par.isave=std::max(1,par.isave);
-    fprintf(stderr,"Non-linear solver = %s\n",par.nlsolver.c_str());
-    fprintf(stderr,"Line search = %s\n",par.lsearch.c_str());
-    fprintf(stderr,"Number of iterations = %d\n",par.niter);
-    fprintf(stderr,"Maximum number of trials per iteration = %d\n",par.max_trial);
-    fprintf(stderr,"Threshold to stop the inversion = %f\n",par.threshold);
-    if (par.mask_file != "none") fprintf(stderr,"A gradient mask file is expected and will be applied at each trial\n");
-    if (par.weights_file != "none") fprintf(stderr,"A data weights file is expected and will be applied to modeled and observed data\n");
-    if (par.normalize) fprintf(stderr,"The modeled and observed data will be normalized trace by trace\n");
-    if (par.envelop==1) fprintf(stderr,"The envelop of modeled and observed data will be computed trace by trace\n");
-    else if (par.envelop==2) fprintf(stderr,"The envelop squared of modeled and observed data will be computed trace by trace\n");
-    fprintf(stderr,"If \"ioutput\" is provided, the model, gradient, and residual will be saved every %d iterations\n",par.isave);
+    if (par.verbose>0)
+    {
+        fprintf(stderr,"\n==========================\n Inversion parameters\n==========================\n");
+        fprintf(stderr,"Non-linear solver = %s\n",par.nlsolver.c_str());
+        fprintf(stderr,"Line search = %s\n",par.lsearch.c_str());
+        fprintf(stderr,"Number of iterations = %d\n",par.niter);
+        fprintf(stderr,"Maximum number of trials per iteration = %d\n",par.max_trial);
+        fprintf(stderr,"Threshold to stop the inversion = %f\n",par.threshold);
+    }
+    if (par.mask_file != "none" && par.verbose>0) fprintf(stderr,"A gradient mask file is expected and will be applied at each trial\n");
+    if (par.weights_file != "none" && par.verbose>0) fprintf(stderr,"A data weights file is expected and will be applied to modeled and observed data\n");
+    if (par.normalize && par.verbose>0) fprintf(stderr,"The modeled and observed data will be normalized trace by trace\n");
+    if (par.envelop==1 && par.verbose>0) fprintf(stderr,"The envelop of modeled and observed data will be computed trace by trace\n");
+    else if (par.envelop==2 && par.verbose>0) fprintf(stderr,"The envelop squared of modeled and observed data will be computed trace by trace\n");
+    if (par.verbose>0) fprintf(stderr,"If \"ioutput\" is provided, the model, gradient, and residual will be saved every %d iterations\n",par.isave);
 }
 
 void analyzeBsplines(const hypercube<data_t> &domain, param &par)
 {
     if (par.bsplines)
     {
-        fprintf(stderr,"\n==========================\n Model parameterization with B-spline functions\n==========================\n");
+        if (par.verbose>0) fprintf(stderr,"\n==========================\n Model parameterization with B-spline functions\n==========================\n");
         if (par.bs_mx.size()==0 && par.bs_mz.size()==0){
             par.bs_nx = std::max(3,par.bs_nx);
-            fprintf(stderr,"The B-spline nodes are regularly spaced with %d nodes in x\n",par.bs_nx);
+            if (par.verbose>0) fprintf(stderr,"The B-spline nodes are regularly spaced with %d nodes in x\n",par.bs_nx);
 
             axis<data_t> X = domain.getAxis(2);
             par.bs_controlx.resize(par.bs_nx); par.bs_mx.resize(par.bs_nx);
@@ -241,11 +250,11 @@ void analyzeBsplines(const hypercube<data_t> &domain, param &par)
             successCheck(par.bs_mx.size()==par.bs_controlx.size(),__FILE__,__LINE__,"Multiplicity and control vectors in x must be of the same size\n");
             par.bs_nx = par.bs_mx.size();
             successCheck(par.bs_nx>2,__FILE__,__LINE__,"There should be at least 3 B-spline nodes in x dimension\n");
-            fprintf(stderr,"The B-spline nodes and their multiplicity in x are read from parameters list\n");
+            if (par.verbose>0) fprintf(stderr,"The B-spline nodes and their multiplicity in x are read from parameters list\n");
         }
         if (par.bs_mz.size()==0 && par.bs_mz.size()==0){
             par.bs_nz = std::max(3,par.bs_nz);
-            fprintf(stderr,"The B-spline nodes are regularly spaced with %d nodes in z\n",par.bs_nz);
+            if (par.verbose>0) fprintf(stderr,"The B-spline nodes are regularly spaced with %d nodes in z\n",par.bs_nz);
 
             axis<data_t> Z = domain.getAxis(1);
             par.bs_controlz.resize(par.bs_nz); par.bs_mz.resize(par.bs_nz);
@@ -263,7 +272,7 @@ void analyzeBsplines(const hypercube<data_t> &domain, param &par)
             successCheck(par.bs_mz.size()==par.bs_controlz.size(),__FILE__,__LINE__,"Multiplicity and control vectors in z must be of the same size\n");
             par.bs_nz = par.bs_mz.size();
             successCheck(par.bs_nz>2,__FILE__,__LINE__,"There should be at least 3 B-spline nodes in z dimension\n");
-            fprintf(stderr,"The B-spline nodes and their multiplicity in z are read from parameters list\n");
+            if (par.verbose>0) fprintf(stderr,"The B-spline nodes and their multiplicity in z are read from parameters list\n");
         }
     }
 }

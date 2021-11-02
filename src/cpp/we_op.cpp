@@ -201,7 +201,7 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
     int nx=X.n;
     int nz=Z.n;
 
-    if (par.verbose) {
+    if (par.verbose>1) {
         fprintf(stderr,"\n==========================\n Subsurface model bounds\n==========================\n");
         if (par.nmodels==2) fprintf(stderr,"Model is assumed to contain Vp (km/s) and density Rho (g/cc) in that order\n");
         else if (par.nmodels==3) fprintf(stderr,"Model is assumed to contain Vp (km/s), Vs (km/s) and density Rho (g/cc) in that order\n");
@@ -210,29 +210,6 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
 
     if (par.nmodels>=3)
     {
-        bool check=true;
-        data_t (* pm) [nx][nz]= (data_t (*) [nx][nz]) model->getVals();
-        for (int ix=0; ix<nx && check; ix++){
-            for (int iz=0; iz<nz && check; iz++){
-                if (pm[0][ix][iz] < sqrt(2)*pm[1][ix][iz]){
-                    check = false;
-                    pm[1][ix][iz] = pm[0][ix][iz] / sqrt(2);
-                }
-            }
-        }
-        //successCheck(check,__FILE__,__LINE__,"Vp values must always be larger than sqrt(2)*Vs\n");
-        if (par.verbose && !check) fprintf(stderr,"WARNING: Vs exceeds Vp/sqrt(2) at some locations and will be clipped within the tolerance of the global bounds\n");
-
-        model->clip(par.vpmin,par.vpmax,0,nx*nz);
-        model->clip(par.vsmin,par.vsmax,nx*nz,2*nx*nz);
-        model->clip(par.rhomin,par.rhomax,2*nx*nz,3*nx*nz);
-
-        if (par.nmodels==5)
-        {
-            model->clip(par.deltamin,par.deltamax,3*nx*nz,4*nx*nz);
-            model->clip(par.epsilonmin,par.epsilonmax,4*nx*nz,5*nx*nz);
-        }
-
         data_t vpmin = model->min(0,nx*nz);
         data_t vpmax = model->max(0,nx*nz);
         data_t vsmin = model->min(nx*nz,2*nx*nz);
@@ -249,13 +226,64 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
             epsmax = model->max(4*nx*nz,5*nx*nz);
         }
 
-        if (par.verbose) {
-            fprintf(stderr,"Vp bounds after clipping are %.2f - %.2f km/s\n",vpmin,vpmax);
-            fprintf(stderr,"Vs bounds after clipping are %.2f - %.2f km/s\n",vsmin,vsmax);
-            fprintf(stderr,"Rho bounds after clipping are %.2f - %.2f g/cc\n",rhomin,rhomax);
+        if (par.verbose>1) {
+            fprintf(stderr,"Vp bounds are %.2f - %.2f km/s\n",vpmin,vpmax);
+            fprintf(stderr,"Vs bounds are %.2f - %.2f km/s\n",vsmin,vsmax);
+            fprintf(stderr,"Rho bounds are %.2f - %.2f g/cc\n",rhomin,rhomax);
             if (par.nmodels==5){
-                fprintf(stderr,"Delta bounds after clipping are %.2f - %.2f\n",delmin,delmax);
-                fprintf(stderr,"Epsilon bounds after clipping are %.2f - %.2f\n",epsmin,epsmax);
+                fprintf(stderr,"Delta bounds are %.2f - %.2f\n",delmin,delmax);
+                fprintf(stderr,"Epsilon bounds are %.2f - %.2f\n",epsmin,epsmax);
+            }
+        }
+
+        if (!par.soft_clip)
+        {
+            model->clip(par.vpmin,par.vpmax,0,nx*nz);
+            model->clip(par.vsmin,par.vsmax,nx*nz,2*nx*nz);
+            model->clip(par.rhomin,par.rhomax,2*nx*nz,3*nx*nz);
+
+            if (par.nmodels==5)
+            {
+                model->clip(par.deltamin,par.deltamax,3*nx*nz,4*nx*nz);
+                model->clip(par.epsilonmin,par.epsilonmax,4*nx*nz,5*nx*nz);
+            }
+
+            bool check=true;
+            data_t (* pm) [nx][nz]= (data_t (*) [nx][nz]) model->getVals();
+            for (int ix=0; ix<nx; ix++){
+                for (int iz=0; iz<nz; iz++){
+                    if (pm[0][ix][iz] < sqrt(2)*pm[1][ix][iz]){
+                        check = false;
+                        pm[1][ix][iz] = pm[0][ix][iz] / sqrt(2.0001);
+                    }
+                }
+            }
+            //successCheck(check,__FILE__,__LINE__,"Vp values must always be larger than sqrt(2)*Vs\n");
+            if (par.verbose>1 && !check) fprintf(stderr,"WARNING: Vs exceeds Vp/sqrt(2) at some locations and will be clipped accordingly\n");
+
+            vpmin = model->min(0,nx*nz);
+            vpmax = model->max(0,nx*nz);
+            vsmin = model->min(nx*nz,2*nx*nz);
+            vsmax = model->max(nx*nz,2*nx*nz);
+            rhomin = model->min(2*nx*nz,3*nx*nz);
+            rhomax = model->max(2*nx*nz,3*nx*nz);
+
+            if (par.nmodels==5)
+            {
+                delmin = model->min(3*nx*nz,4*nx*nz);
+                delmax = model->max(3*nx*nz,4*nx*nz);
+                epsmin = model->min(4*nx*nz,5*nx*nz);
+                epsmax = model->max(4*nx*nz,5*nx*nz);
+            }
+
+            if (par.verbose>1) {
+                fprintf(stderr,"Vp bounds after hard clipping are %.2f - %.2f km/s\n",vpmin,vpmax);
+                fprintf(stderr,"Vs bounds after hard clipping are %.2f - %.2f km/s\n",vsmin,vsmax);
+                fprintf(stderr,"Rho bounds after hard clipping are %.2f - %.2f g/cc\n",rhomin,rhomax);
+                if (par.nmodels==5){
+                    fprintf(stderr,"Delta bounds after hard clipping are %.2f - %.2f\n",delmin,delmax);
+                    fprintf(stderr,"Epsilon bounds after hard clipping are %.2f - %.2f\n",epsmin,epsmax);
+                }
             }
         }
 
@@ -265,33 +293,43 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
 
     else
     {
-        model->clip(par.vpmin,par.vpmax,0,nx*nz);
-        model->clip(par.rhomin,par.rhomax,nx*nz,2*nx*nz);
-
         data_t vpmin = model->min(0,nx*nz);
         data_t vpmax = model->max(0,nx*nz);
         data_t rhomin = model->min(nx*nz,2*nx*nz);
         data_t rhomax = model->max(nx*nz,2*nx*nz);
 
-        if (par.verbose) {
-            fprintf(stderr,"Vp bounds after clipping are %.2f - %.2f km/s\n",vpmin,vpmax);
-            fprintf(stderr,"Rho bounds after clipping are %.2f - %.2f g/cc\n",rhomin,rhomax);
+        if (par.verbose>1) {
+            fprintf(stderr,"Vp bounds are %.2f - %.2f km/s\n",vpmin,vpmax);
+            fprintf(stderr,"Rho bounds are %.2f - %.2f g/cc\n",rhomin,rhomax);
+        }
+
+        model->clip(par.vpmin,par.vpmax,0,nx*nz);
+        model->clip(par.rhomin,par.rhomax,nx*nz,2*nx*nz);
+
+        vpmin = model->min(0,nx*nz);
+        vpmax = model->max(0,nx*nz);
+        rhomin = model->min(nx*nz,2*nx*nz);
+        rhomax = model->max(nx*nz,2*nx*nz);
+
+        if (par.verbose>1) {
+            fprintf(stderr,"Vp bounds after hard clipping are %.2f - %.2f km/s\n",vpmin,vpmax);
+            fprintf(stderr,"Rho bounds after hard clipping are %.2f - %.2f g/cc\n",rhomin,rhomax);
         }
 
         par.vmax=vpmax;
         par.vmin=vpmin;
     }    
 
-    if (par.verbose) {
+    if (par.verbose>2) {
         fprintf(stderr,"\n==========================\n Dispersion analysis\n==========================\n");
         fprintf(stderr,"Maximum frequency assumed by the user = %.2f Hz\n",par.fmax);
         fprintf(stderr,"Corresponding minimum number of grid points per wavelength according to minimum velocity = %.1f\n",par.vmin/(par.fmax*std::max(X.d,Z.d)));
     }
     
-    if (par.verbose) fprintf(stderr,"\n==========================\n Time analysis\n==========================\n");
+    if (par.verbose>2) fprintf(stderr,"\n==========================\n Time analysis\n==========================\n");
     axis<data_t> T = domain.getAxis(1);
     data_t tmax = (T.n-1)*T.d;
-    if (par.verbose){
+    if (par.verbose>2){
         fprintf(stderr,"Maximum duration of the input = %.3f sec, sampling = %.5f sec, number of samples = %d\n",tmax, T.d, T.n);
         fprintf(stderr,"Original Courant number = %.2f\n",par.courant);
         fprintf(stderr,"Corresponding propagation time step based on CFL condition = %.5f sec\n",par.courant*std::min(X.d,Z.d)/par.vmax);
@@ -314,17 +352,17 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
         }
         par.courant = par.dt * par.vmax / std::min(X.d,Z.d);
     }
-    if (par.verbose) fprintf(stderr,"Updated Courant number = %.2f\n",par.courant);
+    if (par.verbose>2) fprintf(stderr,"Updated Courant number = %.2f\n",par.courant);
     par.nt = round(tmax/par.dt) + 1;
     par.tmax=(par.nt-1)*par.dt;
-    if (par.verbose){
+    if (par.verbose>2){
         fprintf(stderr,"Maximum duration of the propagation = %.3f sec, sampling = %.5f sec, number of samples = %d\n", par.tmax, par.dt, par.nt);
         if (par.resampling!="linear") par.resampling="sinc";
         fprintf(stderr,"Time resampling method = %s interpolation\n", par.resampling.c_str());
     }
 
     if (par.sub < 0) par.sub = round(T.d/par.dt);
-    if (par.sub > 0 && par.verbose) fprintf(stderr,"Full wavefield (gradient) will be saved (computed) every %d propagation time steps\n", par.sub);
+    if (par.sub > 0 && par.verbose>2) fprintf(stderr,"Full wavefield (gradient) will be saved (computed) every %d propagation time steps\n", par.sub);
 }
 
 void nl_we_op_e::convert_model(data_t * m, int n, bool forward) const
@@ -679,7 +717,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         curr=next;
         next=bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
     }
 
     // copy the last wfld to the full wfld vector
@@ -712,7 +750,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
 
 void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 {
-    if (_par.verbose) fprintf(stderr,"\n==========================\n Start forward propagation\n==========================\n");
+    if (_par.verbose>1) fprintf(stderr,"Start forward propagation\n");
 
     std::shared_ptr<vecReg<data_t> > model = std::make_shared<vecReg<data_t> >(_domain);
     memcpy(model->getVals(), pmod, _domain.getN123()*sizeof(data_t));
@@ -759,7 +797,7 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     int nr=0;
     for (int s=0; s<_par.ns; s++)
     {
-        if (_par.verbose) fprintf(stderr,"Start propagating shot %d\n",s);
+        if (_par.verbose>2) fprintf(stderr,"Start propagating shot %d\n",s);
 
         // cumulative number of receivers
         if (s>0) nr += _par.rxz[s-1].size();
@@ -778,7 +816,7 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         if (_par.sub>0) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
         propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
 
-        if (_par.verbose) fprintf(stderr,"Finish propagating shot %d\n",s);
+        if (_par.verbose>2) fprintf(stderr,"Finish propagating shot %d\n",s);
 
         delete inj;
         delete ext;
@@ -811,11 +849,14 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 
 void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat)
 {
-    if (_par.verbose) fprintf(stderr,"\n==========================\n Start adjoint propagation\n==========================\n");
+    if (_par.verbose>1) fprintf(stderr,"Start adjoint propagation\n");
 
     std::shared_ptr<vecReg<data_t> > model0 = std::make_shared<vecReg<data_t> >(_domain);
     memcpy(model0->getVals(), pmod0, _domain.getN123()*sizeof(data_t));
+    int verbose = _par.verbose;
+    _par.verbose=0;
     analyzeModel(*_allsrc->getHyper(),model0,_par);
+    _par.verbose=verbose;
     convert_model(model0->getVals(), model0->getN123()/_par.nmodels, true);
     const data_t * pm0 = model0->getCVals();
 
@@ -882,7 +923,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     int nr=0;
     for (int s=0; s<_par.ns; s++)
     {
-        if (_par.verbose) fprintf(stderr,"Start back-propagating shot %d\n",s);
+        if (_par.verbose>2) fprintf(stderr,"Start back-propagating shot %d\n",s);
 
         // cumulative number of receivers
         if (s>0) nr += _par.rxz[s-1].size();
@@ -901,7 +942,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
         if (_par.sub>0) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
         propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz);
 
-        if (_par.verbose) fprintf(stderr,"Finish back-propagating shot %d with gradient computation\n",s);
+        if (_par.verbose>2) fprintf(stderr,"Finish back-propagating shot %d with gradient computation\n",s);
 
         delete inj;
         delete ext;
@@ -944,7 +985,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
 
 void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 {
-    if (_par.verbose) fprintf(stderr,"\n==========================\n Start forward propagation\n==========================\n");
+    if (_par.verbose>1) fprintf(stderr,"Start forward propagation\n");
 
     int nx = _model->getHyper()->getAxis(2).n;
     int nz = _model->getHyper()->getAxis(1).n;
@@ -981,7 +1022,7 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     int nr=0;
     for (int s=0; s<_par.ns; s++)
     {
-        if (_par.verbose) fprintf(stderr,"Start propagating shot %d\n",s);
+        if (_par.verbose>2) fprintf(stderr,"Start propagating shot %d\n",s);
 
         // cumulative number of receivers
         if (s>0) nr += _par.rxz[s-1].size();
@@ -1003,7 +1044,7 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         delete inj;
         delete ext;
 
-        if (_par.verbose) fprintf(stderr,"Finish propagating shot %d\n",s);
+        if (_par.verbose>2) fprintf(stderr,"Finish propagating shot %d\n",s);
     }
 
     // convert to DAS (strain) data when relevant
@@ -1031,7 +1072,7 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 
 void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
 {
-    if (_par.verbose) fprintf(stderr,"\n==========================\n Start adjoint propagation\n==========================\n");
+    if (_par.verbose>1) fprintf(stderr,"Start adjoint propagation\n");
 
     int nx = _model->getHyper()->getAxis(2).n;
     int nz = _model->getHyper()->getAxis(1).n;
@@ -1088,7 +1129,7 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     int nr=0;
     for (int s=0; s<_par.ns; s++)
     {
-        if (_par.verbose) fprintf(stderr,"Start back-propagating shot %d\n",s);
+        if (_par.verbose>2) fprintf(stderr,"Start back-propagating shot %d\n",s);
 
         // cumulative number of receivers
         if (s>0) nr += _par.rxz[s-1].size();
@@ -1110,7 +1151,7 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
         delete inj;
         delete ext;
 
-        if (_par.verbose) fprintf(stderr,"Finish back-propagating shot %d\n",s);
+        if (_par.verbose>2) fprintf(stderr,"Finish back-propagating shot %d\n",s);
     }
 
     // apply time quadrature and revert back in time
@@ -1471,7 +1512,7 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         curr=next;
         next=bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
     }
 
     // copy the last wfld to the full wfld vector

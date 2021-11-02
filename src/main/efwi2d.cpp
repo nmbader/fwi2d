@@ -91,7 +91,7 @@ if (par.bsplines)
     }
 // ----------------------------------------------------------------------------------------//
 
-    nloper * op;
+    nloper * op = nullptr;
     nl_we_op_e * L;
     if (par.nmodels==3) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
     else if (par.nmodels==5) L=new nl_we_op_vti(*model->getHyper(),allsrc,par);
@@ -100,25 +100,21 @@ if (par.bsplines)
     {
         if (par.soft_clip)
         {
-            chainNLOper SBD(S,BD);
-            op  = new chainNLOper(L,&SBD);
+            op  = new chainNLOper(S,BD);
         }
         else{
-            op  = new chainNLOper(L,BD);
+            op  = BD;
         }
-        delete L;
     }
     else
     {
         if (par.soft_clip)
         {
-            op  = new chainNLOper(L,S);
-            delete L;
+            op  = S;
         }
-        else op=L;
     }
 
-    nlls_fwi prob(op, bsmodel, data, bsmask, w, par.normalize, par.integrate, par.envelop);
+    nlls_efwi prob(L, bsmodel, data, op, bsmask, w, par.normalize, par.integrate, par.envelop);
 
     lsearch * ls;
     if (par.lsearch=="weak_wolfe") ls = new weak_wolfe(par.ls_c1, par.ls_a0, par.ls_a1, par.ls_version);
@@ -132,25 +128,13 @@ if (par.bsplines)
     else solver = new lbfgs(par.niter, par.max_trial, par.threshold, ls); 
     
     solver->run(&prob, par.verbose>0, ioutput_file, par.isave);
+    
+    delete L;
 
-    if (par.bsplines)
+    if (op != nullptr)
     {
-        if (par.soft_clip)
-        {
-            BD->forward(false,bsmodel,model);
-            S->forward(false,model,model);
-            delete S;
-        }
-        else{
-            BD->forward(false,bsmodel,model);
-            delete BD;
-        }
-    }
-    else{
-        if (par.soft_clip){
-            S->forward(false,model,model);
-            delete S;
-        }
+        op->forward(false, bsmodel, model);
+        delete op;
     }
 
     if (output_file!="none") sepWrite<data_t>(model, output_file);
@@ -159,8 +143,6 @@ if (par.bsplines)
         memcpy(func->getVals(), solver->_func.data(), solver->_func.size()*sizeof(data_t));
         sepWrite(func,obj_func_file);
     }
-
-    delete op;
 
 return 0;
 }
