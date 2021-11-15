@@ -1273,7 +1273,7 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
     if (par.version==2)
     {
         mod_bis = new data_t [nx*nz];
-        for (int i=0; i<nx*nz; i++) mod_bis[i] = (1+2*mod[4][i])*mod[0][i];
+        for (int i=0; i<nx*nz; i++) mod_bis[i] = (1+2*mod[4][i])*mod[0][i]; // (1 + 2.eps).lambda
     }
     const data_t * mod6[1] = {mod_bis};
 
@@ -1281,12 +1281,6 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
     int l = std::max(par.taper_top,par.taper_bottom);
     l = std::max(l, par.taper_left);
     l = std::max(l, par.taper_right);
-    data_t * gx; data_t * gz; data_t * gxprime; data_t * gzprime;
-    data_t * top_ac; data_t * top_an; data_t * top_s2;
-    data_t * bottom_ac; data_t * bottom_an; data_t * bottom_s2;
-    data_t * left_ac; data_t * left_an; data_t * left_s2; data_t * left_t2c; data_t * left_t2n; data_t * left_t3c; data_t * left_t3n; data_t * left_s5; data_t * left_s6;
-    data_t * right_ac; data_t * right_an; data_t * right_s2; data_t * right_t2c; data_t * right_t2n; data_t * right_t3c; data_t * right_t3n; data_t * right_s5; data_t * right_s6;
-    
     // ###########################################
 
     // source and receiver components for injection/extraction
@@ -1490,7 +1484,7 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         data_t * in[2] = {next[0],next[1]};
         vtisat_scale_boundaries(in, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
         
-        // apply PML or taper when relevant
+        // apply taper when relevant
         taperz(curr[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
         taperz(curr[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
         taperx(curr[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);

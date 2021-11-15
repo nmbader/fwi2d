@@ -80,11 +80,11 @@ target_link_libraries(fwi2d fftw3f fftw3)
 add_executable(WE_MODELING.x ${MAIN_DIR}/we_modeling.cpp)
 target_link_libraries(WE_MODELING.x fwi2d sep)
 
-#add_executable(FWI2D.x ${MAIN_DIR}/fwi2d.cpp)
-#target_link_libraries(FWI2D.x fwi2d sep)
-#
-#add_executable(EFWI2D.x ${MAIN_DIR}/efwi2d.cpp)
-#target_link_libraries(EFWI2D.x fwi2d sep)
+add_executable(FWI2D.x ${MAIN_DIR}/fwi2d.cpp)
+target_link_libraries(FWI2D.x fwi2d sep)
+
+add_executable(EFWI2D.x ${MAIN_DIR}/efwi2d.cpp)
+target_link_libraries(EFWI2D.x fwi2d sep)
 
 #add_executable(FWI2D0.x ${MAIN_DIR}/test_fwi2d_2.cpp)
 #target_link_libraries(FWI2D0.x fwi2d nlsolvers sep)
@@ -123,8 +123,8 @@ target_link_libraries(WE_MODELING.x fwi2d sep)
 install(FILES ${HEADERS} DESTINATION include)
 install(TARGETS fwi2d DESTINATION lib)
 install(TARGETS WE_MODELING.x
-                #FWI2D.x
-                #EFWI2D.x
+                FWI2D.x
+                EFWI2D.x
                 #BSPLINES.x
                 #FX.x
                 #FK.x
