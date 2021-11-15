@@ -23,8 +23,9 @@ void printdoc(){
     "   Apply cubic B-splines smoothing.\n"
     "\nInput/Output:\n"
     "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   bsmodel - string - ['none'] : optional B-splines model to map back to the input space. Must be compatible with the input and parameters below.\n"
     "\nParameters:\n"
-    "   nx,nz - int :\n\t\tnumber of control points in each direction. If provided, will override the parameters below.\n"
+    "   nx,nz - int - [1] :\n\t\tnumber of control points in each direction. If provided, will override the parameters below.\n"
     "   controlx,controlz - [float] :\n\t\tarrays of control points manually entered. Must contain the first and last physical points. To be used in conjunction with mx,mz.\n"
     "   mx,mz - [int] :\n\t\tarrays of control points multiplicity manually entered.\n"
     "\nNote:\n"
@@ -33,6 +34,7 @@ void printdoc(){
     "   BSPLINES.x < infile.H nx=11 nz=23 > oufile.H.\n"
     "   BSPLINES.x < infile.H controlx=0,1,5.5,10 controlz=0,5,20 mx=2,1,1,2 mz=2,1,2 > oufile.H.\n"
     "   BSPLINES.x < infile.H nx=11 controlz=0,5,20 mz=2,1,2 > oufile.H.\n"
+    "   BSPLINES.x < infile.H bsmodel=bsm.H nx=11 nz=23 > oufile.H.\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }
@@ -43,12 +45,13 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", output_file="out";
+    std::string input_file="in", bsmodel_file="none", output_file="out";
     int nx=1, nz=1;
     std::vector<data_t> controlx={0}, controlz={0}; // locations of the control points that define the B-splines
     std::vector<int> mx={0}, mz={0}; // multiplicity of the control points that define the B-splines
 
 	readParam<std::string>(argc, argv, "input", input_file);
+	readParam<std::string>(argc, argv, "bsmodel", bsmodel_file);
 	readParam<std::string>(argc, argv, "output", output_file);
     readParam<int>(argc, argv, "nx", nx);
     readParam<int>(argc, argv, "nz", nz);
@@ -65,7 +68,7 @@ int main(int argc, char **argv){
     // Build the knots, multiplicity, and the B-splines smoothing operator
 // ----------------------------------------------------------------------------------------//
     if (nx > 1){
-        axis<data_t> X = input->getHyper()->getAxis(2);
+        ax X = input->getHyper()->getAxis(2);
         controlx.resize(nx); mx.resize(nx);
         controlx[0] = X.o;
         data_t dx = X.d*(X.n-1)/(nx-1);
@@ -79,7 +82,7 @@ int main(int argc, char **argv){
     }
     else successCheck(mx.size() == controlx.size(),__FILE__,__LINE__,"Multiplicity and control vectors must be of the same size\n");
     if (nz > 1){
-        axis<data_t> Z = input->getHyper()->getAxis(1);
+        ax Z = input->getHyper()->getAxis(1);
         controlz.resize(nz); mz.resize(nz);
         controlz[0] = Z.o;
         data_t dz = Z.d*(Z.n-1)/(nz-1);
@@ -98,10 +101,18 @@ int main(int argc, char **argv){
     setKnot(kx,controlx,mx);
     setKnot(kz,controlz,mz);
 
-    std::vector<axis<data_t> > axes = input->getHyper()->getAxes();
+    std::vector<ax> axes = input->getHyper()->getAxes();
     axes[0].n=controlz.size(); axes[1].n=controlx.size();
-    std::shared_ptr<vecReg<data_t> > bsmodel (new vecReg<data_t>(hypercube<data_t>(axes)));
-    fillin(bsmodel,input,controlx,controlz);
+    
+    std::shared_ptr<vec> bsmodel;
+    if (bsmodel_file=="none"){
+        bsmodel = std::make_shared<vec> (hyper(axes));
+        fillin(bsmodel,input,controlx,controlz);
+    }
+    else{
+        bsmodel = sepRead<data_t>(bsmodel_file);
+        successCheck(bsmodel->getHyper()->isCompatible(hyper(axes)),__FILE__,__LINE__,"The B-splines model is not compatible with the input and B-splines parameters\n");
+    }
   
     duplicate D(*bsmodel->getHyper(),mx,mz);
     bsplines3 B(*D.getRange(),*input->getHyper(),kx,kz);

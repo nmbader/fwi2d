@@ -32,8 +32,8 @@ endif()
 if(GPU)
     enable_language(CUDA)
     message("CUDA enabled")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -w -O3 -ffast-math -std=c++11")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -no-pie")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -std=c++11 -O3 -w -Xcompiler -fopenmp")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCUDA -no-pie -fPIC")
 endif()
 
 #Required openMP

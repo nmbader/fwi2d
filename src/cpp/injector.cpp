@@ -102,9 +102,10 @@ void delta_m3::extract(bool add, const data_t * in, data_t ** out, int nx, int n
 
     #pragma omp parallel for
     for (int itr = itr_min; itr < itr_max; itr++){
+        p_out[itr][it] = add*p_out[itr][it];
         for (int ix=0; ix<3; ix++){
             for (int iz=0; iz<3; iz++){
-                p_out[itr][it] = add*p_out[itr][it] + p_xw[itr][1][ix] * p_zw[itr][1][iz] * p_in[p_xind[itr][ix]][p_zind[itr][iz]];
+                p_out[itr][it] += p_xw[itr][1][ix] * p_zw[itr][1][iz] * p_in[p_xind[itr][ix]][p_zind[itr][iz]];
             }
         } 
     }
@@ -226,10 +227,12 @@ void ddelta_m3::extract(bool add, const data_t * in, data_t ** out, int nx, int 
 
     #pragma omp parallel for
     for (int itr = itr_min; itr < itr_max; itr++){
+        p_outx[itr][it] = add*p_outx[itr][it];
+        p_outz[itr][it] = add*p_outz[itr][it];
         for (int ix=0; ix<3; ix++){
             for (int iz=0; iz<3; iz++){
-                p_outx[itr][it] = add*p_outx[itr][it] - p_xw[itr][1][ix+3] * p_zw[itr][1][iz] * p_in[p_xind[itr][ix]][p_zind[itr][iz]];
-                p_outz[itr][it] = add*p_outz[itr][it] - p_xw[itr][1][ix] * p_zw[itr][1][iz+3] * p_in[p_xind[itr][ix]][p_zind[itr][iz]];
+                p_outx[itr][it] = p_outx[itr][it] - p_xw[itr][1][ix+3] * p_zw[itr][1][iz] * p_in[p_xind[itr][ix]][p_zind[itr][iz]];
+                p_outz[itr][it] = p_outz[itr][it] - p_xw[itr][1][ix] * p_zw[itr][1][iz+3] * p_in[p_xind[itr][ix]][p_zind[itr][iz]];
             }
         } 
     }
@@ -364,9 +367,10 @@ void dipole_m3::extract(bool add, const data_t * in, data_t ** out, int nx, int 
 
     #pragma omp parallel for
     for (int itr = itr_min; itr < itr_max; itr++){
+        p_out[itr][it] = add*p_out[itr][it];
         for (int ix=0; ix<3; ix++){
             for (int iz=0; iz<3; iz++){
-                p_out[itr][it] = add*p_out[itr][it] + p_xw[itr][1][ix+3] * p_zw[itr][1][iz+3] * p_in[p_xind[itr][ix+3]][p_zind[itr][iz+3]]
+                p_out[itr][it] += p_xw[itr][1][ix+3] * p_zw[itr][1][iz+3] * p_in[p_xind[itr][ix+3]][p_zind[itr][iz+3]]
                                 - p_xw[itr][1][ix] * p_zw[itr][1][iz] * p_in[p_xind[itr][ix]][p_zind[itr][iz]];
             }
         } 

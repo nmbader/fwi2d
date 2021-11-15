@@ -536,7 +536,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
 
         // compute FWI gradients except for first and last time samples
         if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
-        
+
         // apply spatial SBP operators
         if (par.version==1)
         {
@@ -553,7 +553,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         Dzz_var<expr2>(true, curr[0], next[0], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
         
         Dx(false, curr[0], u_x[0], nx, nz, dx, 0, nx, 0, nz);
-        Dz(false, curr[1], u_z[1], nx, nz, dx, 0, nx, 0, nz);
+        Dz(false, curr[1], u_z[1], nx, nz, dz, 0, nx, 0, nz);
         
         if (par.version==2)
         {
@@ -573,7 +573,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         // inject sources
         inj->inject(true, srcx, next[0], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
         inj->inject(true, srcz, next[1], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
-    
+
         // apply boundary conditions
         if (par.bc_top==1)
         {
@@ -814,7 +814,8 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         // perform the wave propagation
         data_t * full = nullptr;
         if (_par.sub>0) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
-        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        if (GPU==false) propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        else propagate_gpu(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
 
         if (_par.verbose>2) fprintf(stderr,"Finish propagating shot %d\n",s);
 
@@ -1358,7 +1359,7 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         Dzz_var<vtiexpr2>(true, curr[0], next[0], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
         
         Dx(false, curr[0], u_x[0], nx, nz, dx, 0, nx, 0, nz);
-        Dz(false, curr[1], u_z[1], nx, nz, dx, 0, nx, 0, nz);
+        Dz(false, curr[1], u_z[1], nx, nz, dz, 0, nx, 0, nz);
         
         if (par.version==2)
         {

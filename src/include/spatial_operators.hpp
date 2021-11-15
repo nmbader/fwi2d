@@ -51,7 +51,7 @@ void Dzz_var(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, 
             out[i1+iz] = add*out[i1+iz];
             int i2=iz*nc2*nc3;
             for (int j = 0; j<nc2; j++){
-                 val=0;
+                val=0;
                 for (int k = 0; k<nc3; k++){
                      val += bnd_coef[i2+j*nc3+k] * f(par,i1+k);
                 }
@@ -64,7 +64,7 @@ void Dzz_var(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, 
             out[i1+nz-1-iz] = add*out[i1+nz-1-iz];
             int i2=iz*nc2*nc3;
             for (int j = 0; j<nc2; j++){
-                 val=0;
+                val=0;
                 for (int k = 0; k<nc3; k++){
                      val += bnd_coef[i2+j*nc3+k] * f(par,i1+nz-1-k);
                 }

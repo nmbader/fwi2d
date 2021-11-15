@@ -142,8 +142,8 @@ void Dx(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int i
     // apply the operator near the right boundary if included
     #pragma omp parallel for
     for (int ix=nx-ixmax; ix<nc1; ix++){
-        int i1=(nx-1-ix);
-        for (int iz = izmin; iz < izmax; iz++) out[i1*nz+iz] = add*out[i1*nz+iz] + (-bnd_coef[ix*nc2] * in[(nx-1)*nz+iz] - bnd_coef[ix*nc2+1] * in[(nx-2)*nz+iz] - bnd_coef[ix*nc2+2] * in[(nx-3)*nz+iz] - bnd_coef[ix*nc2+3] * in[(nx-4)*nz+iz] - bnd_coef[ix*nc2+4] * in[(nx-5)*nz+iz] - bnd_coef[ix*nc2+5] * in[(nx-6)*nz+iz]) / d; 
+        int i1=(nx-1-ix)*nz;
+        for (int iz = izmin; iz < izmax; iz++) out[i1+iz] = add*out[i1+iz] + (-bnd_coef[ix*nc2] * in[(nx-1)*nz+iz] - bnd_coef[ix*nc2+1] * in[(nx-2)*nz+iz] - bnd_coef[ix*nc2+2] * in[(nx-3)*nz+iz] - bnd_coef[ix*nc2+3] * in[(nx-4)*nz+iz] - bnd_coef[ix*nc2+4] * in[(nx-5)*nz+iz] - bnd_coef[ix*nc2+5] * in[(nx-6)*nz+iz]) / d; 
     }
 
     // apply the operator in the interior

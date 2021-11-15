@@ -17,6 +17,12 @@
     typedef float data_t;
 #endif
 
+#ifdef CUDA
+    #define GPU 1
+#else
+    #define GPU 0
+#endif
+
 template <typename T1>
 class axis {
 public:
