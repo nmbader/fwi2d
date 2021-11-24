@@ -9,28 +9,32 @@
 
 inline void _cudaCheckError(cudaError_t code, const char *file, int line)
 {
+#ifdef DEBUG
     if (code != cudaSuccess)
     {
-        fprintf(stderr,"\n========CUDA API ERROR in file %s, line %d========\n",file,line);
-        throw std::logic_error(cudaGetErrorString(code));
+        fprintf(stderr,"\n========CUDA API ERROR in file %s, line %d========\n%s\n",file,line,cudaGetErrorString(code));
+        exit(code);
     }
+#endif
 }
 inline void _cudaKernelError(const char *file, int line)
 {
-    cudaError err = cudaGetLastError();
+#ifdef DEBUG
+    cudaError_t err = cudaPeekAtLastError();
     if (err != cudaSuccess)
     {
-        fprintf(stderr,"\n========CUDA KERNEL ERROR in file %s, line %d========\n",file,line);
-        throw std::logic_error(cudaGetErrorString(err));
+        fprintf(stderr,"\n========CUDA KERNEL ERROR in file %s, line %d========\n%s\n",file,line,cudaGetErrorString(err));
+        exit(err);
     }
+#endif
 }
 
 inline void printGpuInfo(int iGpu){
     cudaDeviceProp  prop;
     int count;
-    cudaGetDeviceCount( &count );
+    cudaCheckError (cudaGetDeviceCount( &count ) );
     fprintf(stderr,"Number of GPUs available: %d\n",count);
-    cudaGetDeviceProperties( &prop, iGpu );
+    cudaCheckError( cudaGetDeviceProperties( &prop, iGpu ) );
     fprintf(stderr, "   --- General Information for device %d ---\n", iGpu );
     fprintf(stderr, "Name:  %s\n", prop.name );
     fprintf(stderr, "Compute capability:  %d.%d\n", prop.major, prop.minor );

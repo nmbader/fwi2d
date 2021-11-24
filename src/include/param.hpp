@@ -47,9 +47,10 @@ struct param{
     std::vector<data_t> bs_controlx, bs_controlz;
 
     // inversion parameters
-    std::string nlsolver="lbfgs", lsearch="regular_wolfe", mask_file="none", weights_file="none";
-    data_t threshold=0;
-    int niter=0, max_trial=10, isave=10, envelop=0;
+    std::string nlsolver="lbfgs", lsearch="regular_wolfe", mask_file="none", weights_file="none", inverse_diagonal_hessian_file="none";
+    std::string prior_file = "none";
+    data_t threshold=0, lambda=0;
+    int niter=0, max_trial=10, isave=10, envelop=0, regularization=-1;
     bool normalize=0, integrate=0;
 
     // advances line search parameters (check nlsolver.hpp)

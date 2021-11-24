@@ -1,12 +1,22 @@
+#include <sys/mman.h>
 #include "cudaMisc.h"
 #include "cudaCppWrappers.h"
 #include "we_op.hpp"
 #include "misc.hpp"
 #include "spatial_operators.hpp"
 
+extern cudaStream_t streams[5]; // CUDA kernel and memory copy streams
+
 void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
 {
     int nxz=nx*nz;
+
+    // create the CUDA kernel and memory copy streams
+    cudaCheckError( cudaStreamCreate(&streams[0]) );
+    cudaCheckError( cudaStreamCreate(&streams[1]) );
+    cudaCheckError( cudaStreamCreate(&streams[2]) );
+    cudaCheckError( cudaStreamCreate(&streams[3]) );
+    cudaCheckError( cudaStreamCreate(&streams[4]) );
     
     // wavefields allocations and pointers
     data_t *dev_u_prev, *dev_u_curr, *dev_u_next, *dev_dux, *dev_duz, *dev_bucket, *dev_tmp, *dev_grad;
@@ -171,10 +181,14 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
 
     int pct10 = round(par.nt/10);
 
+    // pin the memory for the full wavefield on the host
+    if ((par.sub>0) && (grad==nullptr)) mlock(full_wfld, nxz*2*(1+par.nt/par.sub));
+
     for (int it=0; it<par.nt-1; it++)
     {
         // copy the current wfld to the full wfld vector
-        if ((par.sub>0) && (it%par.sub==0) && (grad==nullptr)) cudaCheckError( cudaMemcpy(u_full[it/par.sub], dev_u_curr, 2*nxz*sizeof(data_t), cudaMemcpyDeviceToHost) );
+        if ((par.sub>0) && (it%par.sub==0) && (grad==nullptr)) cudaCheckError( cudaMemcpyAsync(u_full[it/par.sub], dev_u_curr, 2*nxz*sizeof(data_t), cudaMemcpyDeviceToHost, streams[0]) );
+        //if ((par.sub>0) && (it%par.sub==0) && (grad==nullptr)) cudaCheckError( cudaMemcpy(u_full[it/par.sub], dev_u_curr, 2*nxz*sizeof(data_t), cudaMemcpyDeviceToHost) );
 
         // extract receivers
         if (grad == nullptr)
@@ -183,127 +197,143 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
             ext->extract_gpu(true, dev_u_curr+nxz, dev_rcvz, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, dev_ext_xind, dev_ext_zind, dev_ext_xw, dev_ext_zw);
         }
 
-        // compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) {
-            cudaCheckError( cudaMemcpy(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice) );
-            compute_gradients_gpu(model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
-        }
+        // copy snapshot of the full wavefield to compute FWI gradients except for first and last time samples
+        if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
+        //if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpy(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice) );
 
         // apply spatial SBP operators
-        Dxx_var_gpu(false, dev_u_curr, dev_u_next, nx, nz, dx, dev_model+nxz , 2);
-        Dzz_var_gpu(false, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model+nxz , 2);
-        cudaDeviceSynchronize();
+        Dxx_var_gpu(false, dev_u_curr, dev_u_next, nx, nz, dx, dev_model+nxz , 2, 1, 2);
+        Dzz_var_gpu(false, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model+nxz , 2, 2, 1);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         
-        Dxx_var_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dev_model+nxz , 1);
-        Dzz_var_gpu(true, dev_u_curr, dev_u_next, nx, nz, dz, dev_model+nxz , 1);
-        cudaDeviceSynchronize();
+        Dxx_var_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dev_model+nxz , 1, 2, 1);
+        Dzz_var_gpu(true, dev_u_curr, dev_u_next, nx, nz, dz, dev_model+nxz , 1, 1, 2);
 
-        Dx_gpu(false, dev_u_curr, dev_dux, nx, nz, dx);
-        Dz_gpu(false, dev_u_curr+nxz, dev_duz+nxz, nx, nz, dz);
-        cudaDeviceSynchronize();
+        Dx_gpu(false, dev_u_curr, dev_dux, nx, nz, dx, 1, 2);
+        Dz_gpu(false, dev_u_curr+nxz, dev_duz+nxz, nx, nz, dz, 2, 1);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         
-        mult_Dx_gpu(true, dev_dux, dev_u_next, nx, nz, dx, dev_model, 1.0);
-        mult_Dz_gpu(true, dev_duz+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
-        cudaDeviceSynchronize();
+        mult_Dx_gpu(true, dev_dux, dev_u_next, nx, nz, dx, dev_model, 1.0, 1, 2);
+        mult_Dz_gpu(true, dev_duz+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2, 1);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         
-        mult_Dx_gpu(true, dev_duz+nxz, dev_u_next, nx, nz, dx, dev_model, 1.0);
-        mult_Dz_gpu(true, dev_dux, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
-        cudaDeviceSynchronize();
+        mult_Dx_gpu(true, dev_duz+nxz, dev_u_next, nx, nz, dx, dev_model, 1.0, 1, 2);
+        mult_Dz_gpu(true, dev_dux, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2, 1);
 
-        Dx_gpu(false, dev_u_curr+nxz, dev_dux+nxz, nx, nz, dx);
-        Dz_gpu(false, dev_u_curr, dev_duz, nx, nz, dz);
-        cudaDeviceSynchronize();
+        Dx_gpu(false, dev_u_curr+nxz, dev_dux+nxz, nx, nz, dx, 1, 2);
+        Dz_gpu(false, dev_u_curr, dev_duz, nx, nz, dz, 2, 1);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         
-        mult_Dx_gpu(true, dev_duz, dev_u_next+nxz, nx, nz, dx, dev_model+nxz, 1.0);
-        mult_Dz_gpu(true, dev_dux+nxz, dev_u_next, nx, nz, dz, dev_model+nxz, 1.0);
-        cudaDeviceSynchronize();
+        mult_Dx_gpu(true, dev_duz, dev_u_next+nxz, nx, nz, dx, dev_model+nxz, 1.0, 2, 1);
+        mult_Dz_gpu(true, dev_dux+nxz, dev_u_next, nx, nz, dz, dev_model+nxz, 1.0, 1, 2);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
+
+        // compute FWI gradients except for first and last time samples
+        cudaStreamSynchronize(streams[0]);
+        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients_gpu(model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
 
         // inject sources
         inj->inject_gpu(true, (const data_t**)dev_srcx, dev_u_next, nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, dev_inj_xind, dev_inj_zind, dev_inj_xw, dev_inj_zw);
         inj->inject_gpu(true, (const data_t**)dev_srcz, dev_u_next+nxz, nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, dev_inj_xind, dev_inj_zind, dev_inj_xw, dev_inj_zw);
+        cudaStreamSynchronize(streams[1]);
 
         // apply boundary conditions
         if (par.bc_top==1)
         {
-            esat_neumann_top_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1);
-            esat_neumann_top_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model, dev_model+nxz, 1, 2);
-            esat_Dz_top_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
+            esat_neumann_top_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1, 1);
+            esat_neumann_top_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model, dev_model+nxz, 1, 2, 2);
+            esat_Dz_top_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2);
         }
         else if (par.bc_top==2)
         {
-            esat_absorbing_top_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_tb_imp+nx, 1, 1, 1);
-            esat_absorbing_top_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model, dev_model+nxz, dev_tb_imp, 1, 2, 1);
-            esat_Dz_top_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
+            esat_absorbing_top_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_tb_imp+nx, 1, 1, 1, 1);
+            esat_absorbing_top_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model, dev_model+nxz, dev_tb_imp, 1, 2, 1, 2);
+            esat_Dz_top_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2);
         }
         if (par.bc_bottom==1)
         {
-            esat_neumann_bottom_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1);
-            esat_neumann_bottom_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model, dev_model+nxz, 1, 2);
-            esat_Dz_bottom_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
+            esat_neumann_bottom_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1, 1);
+            esat_neumann_bottom_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model, dev_model+nxz, 1, 2, 2);
+            esat_Dz_bottom_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2);
         }
         else if (par.bc_bottom==2)
         {
-            esat_absorbing_bottom_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_tb_imp+3*nx, 1, 1, 1);
-            esat_absorbing_bottom_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model, dev_model+nxz, dev_tb_imp+2*nx, 1, 2, 1);
-            esat_Dz_bottom_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
+            esat_absorbing_bottom_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_tb_imp+3*nx, 1, 1, 1, 1);
+            esat_absorbing_bottom_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model, dev_model+nxz, dev_tb_imp+2*nx, 1, 2, 1, 2);
+            esat_Dz_bottom_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2);
         }
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         if (par.bc_left==1)
         {
-            esat_neumann_left_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model, dev_model+nxz, 1, 2);
-            esat_Dx_left_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_model, 1.0);
-            esat_neumann_left_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1);
+            esat_neumann_left_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model, dev_model+nxz, 1, 2, 1);
+            esat_Dx_left_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_model, 1.0, 1);
+            esat_neumann_left_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1, 2);
         }
         else if (par.bc_left==2)
         {
-            esat_absorbing_left_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model, dev_model+nxz, dev_lr_imp, 1, 2, 1);
-            esat_Dx_left_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_model, 1.0);
-            esat_absorbing_left_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_lr_imp+nz, 1, 1, 1);
+            esat_absorbing_left_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model, dev_model+nxz, dev_lr_imp, 1, 2, 1, 1);
+            esat_Dx_left_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_model, 1.0, 1);
+            esat_absorbing_left_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_lr_imp+nz, 1, 1, 1, 2);
         }
         if (par.bc_right==1)
         {
-            esat_neumann_right_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model, dev_model+nxz, 1, 2);
-            esat_Dx_right_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_model, 1.0);
-            esat_neumann_right_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1);
+            esat_neumann_right_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model, dev_model+nxz, 1, 2, 1);
+            esat_Dx_right_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_model, 1.0, 1);
+            esat_neumann_right_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1, 2);
         }
         else if (par.bc_right==2)
         {
-            esat_absorbing_right_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model, dev_model+nxz, dev_lr_imp+2*nz, 1, 2, 1);
-            esat_Dx_right_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_model, 1.0);
-            esat_absorbing_right_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_lr_imp+3*nz, 1, 1, 1);
+            esat_absorbing_right_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model, dev_model+nxz, dev_lr_imp+2*nz, 1, 2, 1, 1);
+            esat_Dx_right_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_model, 1.0, 1);
+            esat_absorbing_right_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_lr_imp+3*nz, 1, 1, 1, 2);
         }
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
 
         // update wfld with the 2 steps time recursion
-        time_step_gpu(dev_u_prev, dev_u_curr, dev_u_next, dev_model+2*nxz, nx, nz, par.dt);
-        time_step_gpu(dev_u_prev+nxz, dev_u_curr+nxz, dev_u_next+nxz, dev_model+2*nxz, nx, nz, par.dt);
+        time_step_gpu(dev_u_prev, dev_u_curr, dev_u_next, dev_model+2*nxz, nx, nz, par.dt, 1);
+        time_step_gpu(dev_u_prev+nxz, dev_u_curr+nxz, dev_u_next+nxz, dev_model+2*nxz, nx, nz, par.dt, 2);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
 
         // scale boundaries when relevant (for locally absorbing BC only)
-        esat_scale_boundaries_gpu(dev_u_next, nx, nz, dx, dz, dev_model, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
+        esat_scale_boundaries_gpu(dev_u_next, nx, nz, dx, dz, dev_model, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2, 1, 2);
+
+        cudaDeviceSynchronize();
         
         // apply taper when relevant
         if (par.taper_top>0) {
-            taper_top_gpu(dev_u_curr, nx, nz, par.taper_top, par.taper_strength);
-            taper_top_gpu(dev_u_curr+nxz, nx, nz, par.taper_top, par.taper_strength);
-            taper_top_gpu(dev_u_next, nx, nz, par.taper_top, par.taper_strength);
-            taper_top_gpu(dev_u_next+nxz, nx, nz, par.taper_top, par.taper_strength);
+            taper_top_gpu(dev_u_curr, nx, nz, par.taper_top, par.taper_strength, 1);
+            taper_top_gpu(dev_u_curr+nxz, nx, nz, par.taper_top, par.taper_strength, 2);
+            taper_top_gpu(dev_u_next, nx, nz, par.taper_top, par.taper_strength, 3);
+            taper_top_gpu(dev_u_next+nxz, nx, nz, par.taper_top, par.taper_strength, 4);
         }
         if (par.taper_bottom>0) {
-            taper_bottom_gpu(dev_u_curr, nx, nz, par.taper_bottom, par.taper_strength);
-            taper_bottom_gpu(dev_u_curr+nxz, nx, nz, par.taper_bottom, par.taper_strength);
-            taper_bottom_gpu(dev_u_next, nx, nz, par.taper_bottom, par.taper_strength);
-            taper_bottom_gpu(dev_u_next+nxz, nx, nz, par.taper_bottom, par.taper_strength);
+            taper_bottom_gpu(dev_u_curr, nx, nz, par.taper_bottom, par.taper_strength, 1);
+            taper_bottom_gpu(dev_u_curr+nxz, nx, nz, par.taper_bottom, par.taper_strength, 2);
+            taper_bottom_gpu(dev_u_next, nx, nz, par.taper_bottom, par.taper_strength, 3);
+            taper_bottom_gpu(dev_u_next+nxz, nx, nz, par.taper_bottom, par.taper_strength, 4);
         }
+        cudaDeviceSynchronize();
         if (par.taper_left>0) {
-            taper_left_gpu(dev_u_curr, nx, nz, par.taper_left, par.taper_strength);
-            taper_left_gpu(dev_u_curr+nxz, nx, nz, par.taper_left, par.taper_strength);
-            taper_left_gpu(dev_u_next, nx, nz, par.taper_left, par.taper_strength);
-            taper_left_gpu(dev_u_next+nxz, nx, nz, par.taper_left, par.taper_strength);
+            taper_left_gpu(dev_u_curr, nx, nz, par.taper_left, par.taper_strength, 1);
+            taper_left_gpu(dev_u_curr+nxz, nx, nz, par.taper_left, par.taper_strength, 2);
+            taper_left_gpu(dev_u_next, nx, nz, par.taper_left, par.taper_strength, 3);
+            taper_left_gpu(dev_u_next+nxz, nx, nz, par.taper_left, par.taper_strength, 4);
         }
         if (par.taper_right>0) {
-            taper_right_gpu(dev_u_curr, nx, nz, par.taper_right, par.taper_strength);
-            taper_right_gpu(dev_u_curr+nxz, nx, nz, par.taper_right, par.taper_strength);
-            taper_right_gpu(dev_u_next, nx, nz, par.taper_right, par.taper_strength);
-            taper_right_gpu(dev_u_next+nxz, nx, nz, par.taper_right, par.taper_strength);
+            taper_right_gpu(dev_u_curr, nx, nz, par.taper_right, par.taper_strength, 1);
+            taper_right_gpu(dev_u_curr+nxz, nx, nz, par.taper_right, par.taper_strength, 2);
+            taper_right_gpu(dev_u_next, nx, nz, par.taper_right, par.taper_strength, 3);
+            taper_right_gpu(dev_u_next+nxz, nx, nz, par.taper_right, par.taper_strength, 4);
         }
+        cudaDeviceSynchronize();
 
         dev_bucket=dev_u_prev;
         dev_u_prev=dev_u_curr;
@@ -321,6 +351,7 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
     {
         ext->extract_gpu(true, dev_u_curr, dev_rcvx, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, dev_ext_xind, dev_ext_zind, dev_ext_xw, dev_ext_zw);
         ext->extract_gpu(true, dev_u_curr+nxz, dev_rcvz, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, dev_ext_xind, dev_ext_zind, dev_ext_xw, dev_ext_zw);
+        cudaStreamSynchronize(streams[1]);
         cudaCheckError( cudaMemcpy(allrcv, dev_rcvx1, par.nt*ntr_r*sizeof(data_t), cudaMemcpyDeviceToHost) );
         cudaCheckError( cudaMemcpy(allrcv+nr*par.nt, dev_rcvz1, par.nt*ntr_r*sizeof(data_t), cudaMemcpyDeviceToHost) );
         if (par.mt==true &&  adj==true){
@@ -376,12 +407,25 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
         cudaCheckError( cudaFree(dev_grad) );
         cudaCheckError( cudaFree(dev_u_for) );
     }
+
+    cudaCheckError( cudaStreamDestroy(streams[0]) );
+    cudaCheckError( cudaStreamDestroy(streams[1]) );
+    cudaCheckError( cudaStreamDestroy(streams[2]) );
+    cudaCheckError( cudaStreamDestroy(streams[3]) );
+    cudaCheckError( cudaStreamDestroy(streams[4]) );
 }
 
 
 void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
 {
     int nxz=nx*nz;
+
+    // create the CUDA kernel and memory copy streams
+    cudaCheckError( cudaStreamCreate(&streams[0]) );
+    cudaCheckError( cudaStreamCreate(&streams[1]) );
+    cudaCheckError( cudaStreamCreate(&streams[2]) );
+    cudaCheckError( cudaStreamCreate(&streams[3]) );
+    cudaCheckError( cudaStreamCreate(&streams[4]) );
     
     // wavefields allocations and pointers
     data_t *dev_u_prev, *dev_u_curr, *dev_u_next, *dev_dux, *dev_duz, *dev_bucket, *dev_tmp, *dev_grad;
@@ -566,10 +610,13 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
 
     int pct10 = round(par.nt/10);
 
+    // pin the memory for the full wavefield on the host
+    if ((par.sub>0) && (grad==nullptr)) mlock(full_wfld, nxz*2*(1+par.nt/par.sub));
+
     for (int it=0; it<par.nt-1; it++)
     {
         // copy the current wfld to the full wfld vector
-        if ((par.sub>0) && (it%par.sub==0) && (grad==nullptr)) cudaCheckError( cudaMemcpy(u_full[it/par.sub], dev_u_curr, 2*nxz*sizeof(data_t), cudaMemcpyDeviceToHost) );
+        if ((par.sub>0) && (it%par.sub==0) && (grad==nullptr)) cudaCheckError( cudaMemcpyAsync(u_full[it/par.sub], dev_u_curr, 2*nxz*sizeof(data_t), cudaMemcpyDeviceToHost, streams[0]) );
 
         // extract receivers
         if (grad == nullptr)
@@ -578,127 +625,143 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
             ext->extract_gpu(true, dev_u_curr+nxz, dev_rcvz, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, dev_ext_xind, dev_ext_zind, dev_ext_xw, dev_ext_zw);
         }
 
-        // compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) {
-            cudaCheckError( cudaMemcpy(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice) );
-            compute_gradients_gpu(model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
-        }
+        // copy snapshot of the full wavefield to compute FWI gradients except for first and last time samples
+        if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
+
 
         // apply spatial SBP operators
-        Dxx_var_gpu(false, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_mu , 1);
-        Dzz_var_gpu(false, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model+nxz , 2);
-        cudaDeviceSynchronize();
+        Dxx_var_gpu(false, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_mu , 1, 1, 2);
+        Dzz_var_gpu(false, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model+nxz , 2, 2, 1);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         
-        Dxx_var_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dev_model+nxz , 1);
-        Dzz_var_gpu(true, dev_u_curr, dev_u_next, nx, nz, dz, dev_model+nxz , 1);
-        cudaDeviceSynchronize();
+        Dxx_var_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dev_model+nxz, 1, 2, 1);
+        Dzz_var_gpu(true, dev_u_curr, dev_u_next, nx, nz, dz, dev_model+nxz, 1, 1, 2);
 
-        Dx_gpu(false, dev_u_curr, dev_dux, nx, nz, dx);
-        Dz_gpu(false, dev_u_curr+nxz, dev_duz+nxz, nx, nz, dz);
-        cudaDeviceSynchronize();
+        Dx_gpu(false, dev_u_curr, dev_dux, nx, nz, dx, 1, 2);
+        Dz_gpu(false, dev_u_curr+nxz, dev_duz+nxz, nx, nz, dz, 2, 1);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         
-        mult_Dx_gpu(true, dev_dux, dev_u_next, nx, nz, dx, dev_eps_la, 1.0);
-        mult_Dz_gpu(true, dev_duz+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
-        cudaDeviceSynchronize();
+        mult_Dx_gpu(true, dev_dux, dev_u_next, nx, nz, dx, dev_eps_la, 1.0, 1, 2);
+        mult_Dz_gpu(true, dev_duz+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2, 1);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         
-        mult_Dx_gpu(true, dev_duz+nxz, dev_u_next, nx, nz, dx, dev_model+3*nxz, 1.0);
-        mult_Dz_gpu(true, dev_dux, dev_u_next+nxz, nx, nz, dz, dev_model+3*nxz, 1.0);
-        cudaDeviceSynchronize();
+        mult_Dx_gpu(true, dev_duz+nxz, dev_u_next, nx, nz, dx, dev_model+3*nxz, 1.0, 1, 2);
+        mult_Dz_gpu(true, dev_dux, dev_u_next+nxz, nx, nz, dz, dev_model+3*nxz, 1.0, 2, 1);
 
-        Dx_gpu(false, dev_u_curr+nxz, dev_dux+nxz, nx, nz, dx);
-        Dz_gpu(false, dev_u_curr, dev_duz, nx, nz, dz);
-        cudaDeviceSynchronize();
+        Dx_gpu(false, dev_u_curr+nxz, dev_dux+nxz, nx, nz, dx, 1, 2);
+        Dz_gpu(false, dev_u_curr, dev_duz, nx, nz, dz, 2, 1);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         
-        mult_Dx_gpu(true, dev_duz, dev_u_next+nxz, nx, nz, dx, dev_model+nxz, 1.0);
-        mult_Dz_gpu(true, dev_dux+nxz, dev_u_next, nx, nz, dz, dev_model+nxz, 1.0);
-        cudaDeviceSynchronize();
+        mult_Dx_gpu(true, dev_duz, dev_u_next+nxz, nx, nz, dx, dev_model+nxz, 1.0, 2, 1);
+        mult_Dz_gpu(true, dev_dux+nxz, dev_u_next, nx, nz, dz, dev_model+nxz, 1.0, 1, 2);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
+
+        // compute FWI gradients except for first and last time samples
+        cudaStreamSynchronize(streams[0]);
+        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients_gpu(model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
 
         // inject sources
         inj->inject_gpu(true, (const data_t**)dev_srcx, dev_u_next, nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, dev_inj_xind, dev_inj_zind, dev_inj_xw, dev_inj_zw);
         inj->inject_gpu(true, (const data_t**)dev_srcz, dev_u_next+nxz, nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, dev_inj_xind, dev_inj_zind, dev_inj_xw, dev_inj_zw);
+        cudaStreamSynchronize(streams[1]);
 
         // apply boundary conditions
         if (par.bc_top==1)
         {
-            esat_neumann_top_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1);
-            esat_neumann_top_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+3*nxz, dev_model+nxz, 1, 2);
-            esat_Dz_top_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
+            esat_neumann_top_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1, 1);
+            esat_neumann_top_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+3*nxz, dev_model+nxz, 1, 2, 2);
+            esat_Dz_top_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2);
         }
         else if (par.bc_top==2)
         {
-            esat_absorbing_top_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_tb_imp+nx, 1, 1, 1);
-            esat_absorbing_top_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+3*nxz, dev_model+nxz, dev_tb_imp, 1, 2, 1);
-            esat_Dz_top_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
+            esat_absorbing_top_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_tb_imp+nx, 1, 1, 1, 1);
+            esat_absorbing_top_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+3*nxz, dev_model+nxz, dev_tb_imp, 1, 2, 1, 2);
+            esat_Dz_top_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2);
         }
         if (par.bc_bottom==1)
         {
-            esat_neumann_bottom_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1);
-            esat_neumann_bottom_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+3*nxz, dev_model+nxz, 1, 2);
-            esat_Dz_bottom_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
+            esat_neumann_bottom_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1, 1);
+            esat_neumann_bottom_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+3*nxz, dev_model+nxz, 1, 2, 2);
+            esat_Dz_bottom_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2);
         }
         else if (par.bc_bottom==2)
         {
-            esat_absorbing_bottom_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_tb_imp+3*nx, 1, 1, 1);
-            esat_absorbing_bottom_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+3*nxz, dev_model+nxz, dev_tb_imp+2*nx, 1, 2, 1);
-            esat_Dz_bottom_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0);
+            esat_absorbing_bottom_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_tb_imp+3*nx, 1, 1, 1, 1);
+            esat_absorbing_bottom_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+3*nxz, dev_model+nxz, dev_tb_imp+2*nx, 1, 2, 1, 2);
+            esat_Dz_bottom_gpu(true, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dz, dev_model, 1.0, 2);
         }
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
         if (par.bc_left==1)
         {
-            esat_neumann_left_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+3*nxz, dev_eps_mu, 1, 1);
-            esat_Dx_left_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_la, 1.0);
-            esat_neumann_left_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1);
+            esat_neumann_left_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+3*nxz, dev_eps_mu, 1, 1, 1);
+            esat_Dx_left_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_la, 1.0, 1);
+            esat_neumann_left_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1, 2);
         }
         else if (par.bc_left==2)
         {
-            esat_absorbing_left_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+3*nxz, dev_eps_mu, dev_lr_imp, 1, 1, 1);
-            esat_Dx_left_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_la, 1.0);
-            esat_absorbing_left_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_lr_imp+nz, 1, 1, 1);
+            esat_absorbing_left_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+3*nxz, dev_eps_mu, dev_lr_imp, 1, 1, 1, 1);
+            esat_Dx_left_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_la, 1.0, 1);
+            esat_absorbing_left_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_lr_imp+nz, 1, 1, 1, 2);
         }
         if (par.bc_right==1)
         {
-            esat_neumann_right_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+3*nxz, dev_eps_mu, 1, 1);
-            esat_Dx_right_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_la, 1.0);
-            esat_neumann_right_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1);
+            esat_neumann_right_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_next, nx, nz, dx, dz, dev_model+3*nxz, dev_eps_mu, 1, 1, 1);
+            esat_Dx_right_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_la, 1.0, 1);
+            esat_neumann_right_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_next+nxz, nx, nz, dx, dz, dev_model+nxz, dev_model+nxz, 1, 1, 2);
         }
         else if (par.bc_right==2)
         {
-            esat_absorbing_right_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+3*nxz, dev_eps_mu, dev_lr_imp+2*nz, 1, 1, 1);
-            esat_Dx_right_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_la, 1.0);
-            esat_absorbing_right_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_lr_imp+3*nz, 1, 1, 1);
+            esat_absorbing_right_gpu(true, dev_u_curr+nxz, dev_u_curr, dev_u_prev, dev_u_next, nx, nz, dx, dz, par.dt, dev_model+3*nxz, dev_eps_mu, dev_lr_imp+2*nz, 1, 1, 1, 1);
+            esat_Dx_right_gpu(true, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_la, 1.0, 1);
+            esat_absorbing_right_gpu(true, dev_u_curr, dev_u_curr+nxz, dev_u_prev+nxz, dev_u_next+nxz, nx, nz, dx, dz, par.dt, dev_model+nxz, dev_model+nxz, dev_lr_imp+3*nz, 1, 1, 1, 2);
         }
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
 
         // update wfld with the 2 steps time recursion
-        time_step_gpu(dev_u_prev, dev_u_curr, dev_u_next, dev_model+2*nxz, nx, nz, par.dt);
-        time_step_gpu(dev_u_prev+nxz, dev_u_curr+nxz, dev_u_next+nxz, dev_model+2*nxz, nx, nz, par.dt);
+        time_step_gpu(dev_u_prev, dev_u_curr, dev_u_next, dev_model+2*nxz, nx, nz, par.dt, 1);
+        time_step_gpu(dev_u_prev+nxz, dev_u_curr+nxz, dev_u_next+nxz, dev_model+2*nxz, nx, nz, par.dt, 2);
+        cudaStreamSynchronize(streams[1]);
+        cudaStreamSynchronize(streams[2]);
 
         // scale boundaries when relevant (for locally absorbing BC only)
-        vtisat_scale_boundaries_gpu(dev_u_next, nx, nz, dx, dz, dev_model, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
+        vtisat_scale_boundaries_gpu(dev_u_next, nx, nz, dx, dz, dev_model, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2, 1, 2);
+        
+        cudaDeviceSynchronize();
 
         // apply taper when relevant
         if (par.taper_top>0) {
-            taper_top_gpu(dev_u_curr, nx, nz, par.taper_top, par.taper_strength);
-            taper_top_gpu(dev_u_curr+nxz, nx, nz, par.taper_top, par.taper_strength);
-            taper_top_gpu(dev_u_next, nx, nz, par.taper_top, par.taper_strength);
-            taper_top_gpu(dev_u_next+nxz, nx, nz, par.taper_top, par.taper_strength);
+            taper_top_gpu(dev_u_curr, nx, nz, par.taper_top, par.taper_strength, 1);
+            taper_top_gpu(dev_u_curr+nxz, nx, nz, par.taper_top, par.taper_strength, 2);
+            taper_top_gpu(dev_u_next, nx, nz, par.taper_top, par.taper_strength, 3);
+            taper_top_gpu(dev_u_next+nxz, nx, nz, par.taper_top, par.taper_strength, 4);
         }
         if (par.taper_bottom>0) {
-            taper_bottom_gpu(dev_u_curr, nx, nz, par.taper_bottom, par.taper_strength);
-            taper_bottom_gpu(dev_u_curr+nxz, nx, nz, par.taper_bottom, par.taper_strength);
-            taper_bottom_gpu(dev_u_next, nx, nz, par.taper_bottom, par.taper_strength);
-            taper_bottom_gpu(dev_u_next+nxz, nx, nz, par.taper_bottom, par.taper_strength);
+            taper_bottom_gpu(dev_u_curr, nx, nz, par.taper_bottom, par.taper_strength, 1);
+            taper_bottom_gpu(dev_u_curr+nxz, nx, nz, par.taper_bottom, par.taper_strength, 2);
+            taper_bottom_gpu(dev_u_next, nx, nz, par.taper_bottom, par.taper_strength, 3);
+            taper_bottom_gpu(dev_u_next+nxz, nx, nz, par.taper_bottom, par.taper_strength, 4);
         }
+        cudaDeviceSynchronize();
         if (par.taper_left>0) {
-            taper_left_gpu(dev_u_curr, nx, nz, par.taper_left, par.taper_strength);
-            taper_left_gpu(dev_u_curr+nxz, nx, nz, par.taper_left, par.taper_strength);
-            taper_left_gpu(dev_u_next, nx, nz, par.taper_left, par.taper_strength);
-            taper_left_gpu(dev_u_next+nxz, nx, nz, par.taper_left, par.taper_strength);
+            taper_left_gpu(dev_u_curr, nx, nz, par.taper_left, par.taper_strength, 1);
+            taper_left_gpu(dev_u_curr+nxz, nx, nz, par.taper_left, par.taper_strength, 2);
+            taper_left_gpu(dev_u_next, nx, nz, par.taper_left, par.taper_strength, 3);
+            taper_left_gpu(dev_u_next+nxz, nx, nz, par.taper_left, par.taper_strength, 4);
         }
         if (par.taper_right>0) {
-            taper_right_gpu(dev_u_curr, nx, nz, par.taper_right, par.taper_strength);
-            taper_right_gpu(dev_u_curr+nxz, nx, nz, par.taper_right, par.taper_strength);
-            taper_right_gpu(dev_u_next, nx, nz, par.taper_right, par.taper_strength);
-            taper_right_gpu(dev_u_next+nxz, nx, nz, par.taper_right, par.taper_strength);
+            taper_right_gpu(dev_u_curr, nx, nz, par.taper_right, par.taper_strength, 1);
+            taper_right_gpu(dev_u_curr+nxz, nx, nz, par.taper_right, par.taper_strength, 2);
+            taper_right_gpu(dev_u_next, nx, nz, par.taper_right, par.taper_strength, 3);
+            taper_right_gpu(dev_u_next+nxz, nx, nz, par.taper_right, par.taper_strength, 4);
         }
+        cudaDeviceSynchronize();
 
         dev_bucket=dev_u_prev;
         dev_u_prev=dev_u_curr;
@@ -716,6 +779,7 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
     {
         ext->extract_gpu(true, dev_u_curr, dev_rcvx, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, dev_ext_xind, dev_ext_zind, dev_ext_xw, dev_ext_zw);
         ext->extract_gpu(true, dev_u_curr+nxz, dev_rcvz, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, dev_ext_xind, dev_ext_zind, dev_ext_xw, dev_ext_zw);
+        cudaStreamSynchronize(streams[1]);
         cudaCheckError( cudaMemcpy(allrcv, dev_rcvx1, par.nt*ntr_r*sizeof(data_t), cudaMemcpyDeviceToHost) );
         cudaCheckError( cudaMemcpy(allrcv+nr*par.nt, dev_rcvz1, par.nt*ntr_r*sizeof(data_t), cudaMemcpyDeviceToHost) );
         if (par.mt==true &&  adj==true){
@@ -773,4 +837,10 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
         cudaCheckError( cudaFree(dev_grad) );
         cudaCheckError( cudaFree(dev_u_for) );
     }
+
+    cudaCheckError( cudaStreamDestroy(streams[0]) );
+    cudaCheckError( cudaStreamDestroy(streams[1]) );
+    cudaCheckError( cudaStreamDestroy(streams[2]) );
+    cudaCheckError( cudaStreamDestroy(streams[3]) );
+    cudaCheckError( cudaStreamDestroy(streams[4]) );
 }

@@ -42,7 +42,7 @@ int main(int argc, char **argv){
     analyzeGeometry(*model->getHyper(),par, par.verbose>0);
 
     // If more than one shot is modeled, don't save the wavefield
-    if (par.ns>1) par.sub=0;
+    // if (par.ns>1) par.sub=0;
 
     // Build the appropriate wave equation operator
     nl_we_op_e * op;

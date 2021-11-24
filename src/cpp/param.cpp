@@ -83,6 +83,8 @@ void readParam(int argc, char **argv, param &par){
     readParam<std::string>(argc, argv, "lsearch", par.lsearch);
     readParam<std::string>(argc, argv, "mask", par.mask_file);
     readParam<std::string>(argc, argv, "weights", par.weights_file);
+    readParam<std::string>(argc, argv, "inverse_diagonal_hessian", par.inverse_diagonal_hessian_file);
+    readParam<std::string>(argc, argv, "prior", par.prior_file);
     readParam<data_t>(argc, argv, "courant", par.courant);
     readParam<data_t>(argc, argv, "dt", par.dt);
     readParam<data_t>(argc, argv, "fmax", par.fmax);
@@ -118,6 +120,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "ls_c1", par.ls_c1);
     readParam<data_t>(argc, argv, "ls_c2", par.ls_c2);
     readParam<data_t>(argc, argv, "ls_max_step", par.ls_max_step);
+    readParam<data_t>(argc, argv, "lambda", par.lambda);
     readParam<int>(argc, argv, "ns", par.ns);
     readParam<int>(argc, argv, "nr", par.nr);
     readParam<int>(argc, argv, "seismotype", par.seismotype);
@@ -138,6 +141,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "max_trial", par.max_trial);
     readParam<int>(argc, argv, "isave", par.isave);
     readParam<int>(argc, argv, "envelop", par.envelop);
+    readParam<int>(argc, argv, "regularization", par.regularization);
     readParam<int>(argc, argv, "version", par.version);
     readParam<int>(argc, argv, "verbose", par.verbose);
     readParam<bool>(argc, argv, "mt", par.mt);
@@ -219,6 +223,9 @@ void analyzeNLInversion(param &par)
     }
     if (par.mask_file != "none" && par.verbose>0) fprintf(stderr,"A gradient mask file is expected and will be applied at each trial\n");
     if (par.weights_file != "none" && par.verbose>0) fprintf(stderr,"A data weights file is expected and will be applied to modeled and observed data\n");
+    if (par.prior_file != "none" && par.verbose>0) fprintf(stderr,"A prior model file is expected and will be used in the regularization if any\n");
+    if (par.regularization>-1 && par.verbose>0) fprintf(stderr,"A Tikhonov regularization will be used, of order=%d and damping=%f\n",par.regularization,par.lambda);
+    else if (par.verbose>0) fprintf(stderr,"No regularization will be used\n");
     if (par.normalize && par.verbose>0) fprintf(stderr,"The modeled and observed data will be normalized trace by trace\n");
     if (par.envelop==1 && par.verbose>0) fprintf(stderr,"The envelop of modeled and observed data will be computed trace by trace\n");
     else if (par.envelop==2 && par.verbose>0) fprintf(stderr,"The envelop squared of modeled and observed data will be computed trace by trace\n");

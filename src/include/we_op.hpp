@@ -13,25 +13,15 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose=tr
 // Analyze model and modify as necessary
 void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > model, param &par);
 
-// non-linear isotropic elastic wave equation operator: taking an elastic model and computing data
-class nl_we_op_e : virtual public nloper {
-    
+// general non-linear wave equation operator: taking a model and computing data
+class nl_we_op : virtual public nloper {
 public:
     param _par;
     std::shared_ptr<vecReg<data_t> > _allsrc;
     std::shared_ptr<vecReg<data_t> > _full_wfld;
 
-    nl_we_op_e(){}
-    virtual ~nl_we_op_e(){}
-    nl_we_op_e(const hypercube<data_t> &domain, const std::shared_ptr<vecReg<data_t> > allsrc, param &par){
-        _allsrc = allsrc;
-        _domain = domain;
-        _par = par;
-        axis<data_t> X(par.nr,0,1);
-        axis<data_t> C(2,0,1);
-        if (par.gl>0) C.n = 1;
-        _range = hypercube<data_t>(allsrc->getHyper()->getAxis(1),X,C);
-    }
+    nl_we_op(){}
+    virtual ~nl_we_op(){}
     void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
         
         successCheck( domain == _domain,__FILE__,__LINE__,"New domain must be the same as the original\n");
@@ -45,6 +35,34 @@ public:
         if ((*mod->getHyper() != _domain) || ( dat->getHyper()->getAxis(1) != _range.getAxis(1)) || ( dat->getN123()/dat->getHyper()->getAxis(1).n != _range.getN123()/_range.getAxis(1).n) ) return false;
         else return true;
     }
+    
+    virtual void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<vecReg<data_t> > dat) {
+        successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+        apply_forward(add, mod->getCVals(), dat->getVals());
+    }
+    virtual void jacobianT(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > mod0, const std::shared_ptr<vecReg<data_t> > dat) {
+        successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+        successCheck(mod->getHyper()->isCompatible(*mod0->getHyper()),__FILE__,__LINE__,"Input and background models hypercubes are not compatible\n");
+        apply_jacobianT(add, mod->getVals(), mod0->getCVals(), dat->getCVals());
+    }
+    virtual void apply_forward(bool add, const data_t * pmod, data_t * pdat) = 0;
+    virtual void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat) = 0;
+};
+
+// non-linear isotropic elastic wave equation operator: taking an elastic model and computing data
+class nl_we_op_e : virtual public nl_we_op {
+public:
+    nl_we_op_e(){}
+    virtual ~nl_we_op_e(){}
+    nl_we_op_e(const hypercube<data_t> &domain, const std::shared_ptr<vecReg<data_t> > allsrc, param &par){
+        _allsrc = allsrc;
+        _domain = domain;
+        _par = par;
+        axis<data_t> X(par.nr,0,1);
+        axis<data_t> C(2,0,1);
+        if (par.gl>0) C.n = 1;
+        _range = hypercube<data_t>(allsrc->getHyper()->getAxis(1),X,C);
+    }
     nl_we_op_e * clone() const {
         param par = _par;
         nl_we_op_e * op = new nl_we_op_e(_domain,_allsrc,par);
@@ -57,19 +75,11 @@ public:
     virtual void convert_model(data_t * m, int n, bool forward) const;
     // refer to the SBP notes for gradients expression
     virtual void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
-    virtual void compute_gradients_gpu(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
     virtual void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
+
+    virtual void compute_gradients_gpu(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
     virtual void propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
 
-    virtual void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<vecReg<data_t> > dat) {
-        successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
-        apply_forward(add, mod->getCVals(), dat->getVals());
-    }
-    virtual void jacobianT(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > mod0, const std::shared_ptr<vecReg<data_t> > dat) {
-        successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
-        successCheck(mod->getHyper()->isCompatible(*mod0->getHyper()),__FILE__,__LINE__,"Input and background models hypercubes are not compatible\n");
-        apply_jacobianT(add, mod->getVals(), mod0->getCVals(), dat->getCVals());
-    }
     virtual void apply_forward(bool add, const data_t * pmod, data_t * pdat);
     virtual void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
 };
@@ -141,7 +151,6 @@ class nl_we_op_vti : virtual public nl_we_op_e {
 public:
     using nl_we_op_e::nl_we_op_e;
     ~nl_we_op_vti(){}
-
     nl_we_op_vti * clone() const {
         param par = _par;
         nl_we_op_vti * op = new nl_we_op_vti(_domain,_allsrc,par);
@@ -158,8 +167,9 @@ public:
     void convert_model(data_t * m, int n, bool forward) const;
     // refer to the SBP notes for gradients expression
     void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
-    void compute_gradients_gpu(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
     void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
+
+    void compute_gradients_gpu(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
     void propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const;
 };
 

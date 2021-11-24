@@ -1052,3 +1052,109 @@ void fkTransform::cinverse(bool add, std::shared_ptr<cvecReg<data_t> > mod, cons
         fftwf_cleanup();
     }
 }
+
+void gradient2d::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    if (!add) memset(pdat,0,_range.getN123()*sizeof(data_t));
+
+    int nz = _domain.getAxis(1).n;
+    int nx = _domain.getAxis(2).n;
+    int ny = _domain.getN123() / (nz*nx);
+    data_t dz = 2*_domain.getAxis(1).d;
+    data_t dx = 2*_domain.getAxis(2).d;
+
+    data_t (* pm)[nx][nz] = (data_t (*) [nx][nz]) pmod;
+    data_t (* pd)[ny][nx][nz] = (data_t (*) [ny][nx][nz]) pdat;
+
+    for (int iy=0; iy<ny; iy++)
+    {
+        #pragma omp parallel for
+        for (int ix=1; ix<nx-1; ix++){
+            for (int iz=1; iz<nz-1; iz++){
+                pd[0][iy][ix][iz] += (pm[iy][ix+1][iz] - pm[iy][ix-1][iz])/dx;
+                pd[1][iy][ix][iz] += (pm[iy][ix][iz+1] - pm[iy][ix][iz-1])/dz;
+            }
+        }
+    }
+}
+
+void gradient2d::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+    if (!add) memset(pmod,0,_domain.getN123()*sizeof(data_t));
+
+    int nz = _domain.getAxis(1).n;
+    int nx = _domain.getAxis(2).n;
+    int ny = _domain.getN123() / (nz*nx);
+    data_t dz = 2*_domain.getAxis(1).d;
+    data_t dx = 2*_domain.getAxis(2).d;
+
+    data_t (* pm)[nx][nz] = (data_t (*) [nx][nz]) pmod;
+    data_t (* pd)[ny][nx][nz] = (data_t (*) [ny][nx][nz]) pdat;
+
+    for (int iy=0; iy<ny; iy++)
+    {
+        for (int ix=1; ix<nx-1; ix++){
+            for (int iz=1; iz<nz-1; iz++){
+                pm[iy][ix+1][iz] += pd[0][iy][ix][iz] / dx;
+                pm[iy][ix-1][iz] -= pd[0][iy][ix][iz] / dx;
+                pm[iy][ix][iz+1] += pd[1][iy][ix][iz] / dz;
+                pm[iy][ix][iz-1] -= pd[1][iy][ix][iz] / dz;
+            }
+        }
+    }
+}
+
+void laplacian2d::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    if (!add) memset(pdat,0,_range.getN123()*sizeof(data_t));
+
+    int nz = _domain.getAxis(1).n;
+    int nx = _domain.getAxis(2).n;
+    int ny = _domain.getN123() / (nz*nx);
+    data_t dz = _domain.getAxis(1).d;
+    data_t dx = _domain.getAxis(2).d;
+    dz *=dz;
+    dx *=dx;
+
+    data_t (* pm)[nx][nz] = (data_t (*) [nx][nz]) pmod;
+    data_t (* pd)[nx][nz] = (data_t (*) [nx][nz]) pdat;
+
+    for (int iy=0; iy<ny; iy++)
+    {
+        #pragma omp parallel for
+        for (int ix=1; ix<nx-1; ix++){
+            for (int iz=1; iz<nz-1; iz++){
+                pd[iy][ix][iz] += (pm[iy][ix+1][iz] -2*pm[iy][ix][iz] + pm[iy][ix-1][iz])/dx + (pm[iy][ix][iz+1] -2*pm[iy][ix][iz] + pm[iy][ix][iz-1])/dz;
+            }
+        }
+    }
+}
+
+void laplacian2d::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+    if (!add) memset(pmod,0,_domain.getN123()*sizeof(data_t));
+
+    int nz = _domain.getAxis(1).n;
+    int nx = _domain.getAxis(2).n;
+    int ny = _domain.getN123() / (nz*nx);
+    data_t dz = _domain.getAxis(1).d;
+    data_t dx = _domain.getAxis(2).d;
+    dz *=dz;
+    dx *=dx;
+
+    data_t (* pm)[nx][nz] = (data_t (*) [nx][nz]) pmod;
+    data_t (* pd)[nx][nz] = (data_t (*) [nx][nz]) pdat;
+
+    for (int iy=0; iy<ny; iy++)
+    {
+        for (int ix=1; ix<nx-1; ix++){
+            for (int iz=1; iz<nz-1; iz++){
+                pm[iy][ix][iz] -= 2*pd[iy][ix][iz]*(1.0/dx + 1.0/dz);
+                pm[iy][ix+1][iz] += pd[iy][ix][iz] / dx;
+                pm[iy][ix-1][iz] += pd[iy][ix][iz] / dx;
+                pm[iy][ix][iz+1] += pd[iy][ix][iz] / dz;
+                pm[iy][ix][iz-1] += pd[iy][ix][iz] / dz;
+            }
+        }
+    }
+}

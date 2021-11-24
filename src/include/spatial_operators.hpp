@@ -464,6 +464,7 @@ void esat_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz
             sumz += scoef[iz] * in[1][ix*nz+iz];
         }
         out[ix*nz] = add*out[ix*nz] - a /(dz * h0) * (-f1(par,ix*nz)*sumx/dx + f2(par,ix*nz)*sumz/dz - f3(par,ix*nz)*in[2][ix*nz]/dt);
+        //out[ix*nz] = add*out[ix*nz] - a /(dz * h0) * (-f1(par,ix*nz)*sumx/dx + f2(par,ix*nz)*sumz/dz - f3(par,ix*nz)*2*(in[2][ix*nz]-in[1][ix*nz])/dt);
     }
 
     // top right
@@ -481,6 +482,7 @@ void esat_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz
             sumz += scoef[iz] * in[1][(nx-1-ix)*nz+iz];
         }
         out[(nx-1-ix)*nz] = add*out[(nx-1-ix)*nz] - a /(dz * h0) * (-f1(par,(nx-1-ix)*nz)*sumx/dx + f2(par,(nx-1-ix)*nz)*sumz/dz - f3(par,(nx-1-ix)*nz)*in[2][(nx-1-ix)*nz]/dt);
+        //out[(nx-1-ix)*nz] = add*out[(nx-1-ix)*nz] - a /(dz * h0) * (-f1(par,(nx-1-ix)*nz)*sumx/dx + f2(par,(nx-1-ix)*nz)*sumz/dz - f3(par,(nx-1-ix)*nz)*2*(in[2][(nx-1-ix)*nz]-in[2][(nx-1-ix)*nz])/dt);
     }
 
     // top middle
@@ -500,6 +502,7 @@ void esat_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz
         }
 
         out[ix*nz] = add*out[ix*nz] - a /(dz * h0) * (-f1(par,ix*nz)*sumx/dx + f2(par,ix*nz)*sumz/dz - f3(par,ix*nz)*in[2][ix*nz]/dt);
+        //out[ix*nz] = add*out[ix*nz] - a /(dz * h0) * (-f1(par,ix*nz)*sumx/dx + f2(par,ix*nz)*sumz/dz - f3(par,ix*nz)*2*(in[2][ix*nz]-in[1][ix*nz])/dt);
     }
 }
 
@@ -533,6 +536,7 @@ void esat_absorbing_bottom(bool add, const data_t** in, data_t* out, int nx, int
             sumz += scoef[iz] * in[1][ix*nz+nz-1-iz];
         }
         out[ix*nz+nz-1] = add*out[ix*nz+nz-1] - a /(dz * h0) * (f1(par,ix*nz+nz-1)*sumx/dx + f2(par,ix*nz+nz-1)*sumz/dz - f3(par,ix*nz+nz-1)*in[2][ix*nz+nz-1]/dt);
+        //out[ix*nz+nz-1] = add*out[ix*nz+nz-1] - a /(dz * h0) * (f1(par,ix*nz+nz-1)*sumx/dx + f2(par,ix*nz+nz-1)*sumz/dz - f3(par,ix*nz+nz-1)*2*(in[2][ix*nz+nz-1]-in[1][ix*nz+nz-1])/dt);
     }
 
     // bottom right
@@ -550,6 +554,7 @@ void esat_absorbing_bottom(bool add, const data_t** in, data_t* out, int nx, int
             sumz += scoef[iz] * in[1][(nx-1-ix)*nz+nz-1-iz];
         }
         out[(nx-1-ix)*nz+nz-1] = add*out[(nx-1-ix)*nz+nz-1] - a /(dz * h0) * (f1(par,(nx-1-ix)*nz+nz-1)*sumx/dx + f2(par,(nx-1-ix)*nz+nz-1)*sumz/dz - f3(par,(nx-1-ix)*nz+nz-1)*in[2][(nx-1-ix)*nz+nz-1]/dt);
+        //out[(nx-1-ix)*nz+nz-1] = add*out[(nx-1-ix)*nz+nz-1] - a /(dz * h0) * (f1(par,(nx-1-ix)*nz+nz-1)*sumx/dx + f2(par,(nx-1-ix)*nz+nz-1)*sumz/dz - f3(par,(nx-1-ix)*nz+nz-1)*2*(in[2][(nx-1-ix)*nz+nz-1]-in[1][(nx-1-ix)*nz+nz-1])/dt);
     }
 
     // bottom middle
@@ -569,6 +574,7 @@ void esat_absorbing_bottom(bool add, const data_t** in, data_t* out, int nx, int
         }
 
         out[ix*nz+nz-1] = add*out[ix*nz+nz-1] - a /(dz * h0) * (f1(par,ix*nz+nz-1)*sumx/dx + f2(par,ix*nz+nz-1)*sumz/dz - f3(par,ix*nz+nz-1)*in[2][ix*nz+nz-1]/dt);
+        //out[ix*nz+nz-1] = add*out[ix*nz+nz-1] - a /(dz * h0) * (f1(par,ix*nz+nz-1)*sumx/dx + f2(par,ix*nz+nz-1)*sumz/dz - f3(par,ix*nz+nz-1)*2*(in[2][ix*nz+nz-1]-in[1][ix*nz+nz-1])/dt);
     }
 }
 
@@ -602,6 +608,7 @@ void esat_absorbing_left(bool add, const data_t** in, data_t* out, int nx, int n
             sumx += scoef[ix] * in[1][ix*nz+iz];
         }
         out[iz] = add*out[iz] - a /(dx * h0) * (-f1(par,iz)*sumz/dz + f2(par,iz)*sumx/dx - f3(par,iz)*in[2][iz]/dt);
+        //out[iz] = add*out[iz] - a /(dx * h0) * (-f1(par,iz)*sumz/dz + f2(par,iz)*sumx/dx - f3(par,iz)*2*(in[2][iz]-in[1][iz])/dt);
     }
 
     // left bottom
@@ -619,6 +626,7 @@ void esat_absorbing_left(bool add, const data_t** in, data_t* out, int nx, int n
             sumx += scoef[ix] * in[1][ix*nz+nz-1-iz];
         }
         out[nz-1-iz] = add*out[nz-1-iz] - a /(dx * h0) * (-f1(par,nz-1-iz)*sumz/dz + f2(par,nz-1-iz)*sumx/dx - f3(par,nz-1-iz)*in[2][nz-1-iz]/dt);
+        //out[nz-1-iz] = add*out[nz-1-iz] - a /(dx * h0) * (-f1(par,nz-1-iz)*sumz/dz + f2(par,nz-1-iz)*sumx/dx - f3(par,nz-1-iz)*2*(in[2][nz-1-iz]-in[1][nz-1-iz])/dt);
     }
 
     // left middle
@@ -638,6 +646,7 @@ void esat_absorbing_left(bool add, const data_t** in, data_t* out, int nx, int n
         }
 
         out[iz] = add*out[iz] - a /(dx * h0) * (-f1(par,iz)*sumz/dz + f2(par,iz)*sumx/dx - f3(par,iz)*in[2][iz]/dt);
+        //out[iz] = add*out[iz] - a /(dx * h0) * (-f1(par,iz)*sumz/dz + f2(par,iz)*sumx/dx - f3(par,iz)*2*(in[2][iz]-in[1][iz])/dt);
     }
 }
 
@@ -671,6 +680,7 @@ void esat_absorbing_right(bool add, const data_t** in, data_t* out, int nx, int 
             sumx += scoef[ix] * in[1][(nx-1-ix)*nz+iz];
         }
         out[(nx-1)*nz+iz] = add*out[(nx-1)*nz+iz] - a /(dx * h0) * (f1(par,(nx-1)*nz+iz)*sumz/dz + f2(par,(nx-1)*nz+iz)*sumx/dx - f3(par,(nx-1)*nz+iz)*in[2][(nx-1)*nz+iz]/dt);
+        //out[(nx-1)*nz+iz] = add*out[(nx-1)*nz+iz] - a /(dx * h0) * (f1(par,(nx-1)*nz+iz)*sumz/dz + f2(par,(nx-1)*nz+iz)*sumx/dx - f3(par,(nx-1)*nz+iz)*2*(in[2][(nx-1)*nz+iz]-in[1][(nx-1)*nz+iz])/dt);
     }
 
     // right bottom
@@ -688,6 +698,7 @@ void esat_absorbing_right(bool add, const data_t** in, data_t* out, int nx, int 
             sumx += scoef[ix] * in[1][(nx-1-ix)*nz+nz-1-iz];
         }
         out[(nx-1)*nz+nz-1-iz] = add*out[(nx-1)*nz+nz-1-iz] - a /(dx * h0) * (f1(par,(nx-1)*nz+nz-1-iz)*sumz/dz + f2(par,(nx-1)*nz+nz-1-iz)*sumx/dx - f3(par,(nx-1)*nz+nz-1-iz)*in[2][(nx-1)*nz+nz-1-iz]/dt);
+        //out[(nx-1)*nz+nz-1-iz] = add*out[(nx-1)*nz+nz-1-iz] - a /(dx * h0) * (f1(par,(nx-1)*nz+nz-1-iz)*sumz/dz + f2(par,(nx-1)*nz+nz-1-iz)*sumx/dx - f3(par,(nx-1)*nz+nz-1-iz)*2*(in[2][(nx-1)*nz+nz-1-iz]-in[1][(nx-1)*nz+nz-1-iz])/dt);
     }
 
     // right middle
@@ -707,6 +718,7 @@ void esat_absorbing_right(bool add, const data_t** in, data_t* out, int nx, int 
         }
 
         out[(nx-1)*nz+iz] = add*out[(nx-1)*nz+iz] - a /(dx * h0) * (f1(par,(nx-1)*nz+iz)*sumz/dz + f2(par,(nx-1)*nz+iz)*sumx/dx - f3(par,(nx-1)*nz+iz)*in[2][(nx-1)*nz+iz]/dt);
+        //out[(nx-1)*nz+iz] = add*out[(nx-1)*nz+iz] - a /(dx * h0) * (f1(par,(nx-1)*nz+iz)*sumz/dz + f2(par,(nx-1)*nz+iz)*sumx/dx - f3(par,(nx-1)*nz+iz)*2*(in[2][(nx-1)*nz+iz]-in[1][(nx-1)*nz+iz])/dt);
     }
 }
 

@@ -1405,359 +1405,6 @@ __global__ void cudaExtractDIPM3(const data_t * in, data_t ** out, int nx, int n
     atomicAdd(out[0]+itr*nt+it, val);
 }
 
-// ################################ C++ wrappers ##################################
-
-void Dz_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d){
-    
-    cudaStream_t stream0;
-    cudaStream_t stream1;
-    cudaCheckError( cudaStreamCreate(&stream0) );
-    cudaCheckError( cudaStreamCreate(&stream1) );
-    
-    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
-    dim3 blocks1((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz-8+BLOCK_SIZE-1)/BLOCK_SIZE);
-    dim3 threads2(BLOCK_SIZE,4);
-    dim3 blocks2((nx+BLOCK_SIZE-1)/BLOCK_SIZE,2);
-
-    cudaDz_interior<<<blocks1,threads1,0,stream0>>>(add, in, out, nx, nz, d);
-    cudaKernelError();
-    cudaDz_bnd<<<blocks2,threads2,0,stream1>>>(add, in, out, nx, nz, d);
-    cudaKernelError();
-
-    cudaCheckError( cudaStreamDestroy(stream0) );
-    cudaCheckError( cudaStreamDestroy(stream1) );
-}
-
-void Dx_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d){
-
-    cudaStream_t stream0;
-    cudaStream_t stream1;
-    cudaCheckError( cudaStreamCreate(&stream0) );
-    cudaCheckError( cudaStreamCreate(&stream1) );
-    
-    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
-    dim3 blocks1((nx-8+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    dim3 threads2(4,BLOCK_SIZE);
-    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaDx_interior<<<blocks1,threads1,0,stream0>>>(add, in, out, nx, nz, d);
-    cudaKernelError();
-    cudaDx_bnd<<<blocks2,threads2,0,stream1>>>(add, in, out, nx, nz, d);
-    cudaKernelError();
-
-    cudaCheckError( cudaStreamDestroy(stream0) );
-    cudaCheckError( cudaStreamDestroy(stream1) );
-}
-
-void mult_Dz_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, const data_t* par, data_t a){
-    
-    cudaStream_t stream0;
-    cudaStream_t stream1;
-    cudaCheckError( cudaStreamCreate(&stream0) );
-    cudaCheckError( cudaStreamCreate(&stream1) );
-    
-    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
-    dim3 blocks1((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz-8+BLOCK_SIZE-1)/BLOCK_SIZE);
-    dim3 threads2(BLOCK_SIZE,4);
-    dim3 blocks2((nx+BLOCK_SIZE-1)/BLOCK_SIZE,2);
-
-    cudaMultDz_interior<<<blocks1,threads1,0,stream0>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-    cudaMultDz_bnd<<<blocks2,threads2,0,stream1>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-
-    cudaCheckError( cudaStreamDestroy(stream0) );
-    cudaCheckError( cudaStreamDestroy(stream1) );
-}
-
-void mult_Dx_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, const data_t * par, data_t a){
-
-    cudaStream_t stream0;
-    cudaStream_t stream1;
-    cudaCheckError( cudaStreamCreate(&stream0) );
-    cudaCheckError( cudaStreamCreate(&stream1) );
-    
-    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
-    dim3 blocks1((nx-8+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    dim3 threads2(4,BLOCK_SIZE);
-    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaMultDx_interior<<<blocks1,threads1,0,stream0>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-    cudaMultDx_bnd<<<blocks2,threads2,0,stream1>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-
-    cudaCheckError( cudaStreamDestroy(stream0) );
-    cudaCheckError( cudaStreamDestroy(stream1) );
-}
-
-void Dzz_var_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, const data_t * par, data_t a){
-
-    cudaStream_t stream0;
-    cudaStream_t stream1;
-    cudaCheckError( cudaStreamCreate(&stream0) );
-    cudaCheckError( cudaStreamCreate(&stream1) );
-    
-    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
-    dim3 blocks1((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz-12+BLOCK_SIZE-1)/BLOCK_SIZE);
-    dim3 threads2(BLOCK_SIZE,6);
-    dim3 blocks2((nx+BLOCK_SIZE-1)/BLOCK_SIZE,2);
-
-    cudaDzz_var_interior<<<blocks1,threads1,0,stream0>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-    cudaDzz_var_bnd<<<blocks2,threads2,0,stream1>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-
-    cudaCheckError( cudaStreamDestroy(stream0) );
-    cudaCheckError( cudaStreamDestroy(stream1) );
-}
-
-void Dxx_var_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, const data_t * par, data_t a){
-
-    cudaStream_t stream0;
-    cudaStream_t stream1;
-    cudaCheckError( cudaStreamCreate(&stream0) );
-    cudaCheckError( cudaStreamCreate(&stream1) );
-    
-    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
-    dim3 blocks1((nx-12+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    dim3 threads2(6,BLOCK_SIZE);
-    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaDxx_var_interior<<<blocks1,threads1,0,stream0>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-    cudaDxx_var_bnd<<<blocks2,threads2,0,stream1>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-
-    cudaCheckError( cudaStreamDestroy(stream0) );
-    cudaCheckError( cudaStreamDestroy(stream1) );
-}
-
-void esat_neumann_top_gpu(bool add, const data_t* in0, const data_t*in1, data_t* out, int nx, int nz, data_t dx, data_t dz, const data_t * par0, const data_t * par1, data_t a0, data_t a1){
-    
-    dim3 threads(BLOCK_SIZE,1);
-    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
-
-    cudaEsatNeumannTop<<<blocks,threads>>>(add, in0, in1, out, nx, nz, dx, dz, par0, par1, a0, a1);
-    cudaKernelError();
-}
-void esat_neumann_bottom_gpu(bool add, const data_t* in0, const data_t*in1, data_t* out, int nx, int nz, data_t dx, data_t dz, const data_t * par0, const data_t * par1, data_t a0, data_t a1){
-    
-    dim3 threads(BLOCK_SIZE,1);
-    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
-
-    cudaEsatNeumannBottom<<<blocks,threads>>>(add, in0, in1, out, nx, nz, dx, dz, par0, par1, a0, a1);
-    cudaKernelError();
-}
-void esat_neumann_left_gpu(bool add, const data_t* in0, const data_t*in1, data_t* out, int nx, int nz, data_t dx, data_t dz, const data_t * par0, const data_t * par1, data_t a0, data_t a1){
-    
-    dim3 threads(1,BLOCK_SIZE);
-    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaEsatNeumannLeft<<<blocks,threads>>>(add, in0, in1, out, nx, nz, dx, dz, par0, par1, a0, a1);
-    cudaKernelError();
-}
-void esat_neumann_right_gpu(bool add, const data_t* in0, const data_t*in1, data_t* out, int nx, int nz, data_t dx, data_t dz, const data_t * par0, const data_t * par1, data_t a0, data_t a1){
-    
-    dim3 threads(1,BLOCK_SIZE);
-    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaEsatNeumannRight<<<blocks,threads>>>(add, in0, in1, out, nx, nz, dx, dz, par0, par1, a0, a1);
-    cudaKernelError();
-}
-
-void esat_absorbing_top_gpu(bool add, const data_t* in0, const data_t* in1, const data_t* in2, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, const data_t * par0,  const data_t * par1, const data_t * par2, data_t a0, data_t a1, data_t a2){
-    
-    dim3 threads(BLOCK_SIZE,1);
-    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
-
-    cudaEsatAbsorbingTop<<<blocks,threads>>>(add, in0, in1, in2, out, nx, nz, dx, dz, dt, par0, par1, par2, a0, a1, a2);
-    cudaKernelError();
-}
-void esat_absorbing_bottom_gpu(bool add, const data_t* in0, const data_t* in1, const data_t* in2, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, const data_t * par0,  const data_t * par1, const data_t * par2, data_t a0, data_t a1, data_t a2){
-    
-    dim3 threads(BLOCK_SIZE,1);
-    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
-
-    cudaEsatAbsorbingBottom<<<blocks,threads>>>(add, in0, in1, in2, out, nx, nz, dx, dz, dt, par0, par1, par2, a0, a1, a2);
-    cudaKernelError();
-}
-void esat_absorbing_left_gpu(bool add, const data_t* in0, const data_t* in1, const data_t* in2, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, const data_t * par0,  const data_t * par1, const data_t * par2, data_t a0, data_t a1, data_t a2){
-    
-    dim3 threads(1,BLOCK_SIZE);
-    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaEsatAbsorbingLeft<<<blocks,threads>>>(add, in0, in1, in2, out, nx, nz, dx, dz, dt, par0, par1, par2, a0, a1, a2);
-    cudaKernelError();
-}
-void esat_absorbing_right_gpu(bool add, const data_t* in0, const data_t* in1, const data_t* in2, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, const data_t * par0,  const data_t * par1, const data_t * par2, data_t a0, data_t a1, data_t a2){
-    
-    dim3 threads(1,BLOCK_SIZE);
-    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaEsatAbsorbingRight<<<blocks,threads>>>(add, in0, in1, in2, out, nx, nz, dx, dz, dt, par0, par1, par2, a0, a1, a2);
-    cudaKernelError();
-}
-
-void esat_Dz_top_gpu(bool add, const data_t * in, data_t * out, int nx, int nz, data_t d, const data_t * par, data_t a){ 
-    dim3 threads(BLOCK_SIZE,1);
-    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
-
-    cudaDzTop<<<blocks,threads>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-}
-void esat_Dz_bottom_gpu(bool add, const data_t * in, data_t * out, int nx, int nz, data_t d, const data_t * par, data_t a){
-    dim3 threads(BLOCK_SIZE,1);
-    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
-
-    cudaDzBottom<<<blocks,threads>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-}
-void esat_Dx_left_gpu(bool add, const data_t * in, data_t * out, int nx, int nz, data_t d, const data_t * par, data_t a){
-    dim3 threads(1,BLOCK_SIZE);
-    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaDxLeft<<<blocks,threads>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-}
-void esat_Dx_right_gpu(bool add, const data_t * in, data_t * out, int nx, int nz, data_t d, const data_t * par, data_t a){
-    dim3 threads(1,BLOCK_SIZE);
-    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-
-    cudaDxRight<<<blocks,threads>>>(add, in, out, nx, nz, d, par, a);
-    cudaKernelError();
-}
-
-void esat_scale_boundaries_gpu(data_t* in, int nx, int nz, data_t dx, data_t dz, const data_t* par, data_t dt, bool top, bool bottom, bool left, bool right){
-    
-    dim3 threads1(BLOCK_SIZE,1); // top-bottom excluding the corners
-    dim3 blocks1((nx-2+BLOCK_SIZE-1)/BLOCK_SIZE,2);
-    dim3 threads2(1,BLOCK_SIZE); // left-right 
-    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    
-    if  (top || bottom) {
-        cudaScaleTopBottom<<<blocks1,threads1>>>(in, nx, nz, dx, dz, par, dt, top, bottom);
-        cudaKernelError();
-    }
-    if  (top || bottom || left || right) {
-        cudaScaleLeftRight<<<blocks2,threads2>>>(in, nx, nz, dx, dz, par, dt, top, bottom, left, right);
-        cudaKernelError();
-    }
-}
-void vtisat_scale_boundaries_gpu(data_t* in, int nx, int nz, data_t dx, data_t dz, const data_t* par, data_t dt, bool top, bool bottom, bool left, bool right){
-
-    dim3 threads1(BLOCK_SIZE,1); // top-bottom excluding the corners
-    dim3 blocks1((nx-2+BLOCK_SIZE-1)/BLOCK_SIZE,2);
-    dim3 threads2(1,BLOCK_SIZE); // left-right 
-    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    
-    if  (top || bottom) {
-        cudaScaleTopBottom<<<blocks1,threads1>>>(in, nx, nz, dx, dz, par, dt, top, bottom);
-        cudaKernelError();
-    }
-    if  (top || bottom || left || right) {
-        cudaScaleLeftRightVTI<<<blocks2,threads2>>>(in, nx, nz, dx, dz, par, dt, top, bottom, left, right);
-        cudaKernelError();
-    }
-}
-
-void taper_top_gpu(data_t* in, int nx, int nz, int taper, data_t a){
-
-    dim3 threads(BLOCK_SIZE/2,taper);
-    dim3 blocks(2*(nx+BLOCK_SIZE/2-1)/BLOCK_SIZE,1);
-    cudaTaperTop<<<blocks,threads>>>(in,nx,nz,taper,a);
-    cudaKernelError();
-}
-
-void taper_bottom_gpu(data_t* in, int nx, int nz, int taper, data_t a){
-
-    dim3 threads(BLOCK_SIZE/2,taper);
-    dim3 blocks(2*(nx+BLOCK_SIZE/2-1)/BLOCK_SIZE,1);
-    cudaTaperBottom<<<blocks,threads>>>(in,nx,nz,taper,a);
-    cudaKernelError();
-}
-
-void taper_left_gpu(data_t* in, int nx, int nz, int taper, data_t a){
-
-    dim3 threads(taper,BLOCK_SIZE/2);
-    dim3 blocks(1,2*(nx+BLOCK_SIZE/2-1)/BLOCK_SIZE);
-    cudaTaperLeft<<<blocks,threads>>>(in,nx,nz,taper,a);
-    cudaKernelError();
-}
-
-void taper_right_gpu(data_t* in, int nx, int nz, int taper, data_t a){
-
-    dim3 threads(taper,BLOCK_SIZE/2);
-    dim3 blocks(1,2*(nx+BLOCK_SIZE/2-1)/BLOCK_SIZE);
-    cudaTaperRight<<<blocks,threads>>>(in,nx,nz,taper,a);
-    cudaKernelError();
-}
-
-void time_step_gpu(const data_t * prev, const data_t * curr, data_t * next, const data_t * par, int nx, int nz, data_t dt){
-
-    dim3 threads(BLOCK_SIZE,BLOCK_SIZE);
-    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    cudaTimeStep<<<blocks,threads>>>(prev,curr,next,par,nx,nz,dt);
-    cudaKernelError();
-}
-
-void delta_m3::inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
-
-    if (add==false) cudaMemset(out,0,nx*nz*sizeof(data_t));
-    dim3 threads(3,3);
-    dim3 blocks(itr_max-itr_min,1);
-    cudaInjectDM3<<<blocks,threads>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
-    cudaKernelError();
-}
-
-void delta_m3::extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
-
-    if (add==false) cudaMemset(out[0]+itr_min,0,nt*(itr_max-itr_min)*sizeof(data_t));
-    dim3 threads(3,3);
-    dim3 blocks(itr_max-itr_min,1);
-    cudaExtractDM3<<<blocks,threads>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
-    cudaKernelError();
-}
-
-void ddelta_m3::inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
-
-    if (add==false) cudaMemset(out,0,nx*nz*sizeof(data_t));
-    dim3 threads(3,3);
-    dim3 blocks(itr_max-itr_min,1);
-    cudaInjectDDM3<<<blocks,threads>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
-    cudaKernelError();
-}
-
-void ddelta_m3::extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
-
-    if (add==false) {
-        cudaMemset(out[0]+itr_min,0,nt*(itr_max-itr_min)*sizeof(data_t));
-        cudaMemset(out[1]+itr_min,0,nt*(itr_max-itr_min)*sizeof(data_t));
-    }
-    dim3 threads(3,3);
-    dim3 blocks(itr_max-itr_min,1);
-    cudaExtractDDM3<<<blocks,threads>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
-    cudaKernelError();
-}
-
-void dipole_m3::inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
-
-    if (add==false) cudaMemset(out,0,nx*nz*sizeof(data_t));
-    dim3 threads(3,3);
-    dim3 blocks(itr_max-itr_min,1);
-    cudaInjectDIPM3<<<blocks,threads>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
-    cudaKernelError();
-}
-
-void dipole_m3::extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
-
-    if (add==false) cudaMemset(out[0]+itr_min,0,nt*(itr_max-itr_min)*sizeof(data_t));
-    dim3 threads(3,3);
-    dim3 blocks(itr_max-itr_min,1);
-    cudaExtractDIPM3<<<blocks,threads>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
-    cudaKernelError();
-}
-
 __global__ void cudaComputeGradients(const data_t * model, const data_t * u_for, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, int nx, int nz, int nt, int sub, data_t dx, data_t dz, data_t dt){
 
     int ix = threadIdx.x + blockIdx.x*BLOCK_SIZE;
@@ -1822,20 +1469,329 @@ __global__ void cudaComputeGradientsVTI(const data_t * model, const data_t * u_f
     }
 }
 
+// ################################ C++ wrappers ##################################
+
+cudaStream_t streams[5];
+
+void Dz_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int stream1, int stream2){
+    
+    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
+    dim3 blocks1((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz-8+BLOCK_SIZE-1)/BLOCK_SIZE);
+    dim3 threads2(BLOCK_SIZE,4);
+    dim3 blocks2((nx+BLOCK_SIZE-1)/BLOCK_SIZE,2);
+
+    cudaDz_interior<<<blocks1,threads1,0,streams[stream1]>>>(add, in, out, nx, nz, d);
+    cudaKernelError();
+    cudaDz_bnd<<<blocks2,threads2,0,streams[stream2]>>>(add, in, out, nx, nz, d);
+    cudaKernelError();
+}
+
+void Dx_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int stream1, int stream2){
+
+    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
+    dim3 blocks1((nx-8+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+    dim3 threads2(4,BLOCK_SIZE);
+    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaDx_interior<<<blocks1,threads1,0,streams[stream1]>>>(add, in, out, nx, nz, d);
+    cudaKernelError();
+    cudaDx_bnd<<<blocks2,threads2,0,streams[stream2]>>>(add, in, out, nx, nz, d);
+    cudaKernelError();
+}
+
+void mult_Dz_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, const data_t* par, data_t a, int stream1, int stream2){
+    
+    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
+    dim3 blocks1((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz-8+BLOCK_SIZE-1)/BLOCK_SIZE);
+    dim3 threads2(BLOCK_SIZE,4);
+    dim3 blocks2((nx+BLOCK_SIZE-1)/BLOCK_SIZE,2);
+
+    cudaMultDz_interior<<<blocks1,threads1,0,streams[stream1]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+    cudaMultDz_bnd<<<blocks2,threads2,0,streams[stream2]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+}
+
+void mult_Dx_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, const data_t * par, data_t a, int stream1, int stream2){
+
+    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
+    dim3 blocks1((nx-8+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+    dim3 threads2(4,BLOCK_SIZE);
+    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaMultDx_interior<<<blocks1,threads1,0,streams[stream1]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+    cudaMultDx_bnd<<<blocks2,threads2,0,streams[stream2]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+}
+
+void Dzz_var_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, const data_t * par, data_t a, int stream1, int stream2){
+
+    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
+    dim3 blocks1((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz-12+BLOCK_SIZE-1)/BLOCK_SIZE);
+    dim3 threads2(BLOCK_SIZE,6);
+    dim3 blocks2((nx+BLOCK_SIZE-1)/BLOCK_SIZE,2);
+
+    cudaDzz_var_interior<<<blocks1,threads1,0,streams[stream1]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+    cudaDzz_var_bnd<<<blocks2,threads2,0,streams[stream2]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+}
+
+void Dxx_var_gpu(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, const data_t * par, data_t a, int stream1, int stream2){
+
+    dim3 threads1(BLOCK_SIZE,BLOCK_SIZE);
+    dim3 blocks1((nx-12+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+    dim3 threads2(6,BLOCK_SIZE);
+    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaDxx_var_interior<<<blocks1,threads1,0,streams[stream1]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+    cudaDxx_var_bnd<<<blocks2,threads2,0,streams[stream2]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+}
+
+void esat_neumann_top_gpu(bool add, const data_t* in0, const data_t*in1, data_t* out, int nx, int nz, data_t dx, data_t dz, const data_t * par0, const data_t * par1, data_t a0, data_t a1, int stream){
+    
+    dim3 threads(BLOCK_SIZE,1);
+    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
+
+    cudaEsatNeumannTop<<<blocks,threads,0,streams[stream]>>>(add, in0, in1, out, nx, nz, dx, dz, par0, par1, a0, a1);
+    cudaKernelError();
+}
+void esat_neumann_bottom_gpu(bool add, const data_t* in0, const data_t*in1, data_t* out, int nx, int nz, data_t dx, data_t dz, const data_t * par0, const data_t * par1, data_t a0, data_t a1, int stream){
+    
+    dim3 threads(BLOCK_SIZE,1);
+    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
+
+    cudaEsatNeumannBottom<<<blocks,threads,0,streams[stream]>>>(add, in0, in1, out, nx, nz, dx, dz, par0, par1, a0, a1);
+    cudaKernelError();
+}
+void esat_neumann_left_gpu(bool add, const data_t* in0, const data_t*in1, data_t* out, int nx, int nz, data_t dx, data_t dz, const data_t * par0, const data_t * par1, data_t a0, data_t a1, int stream){
+    
+    dim3 threads(1,BLOCK_SIZE);
+    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaEsatNeumannLeft<<<blocks,threads,0,streams[stream]>>>(add, in0, in1, out, nx, nz, dx, dz, par0, par1, a0, a1);
+    cudaKernelError();
+}
+void esat_neumann_right_gpu(bool add, const data_t* in0, const data_t*in1, data_t* out, int nx, int nz, data_t dx, data_t dz, const data_t * par0, const data_t * par1, data_t a0, data_t a1, int stream){
+    
+    dim3 threads(1,BLOCK_SIZE);
+    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaEsatNeumannRight<<<blocks,threads,0,streams[stream]>>>(add, in0, in1, out, nx, nz, dx, dz, par0, par1, a0, a1);
+    cudaKernelError();
+}
+
+void esat_absorbing_top_gpu(bool add, const data_t* in0, const data_t* in1, const data_t* in2, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, const data_t * par0,  const data_t * par1, const data_t * par2, data_t a0, data_t a1, data_t a2, int stream){
+    
+    dim3 threads(BLOCK_SIZE,1);
+    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
+
+    cudaEsatAbsorbingTop<<<blocks,threads,0,streams[stream]>>>(add, in0, in1, in2, out, nx, nz, dx, dz, dt, par0, par1, par2, a0, a1, a2);
+    cudaKernelError();
+}
+void esat_absorbing_bottom_gpu(bool add, const data_t* in0, const data_t* in1, const data_t* in2, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, const data_t * par0,  const data_t * par1, const data_t * par2, data_t a0, data_t a1, data_t a2, int stream){
+    
+    dim3 threads(BLOCK_SIZE,1);
+    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
+
+    cudaEsatAbsorbingBottom<<<blocks,threads,0,streams[stream]>>>(add, in0, in1, in2, out, nx, nz, dx, dz, dt, par0, par1, par2, a0, a1, a2);
+    cudaKernelError();
+}
+void esat_absorbing_left_gpu(bool add, const data_t* in0, const data_t* in1, const data_t* in2, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, const data_t * par0,  const data_t * par1, const data_t * par2, data_t a0, data_t a1, data_t a2, int stream){
+    
+    dim3 threads(1,BLOCK_SIZE);
+    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaEsatAbsorbingLeft<<<blocks,threads,0,streams[stream]>>>(add, in0, in1, in2, out, nx, nz, dx, dz, dt, par0, par1, par2, a0, a1, a2);
+    cudaKernelError();
+}
+void esat_absorbing_right_gpu(bool add, const data_t* in0, const data_t* in1, const data_t* in2, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, const data_t * par0,  const data_t * par1, const data_t * par2, data_t a0, data_t a1, data_t a2, int stream){
+    
+    dim3 threads(1,BLOCK_SIZE);
+    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaEsatAbsorbingRight<<<blocks,threads,0,streams[stream]>>>(add, in0, in1, in2, out, nx, nz, dx, dz, dt, par0, par1, par2, a0, a1, a2);
+    cudaKernelError();
+}
+
+void esat_Dz_top_gpu(bool add, const data_t * in, data_t * out, int nx, int nz, data_t d, const data_t * par, data_t a, int stream){ 
+    dim3 threads(BLOCK_SIZE,1);
+    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
+
+    cudaDzTop<<<blocks,threads,0,streams[stream]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+}
+void esat_Dz_bottom_gpu(bool add, const data_t * in, data_t * out, int nx, int nz, data_t d, const data_t * par, data_t a, int stream){
+    dim3 threads(BLOCK_SIZE,1);
+    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,1);
+
+    cudaDzBottom<<<blocks,threads,0,streams[stream]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+}
+void esat_Dx_left_gpu(bool add, const data_t * in, data_t * out, int nx, int nz, data_t d, const data_t * par, data_t a, int stream){
+    dim3 threads(1,BLOCK_SIZE);
+    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaDxLeft<<<blocks,threads,0,streams[stream]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+}
+void esat_Dx_right_gpu(bool add, const data_t * in, data_t * out, int nx, int nz, data_t d, const data_t * par, data_t a, int stream){
+    dim3 threads(1,BLOCK_SIZE);
+    dim3 blocks(1,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+
+    cudaDxRight<<<blocks,threads,0,streams[stream]>>>(add, in, out, nx, nz, d, par, a);
+    cudaKernelError();
+}
+
+void esat_scale_boundaries_gpu(data_t* in, int nx, int nz, data_t dx, data_t dz, const data_t* par, data_t dt, bool top, bool bottom, bool left, bool right, int stream1, int stream2){
+    
+    dim3 threads1(BLOCK_SIZE,1); // top-bottom excluding the corners
+    dim3 blocks1((nx-2+BLOCK_SIZE-1)/BLOCK_SIZE,2);
+    dim3 threads2(1,BLOCK_SIZE); // left-right 
+    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+    
+    if  (top || bottom) {
+        cudaScaleTopBottom<<<blocks1,threads1,0,streams[stream1]>>>(in, nx, nz, dx, dz, par, dt, top, bottom);
+        cudaKernelError();
+    }
+    if  (top || bottom || left || right) {
+        cudaScaleLeftRight<<<blocks2,threads2,0,streams[stream2]>>>(in, nx, nz, dx, dz, par, dt, top, bottom, left, right);
+        cudaKernelError();
+    }
+}
+void vtisat_scale_boundaries_gpu(data_t* in, int nx, int nz, data_t dx, data_t dz, const data_t* par, data_t dt, bool top, bool bottom, bool left, bool right, int stream1, int stream2){
+
+    dim3 threads1(BLOCK_SIZE,1); // top-bottom excluding the corners
+    dim3 blocks1((nx-2+BLOCK_SIZE-1)/BLOCK_SIZE,2);
+    dim3 threads2(1,BLOCK_SIZE); // left-right 
+    dim3 blocks2(2,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+    
+    if  (top || bottom) {
+        cudaScaleTopBottom<<<blocks1,threads1,0,streams[stream1]>>>(in, nx, nz, dx, dz, par, dt, top, bottom);
+        cudaKernelError();
+    }
+    if  (top || bottom || left || right) {
+        cudaScaleLeftRightVTI<<<blocks2,threads2,0,streams[stream2]>>>(in, nx, nz, dx, dz, par, dt, top, bottom, left, right);
+        cudaKernelError();
+    }
+}
+
+void taper_top_gpu(data_t* in, int nx, int nz, int taper, data_t a, int stream){
+
+    dim3 threads(BLOCK_SIZE/2,taper);
+    dim3 blocks(2*(nx+BLOCK_SIZE/2-1)/BLOCK_SIZE,1);
+    cudaTaperTop<<<blocks,threads,0,streams[stream]>>>(in,nx,nz,taper,a);
+    cudaKernelError();
+}
+
+void taper_bottom_gpu(data_t* in, int nx, int nz, int taper, data_t a, int stream){
+
+    dim3 threads(BLOCK_SIZE/2,taper);
+    dim3 blocks(2*(nx+BLOCK_SIZE/2-1)/BLOCK_SIZE,1);
+    cudaTaperBottom<<<blocks,threads,0,streams[stream]>>>(in,nx,nz,taper,a);
+    cudaKernelError();
+}
+
+void taper_left_gpu(data_t* in, int nx, int nz, int taper, data_t a, int stream){
+
+    dim3 threads(taper,BLOCK_SIZE/2);
+    dim3 blocks(1,2*(nx+BLOCK_SIZE/2-1)/BLOCK_SIZE);
+    cudaTaperLeft<<<blocks,threads,0,streams[stream]>>>(in,nx,nz,taper,a);
+    cudaKernelError();
+}
+
+void taper_right_gpu(data_t* in, int nx, int nz, int taper, data_t a, int stream){
+
+    dim3 threads(taper,BLOCK_SIZE/2);
+    dim3 blocks(1,2*(nx+BLOCK_SIZE/2-1)/BLOCK_SIZE);
+    cudaTaperRight<<<blocks,threads,0,streams[stream]>>>(in,nx,nz,taper,a);
+    cudaKernelError();
+}
+
+void time_step_gpu(const data_t * prev, const data_t * curr, data_t * next, const data_t * par, int nx, int nz, data_t dt, int stream){
+
+    dim3 threads(BLOCK_SIZE,BLOCK_SIZE);
+    dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
+    cudaTimeStep<<<blocks,threads,0,streams[stream]>>>(prev,curr,next,par,nx,nz,dt);
+    cudaKernelError();
+}
+
+void delta_m3::inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
+
+    if (add==false) cudaMemset(out,0,nx*nz*sizeof(data_t));
+    dim3 threads(3,3);
+    dim3 blocks(itr_max-itr_min,1);
+    cudaInjectDM3<<<blocks,threads,0,streams[1]>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
+    cudaKernelError();
+}
+
+void delta_m3::extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
+
+    if (add==false) cudaMemset(out[0]+itr_min,0,nt*(itr_max-itr_min)*sizeof(data_t));
+    dim3 threads(3,3);
+    dim3 blocks(itr_max-itr_min,1);
+    cudaExtractDM3<<<blocks,threads,0,streams[1]>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
+    cudaKernelError();
+}
+
+void ddelta_m3::inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
+
+    if (add==false) cudaMemset(out,0,nx*nz*sizeof(data_t));
+    dim3 threads(3,3);
+    dim3 blocks(itr_max-itr_min,1);
+    cudaInjectDDM3<<<blocks,threads,0,streams[1]>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
+    cudaKernelError();
+}
+
+void ddelta_m3::extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
+
+    if (add==false) {
+        cudaMemset(out[0]+itr_min,0,nt*(itr_max-itr_min)*sizeof(data_t));
+        cudaMemset(out[1]+itr_min,0,nt*(itr_max-itr_min)*sizeof(data_t));
+    }
+    dim3 threads(3,3);
+    dim3 blocks(itr_max-itr_min,1);
+    cudaExtractDDM3<<<blocks,threads,0,streams[1]>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
+    cudaKernelError();
+}
+
+void dipole_m3::inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
+
+    if (add==false) cudaMemset(out,0,nx*nz*sizeof(data_t));
+    dim3 threads(3,3);
+    dim3 blocks(itr_max-itr_min,1);
+    cudaInjectDIPM3<<<blocks,threads,0,streams[1]>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
+    cudaKernelError();
+}
+
+void dipole_m3::extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const{
+
+    if (add==false) cudaMemset(out[0]+itr_min,0,nt*(itr_max-itr_min)*sizeof(data_t));
+    dim3 threads(3,3);
+    dim3 blocks(itr_max-itr_min,1);
+    cudaExtractDIPM3<<<blocks,threads,0,streams[1]>>>(in, out, nx, nz, nt, ntr, it, itr_min, itr_max, xind, zind, xw, zw);
+    cudaKernelError();
+}
+
 void nl_we_op_e::compute_gradients_gpu(const data_t * model, const data_t * u_for, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const {
     
     int nxz = nx*nz;
     const data_t * pfor1x=u_for+2*nxz;
     const data_t * pfor1z=u_for+3*nxz;
 
-    Dx_gpu(false, pfor1x, tmp, nx, nz, dx); // forwardx_x
-    Dz_gpu(false, pfor1z, tmp+nxz, nx, nz, dz); // forwardz_z
-    Dx_gpu(false, pfor1z, tmp+2*nxz, nx, nz, dx); // forwardz_x
-    Dz_gpu(false, pfor1x, tmp+3*nxz, nx, nz, dz); // forwardx_z
+    Dx_gpu(false, pfor1x, tmp, nx, nz, dx, 3, 4); // forwardx_x
+    Dz_gpu(false, pfor1z, tmp+nxz, nx, nz, dz, 4, 3); // forwardz_z
+    Dx_gpu(false, pfor1z, tmp+2*nxz, nx, nz, dx, 3, 4); // forwardz_x
+    Dz_gpu(false, pfor1x, tmp+3*nxz, nx, nz, dz, 4, 3); // forwardx_z
+    cudaStreamSynchronize(streams[3]);
+    cudaStreamSynchronize(streams[4]);
 
     dim3 threads(BLOCK_SIZE,BLOCK_SIZE);
     dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    cudaComputeGradients<<<blocks,threads>>>(model, u_for, curr, u_x, u_z, tmp, grad, nx, nz, par.nt, par.sub, dx, dz, dt);
+    cudaComputeGradients<<<blocks,threads,0,streams[3]>>>(model, u_for, curr, u_x, u_z, tmp, grad, nx, nz, par.nt, par.sub, dx, dz, dt);
     cudaKernelError();
 }
 
@@ -1845,14 +1801,16 @@ void nl_we_op_vti::compute_gradients_gpu(const data_t * model, const data_t * u_
     const data_t * pfor1x=u_for+2*nxz;
     const data_t * pfor1z=u_for+3*nxz;
 
-    Dx_gpu(false, pfor1x, tmp, nx, nz, dx); // forwardx_x
-    Dz_gpu(false, pfor1z, tmp+nxz, nx, nz, dz); // forwardz_z
-    Dx_gpu(false, pfor1z, tmp+2*nxz, nx, nz, dx); // forwardz_x
-    Dz_gpu(false, pfor1x, tmp+3*nxz, nx, nz, dz); // forwardx_z
+    Dx_gpu(false, pfor1x, tmp, nx, nz, dx, 3, 4); // forwardx_x
+    Dz_gpu(false, pfor1z, tmp+nxz, nx, nz, dz, 4, 3); // forwardz_z
+    Dx_gpu(false, pfor1z, tmp+2*nxz, nx, nz, dx, 3, 4); // forwardz_x
+    Dz_gpu(false, pfor1x, tmp+3*nxz, nx, nz, dz, 4, 3); // forwardx_z
+    cudaStreamSynchronize(streams[3]);
+    cudaStreamSynchronize(streams[4]);
 
     dim3 threads(BLOCK_SIZE,BLOCK_SIZE);
     dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    cudaComputeGradientsVTI<<<blocks,threads>>>(model, u_for, curr, u_x, u_z, tmp, grad, nx, nz, par.nt, par.sub, dx, dz, dt);
+    cudaComputeGradientsVTI<<<blocks,threads,0,streams[3]>>>(model, u_for, curr, u_x, u_z, tmp, grad, nx, nz, par.nt, par.sub, dx, dz, dt);
     cudaKernelError();
 }
 
