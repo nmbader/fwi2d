@@ -38,15 +38,19 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> model = sepRead<data_t>(model_file);
     
     // Analyze the input source time function and duplicate if necessary, analyze geometry
-    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
     analyzeGeometry(*model->getHyper(),par, par.verbose>0);
-
+    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
+    //analyzeModel(*allsrc->getHyper(),model,par);
+    //l_we_op_a lop(*allsrc->getHyper(),model,par);
+    //lop.dotProduct();
+    
     // If more than one shot is modeled, don't save the wavefield
     // if (par.ns>1) par.sub=0;
 
     // Build the appropriate wave equation operator
     nl_we_op_e * op;
-    if (par.nmodels==3) op=new nl_we_op_e(*model->getHyper(),allsrc,par);
+    if (par.nmodels==2) op=new nl_we_op_a(*model->getHyper(),allsrc,par);
+    else if (par.nmodels==3) op=new nl_we_op_e(*model->getHyper(),allsrc,par);
     else if (par.nmodels==5) op=new nl_we_op_vti(*model->getHyper(),allsrc,par);
 
     // Run the forward modeling

@@ -214,13 +214,15 @@ public:
         int kz = _kz.size()-4;
         data_t x, z;
 
+        if (add == false) memset(pdat, 0, _range.getN123()*sizeof(data_t));
+
         for (int iy=0; iy<ny; iy++){
             #pragma omp parallel for private(x,z)
             for (int ix=0; ix<X.n; ix++){
                 x = ix*X.d+X.o;
                 for (int iz=0; iz<Z.n; iz++){
                     z = iz*Z.d+Z.o;
-                    pdat[iy*X.n*Z.n+ix*Z.n+iz] = add*pdat[iy*X.n*Z.n+ix*Z.n+iz];
+                    //pdat[iy*X.n*Z.n+ix*Z.n+iz] = add*pdat[iy*X.n*Z.n+ix*Z.n+iz];
                     for (int i=_kxmin[ix]; i<_kxmin[ix]+4; i++){
                         for (int j=_kzmin[iz]; j<_kzmin[iz]+4; j++){
                             pdat[iy*X.n*Z.n+ix*Z.n+iz] += N3(i,x,_kx)*N3(j,z,_kz)*pmod[iy*kx*kz+i*kz+j];
@@ -242,7 +244,7 @@ public:
         if (add == false) memset(pmod, 0, _domain.getN123()*sizeof(data_t));
 
         for (int iy=0; iy<ny; iy++){
-            #pragma omp parallel for private(x,z)
+            //#pragma omp parallel for private(x,z)
             for (int ix=0; ix<X.n; ix++){
                 x = ix*X.d+X.o;
                 for (int iz=0; iz<Z.n; iz++){

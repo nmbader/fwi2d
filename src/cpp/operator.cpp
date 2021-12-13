@@ -10,7 +10,7 @@ void nloper::dotProduct(){
 
     m->random(-10,10);
     d->random(-10,10);
-    dm = m->clone();
+    dm->random(-10,10);
 
     std::shared_ptr<vecReg<data_t> > mtilde = m->clone();
     std::shared_ptr<vecReg<data_t> > d1 = d->clone();

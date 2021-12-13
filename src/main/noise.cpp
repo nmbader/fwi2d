@@ -32,7 +32,7 @@ void printdoc(){
     "   replace - int - [0]:\n\t\t0 = add noise to input, 1 = replace input.\n"
     "\nExample:\n"
     "   NOISE.x < infile.H type=uniform min=-10 max=20 > oufile.H.\n"
-    "   NOISE.x < infile.H type=normal mean=3 sigma=5 replace=1 > oufile.H.\n"
+    "   NOISE.x < infile.H type=normal mean=3 sigma=5 replace=1 > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }

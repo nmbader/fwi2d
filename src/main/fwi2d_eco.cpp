@@ -53,8 +53,8 @@ int main(int argc, char **argv){
     if (par.prior_file!="none") prior = sepRead<data_t>(par.prior_file);
 
 // Analyze the inputs and parameters and modify if necessary
-    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
     analyzeGeometry(*model->getHyper(),par, par.verbose>0);
+    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
     analyzeBsplines(*model->getHyper(),par);
     analyzeNLInversion(par);
 
@@ -107,7 +107,8 @@ if (par.bsplines)
 
     nloper * op = nullptr;
     nl_we_op * L;
-    if (par.nmodels==3) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
+    if (par.nmodels==2) L=new nl_we_op_a(*model->getHyper(),allsrc,par);
+    else if (par.nmodels==3) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
     else if (par.nmodels==5) L=new nl_we_op_vti(*model->getHyper(),allsrc,par);
 
     if (par.bsplines)
@@ -159,9 +160,6 @@ if (par.bsplines)
     
     solver->run(prob, par.verbose>0, ioutput_file, par.isave);
     
-    delete L;
-    delete prob;
-
     if (D != nullptr) delete D;
     if (op != nullptr)
     {
@@ -184,7 +182,8 @@ if (par.bsplines)
         }
     }
 
-
+    delete L;
+    delete prob;
 
 return 0;
 }

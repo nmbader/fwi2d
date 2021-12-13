@@ -828,6 +828,17 @@ void taperx(data_t* in, int nx, int nz, int izmin, int izmax, int istart, int ie
 extern "C" void taperz_ispc(data_t* in, int i1, int istart, int iend, data_t a);
 extern "C" void taperx_ispc(data_t* in, int i1, int n, int izmin, int izmax, data_t a);
 
+// SAT functions for the acoustic wave equation (variable density)
+void asat_dirichlet_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a);
+void asat_dirichlet_bottom(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a);
+void asat_dirichlet_left(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a);
+void asat_dirichlet_right(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a);
+void asat_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, data_t a);
+void asat_absorbing_bottom(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, data_t a);
+void asat_absorbing_left(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int izmin, int izmax, const data_t ** par, data_t a);
+void asat_absorbing_right(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int izmin, int izmax, const data_t ** par, data_t a);
+void asat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, data_t dt, bool top, bool bottom, bool left, bool right);
+
 
 /*
 Perfectly matched layer following Komatitsch and Tromp 2003, eq. (20) and (21)

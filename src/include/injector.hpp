@@ -57,6 +57,7 @@ public:
 
     void inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const;
     void extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const;
+
 };
 
 // injector/extractor by approximating the Dirac distribution and its spatial derivative using H norm operator and 3 moment conditions
@@ -85,6 +86,7 @@ public:
 
     void inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const;
     void extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const;
+
 };
 
 // injector/extractor for a linear DAS fiber along arbitrary direction defined by a dip angle
@@ -114,4 +116,5 @@ public:
 
     void inject_gpu(bool add, const data_t ** in, data_t * out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const;
     void extract_gpu(bool add, const data_t * in, data_t ** out, int nx, int nz, int nt, int ntr, int it, int itr_min, int itr_max, const int * xind, const int * zind, const data_t * xw, const data_t * zw) const;
+
 };

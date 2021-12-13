@@ -213,7 +213,7 @@ public:
     }
     void apply_forward(bool add, const data_t * pmod, data_t * pdat) {
         _R->apply_forward(false, pmod, _v->getVals());
-        _L->apply_forward(false, _v->getCVals(), pdat);
+        _L->apply_forward(add, _v->getCVals(), pdat);
     }
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat) {
         _L->apply_adjoint(false, _v->getVals(), pdat);

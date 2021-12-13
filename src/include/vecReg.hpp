@@ -17,10 +17,8 @@
     typedef float data_t;
 #endif
 
-#ifdef CUDA
-    #define GPU 1
-#else
-    #define GPU 0
+#ifdef GPU
+    #define CUDA 1
 #endif
 
 template <typename T1>

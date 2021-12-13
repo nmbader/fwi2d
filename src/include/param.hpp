@@ -31,7 +31,7 @@ struct param{
 
     // boundary parameters
     int bc_top=1, bc_bottom=1, bc_left=1, bc_right=1, taper_top=0, taper_bottom=0, taper_left=0, taper_right=0;
-    data_t alpha=0.2508560249/1.05, taper_strength=0.05;
+    data_t free_surface_stiffness=1.05, taper_strength=0.05;
     bool pml=false, pml_T=false, pml_B=false, pml_L=false, pml_R=false;
     data_t R = 1e-3; int p=2; 
 
@@ -59,7 +59,7 @@ struct param{
 
     // miscallenous
     int version=2; // spatial operators version (1 or 2)
-    std::vector<int> device; // list of gpu devices to use
+    std::vector<int> devices={0}; // list of gpu devices to use
     int verbose=1;
 };
 

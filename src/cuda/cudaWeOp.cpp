@@ -9,6 +9,12 @@ extern cudaStream_t streams[5]; // CUDA kernel and memory copy streams
 
 void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
 {
+    int ndevices;
+    int iGpu = par.devices[0];
+    cudaCheckError (cudaGetDeviceCount(&ndevices) );
+    successCheck(iGpu<ndevices,__FILE__,__LINE__,"The requested device is not available\n");
+    cudaCheckError (cudaSetDevice(iGpu) );
+
     int nxz=nx*nz;
 
     // create the CUDA kernel and memory copy streams
@@ -418,6 +424,12 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
 
 void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
 {
+    int ndevices;
+    int iGpu = par.devices[0];
+    cudaCheckError (cudaGetDeviceCount(&ndevices) );
+    successCheck(iGpu<ndevices,__FILE__,__LINE__,"The requested device is not available\n");
+    cudaCheckError (cudaSetDevice(iGpu) );
+    
     int nxz=nx*nz;
 
     // create the CUDA kernel and memory copy streams

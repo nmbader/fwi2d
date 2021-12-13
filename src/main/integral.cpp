@@ -27,7 +27,7 @@ void printdoc(){
     "   domain - string - ['time']:\n\t\t'time' or 'frequency'.\n"
     "   eps - positive float - [1e-06]:\n\t\tdamping value.\n"
     "\nExample:\n"
-    "   INTEGRAL.x < infile.H domain=frequency eps=1e-04 > oufile.H.\n"
+    "   INTEGRAL.x < infile.H domain=frequency eps=1e-04 > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }

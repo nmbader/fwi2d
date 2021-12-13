@@ -307,8 +307,8 @@ void printdoc(){
     "   dt - positive float - [0.004]:\n\t\tsampling interval.\n"
     "   shift - int - [0]:\n\t\tshift in nb of samples, applied to the origin of the output. Inactive if 'phase' is not provided.\n"
     "\nExample:\n"
-    "   GENERATE_WAVELET.x < infile.H type=spectrum nt=100 dt=0.004 shift=11 phase=minimum > oufile.H.\n"
-    "   GENERATE_WAVELET.x type=bandpass nt=100 dt=0.004 shift=11 w1=0 w2=0.2 w3=0.6 w4=0.8 > oufile.H.\n"
+    "   GENERATE_WAVELET.x < infile.H type=spectrum nt=100 dt=0.004 shift=11 phase=minimum > oufile.H\n"
+    "   GENERATE_WAVELET.x type=bandpass nt=100 dt=0.004 shift=11 w1=0 w2=0.2 w3=0.6 w4=0.8 > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }

@@ -29,7 +29,7 @@ void printdoc(){
     "   vmax - vmin<=float - [0]:\n\t\tlowest absolute phase velocity (m/s) to fully preserve (0 means no cone filtering).\n"
     "   taper - non-negative float - [0.1]:\n\t\tlength of the cosine taper, applied in the wavenumber direction.\n"
     "\nExample:\n"
-    "   FK_FILTER.x < infile.H kmin=-0.3 kmax=0.3 vmin=1000 vmax=10000 taper=0.05 > oufile.H.\n"
+    "   FK_FILTER.x < infile.H kmin=-0.3 kmax=0.3 vmin=1000 vmax=10000 taper=0.05 > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }

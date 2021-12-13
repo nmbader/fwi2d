@@ -6,6 +6,10 @@
 #include "operator.hpp"
 #include "we_op.hpp"
 
+#ifdef CUDA
+    #include "cudaMisc.h"
+#endif
+
 // General class for optimization problems: min(f(m))
 class optimization {
 protected:
@@ -485,8 +489,6 @@ public:
         else _envelop=0;
         _f = 0;
         _flag = true;
-        _dfunc={};
-        _mfunc={};
        
         if (P!= nullptr){
             _p = std::make_shared<vecReg<data_t> >(*P->getRange());
@@ -531,12 +533,13 @@ public:
 
     void compute_res_and_grad(data_t * r, std::shared_ptr<vecReg<data_t> > g){       
 
+        _g->zero();
+
         if (_P != nullptr)  {
             _P->forward(false, _m, _p);
             _pg->zero();
         }
         else _pg=_g;
-        _g->zero();
 
         int ns = _L->_par.ns;
         int nt = _d->getHyper()->getAxis(1).n;
@@ -545,7 +548,6 @@ public:
 
         for (int s=0; s<ns; s++)
         {
-            
             if (_L->_par.verbose>1) fprintf(stderr,"Start processing shot %d\n",s);
 
             // cumulative number of receivers
@@ -557,7 +559,7 @@ public:
             par.rxz = {_L->_par.rxz[s]};
             par.ns=1;
             par.nr=par.rxz[s].size();
-            par.rdip = std::vector<data_t>(_L->_par.rdip.begin()+nr, _L->_par.rdip.begin()+nr+par.nr);
+            if (par.gl>0) par.rdip = std::vector<data_t>(_L->_par.rdip.begin()+nr, _L->_par.rdip.begin()+nr+par.nr);
 
             if (s>0) par.verbose=0;
 
@@ -570,7 +572,8 @@ public:
 
             // build the we operator for a single shot
             nl_we_op * L;
-            if (par.nmodels==3) L=new nl_we_op_e(*_p->getHyper(),src,par);
+            if (par.nmodels==2) L=new nl_we_op_a(*_p->getHyper(),src,par);
+            else if (par.nmodels==3) L=new nl_we_op_e(*_p->getHyper(),src,par);
             else if (par.nmodels==5) L=new nl_we_op_vti(*_p->getHyper(),src,par);
             std::shared_ptr<vecReg<data_t> > rs = std::make_shared<vecReg<data_t> >(*L->getRange());
             int ntr = rs->getN123()/nt;
@@ -701,9 +704,9 @@ public:
         if (_gmask != nullptr) _g->mult(_gmask);
     }
 
-    void res(){compute_res_and_grad(_r->getVals(), _g); _flag = true;}
+    virtual void res(){compute_res_and_grad(_r->getVals(), _g); _flag = true;}
 
-    data_t getFunc(){
+    virtual data_t getFunc(){
         if (_flag)
         {
             int n123 = _r->getN123();
@@ -718,7 +721,7 @@ public:
         }
         return _f;
     }
-    void grad() {
+    virtual void grad() {
         // already computed in the compute_res_and_grad() method above
     }
 };
@@ -751,8 +754,6 @@ public:
         else _envelop=0;
         _f = 0;
         _flag = true;
-        _dfunc={};
-        _mfunc={};
 
         _Dmp = std::make_shared<vecReg<data_t> > (*_D->getRange());
         _Dmp->zero();
@@ -810,6 +811,8 @@ public:
     void initRes() {
         _r = std::make_shared<vecReg<data_t> >(hypercube<data_t>(_d->getN123()+_D->getRange()->getN123()));
         _r->zero();
+        _dfunc.clear();
+        _mfunc.clear();
     }
 
     // res = ( L(m) - d ; lambda*(D(m) - D(m_prior)) )
@@ -833,21 +836,19 @@ public:
         if (_flag)
         {
             int n123 = _d->getN123();
-            int nm = _D->getRange()->getN123();
             int nt = _d->getHyper()->getAxis(1).n;
             int nx = n123 / nt;
             data_t dt = _d->getHyper()->getAxis(1).d;
             data_t * pr = _r->getVals();
-            data_t fd = 0, fm = 0;
-            for (int i=0; i<n123; i++) fd += dt*pr[i]*pr[i];
-            for (int i=0; i<nx; i++) fd = fd - 0.5*dt*(pr[i*nt]*pr[i*nt] + pr[i*nt+nt-1]*pr[i*nt+nt-1]);
-            for (int i=0; i<nm; i++) fm += pr[n123+i]*pr[n123+i];
-            fd = 0.5*fd/_dnorm;
+            data_t fd = _r->norm2(0,n123);
+            data_t fm = _r->norm2(n123,-1);
+            for (int i=0; i<nx; i++) fd = fd - 0.5*(pr[i*nt]*pr[i*nt] + pr[i*nt+nt-1]*pr[i*nt+nt-1]);
+            fd = 0.5*dt*fd/_dnorm;
             fm = 0.5*fm/_mnorm;
             _f = fd+fm;
             _flag = false;
             
-            if (_L->_par.verbose>1) fprintf(stderr,"Data functional = %f; Model functional = %f\n",fd,fm);
+            if (_L->_par.verbose>0) fprintf(stderr,"Data functional = %f; Model functional = %f\n",fd,fm);
             _dfunc.push_back(fd);
             _mfunc.push_back(fm);
         }

@@ -24,7 +24,7 @@ void printdoc(){
     "\nParameters:\n"
     "   type - string - ['amplitude']:\n\t\toptions: 'amplitude', 'power', 'phase', 'real', 'imag'.\n"
     "\nExample:\n"
-    "   FX.x < infile.H type=power > oufile.H.\n"
+    "   FX.x < infile.H type=power > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }

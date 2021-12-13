@@ -26,7 +26,7 @@ void printdoc(){
     "   wrapped - bool - ['1']:\n\t\twrap or unwrap the instantaneous phase.\n"
     "\nExample:\n"
     "   HILBERT.x < infile.H > oufile.H.\n"
-    "   HILBERT.x < infile.H type=iphase wrapped=0 > oufile.H.\n"
+    "   HILBERT.x < infile.H type=iphase wrapped=0 > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }

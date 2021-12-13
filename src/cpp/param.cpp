@@ -98,7 +98,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "rxinc", par.rxinc);
     readParam<data_t>(argc, argv, "rzinc", par.rzinc);
     readParam<data_t>(argc, argv, "rdipinc", par.rdipinc);
-    readParam<data_t>(argc, argv, "alpha", par.alpha);
+    readParam<data_t>(argc, argv, "free_surface_stiffness", par.free_surface_stiffness);
     readParam<data_t>(argc, argv, "taper_strength", par.taper_strength);
     readParam<data_t>(argc, argv, "R", par.R);
     readParam<data_t>(argc, argv, "gl", par.gl);
@@ -153,7 +153,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<bool>(argc, argv, "ls_version", par.ls_version);
     readParam<int>(argc, argv, "bs_mx", par.bs_mx);
     readParam<int>(argc, argv, "bs_mz", par.bs_mz);
-    readParam<int>(argc, argv, "device", par.device);
+    readParam<int>(argc, argv, "devices", par.devices);
 }
 
 void readParam(std::string parfile, param &par){

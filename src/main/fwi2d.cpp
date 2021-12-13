@@ -49,8 +49,8 @@ int main(int argc, char **argv){
     if (par.weights_file!="none") w = sepRead<data_t>(par.weights_file);
 
 // Analyze the inputs and parameters and modify if necessary
-    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
     analyzeGeometry(*model->getHyper(),par, par.verbose>0);
+    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
     analyzeBsplines(*model->getHyper(),par);
     analyzeNLInversion(par);
 
@@ -93,7 +93,8 @@ if (par.bsplines)
 
     nloper * op;
     nl_we_op_e * L;
-    if (par.nmodels==3) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
+    if (par.nmodels==2) L=new nl_we_op_a(*model->getHyper(),allsrc,par);
+    else if (par.nmodels==3) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
     else if (par.nmodels==5) L=new nl_we_op_vti(*model->getHyper(),allsrc,par);
 
     if (par.bsplines)

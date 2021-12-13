@@ -453,6 +453,238 @@ void taperx(data_t* in, int nx, int nz, int izmin, int izmax, int istart, int ie
     }
 }
 
+void asat_dirichlet_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t hcoef[4] = {17.0/48, 59.0/48, 43.0/48, 49.0/48};
+    int nc1=4;
+    data_t dz2=dz*dz;
+
+    // SAT = + H-1 (S'.(f2*in_0)) - H-1(f2*in_0/(h.a))_0  f2=reciprocal of density
+    #pragma omp parallel for
+    for (int ix=ixmin; ix<ixmax; ix++){
+        for (int iz=0; iz<nc1; iz++){
+            out[ix*nz+iz] = add*out[ix*nz+iz] + 1.0/(hcoef[iz]*dz2)*scoef[iz]*par[1][ix*nz]*in[0][ix*nz];
+        }
+        out[ix*nz] -= par[1][ix*nz]*in[0][ix*nz]/(a*hcoef[0]*dz2);
+    }
+}
+
+void asat_dirichlet_bottom(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t hcoef[4] = {17.0/48, 59.0/48, 43.0/48, 49.0/48};
+    int nc1=4;
+    data_t dz2=dz*dz;
+
+    // SAT = + H-1 (S'.(f2*in_0)) - H-1(f2*in_0/(h.a))_0  f2=reciprocal of density
+    #pragma omp parallel for
+    for (int ix=ixmin; ix<ixmax; ix++){
+        for (int iz=0; iz<nc1; iz++){
+            out[ix*nz+nz-1-iz] = add*out[ix*nz+nz-1-iz] + 1.0/(hcoef[iz]*dz2)*scoef[iz]*par[1][ix*nz+nz-1]*in[0][ix*nz+nz-1];
+        }
+        out[ix*nz+nz-1] -= par[1][ix*nz+nz-1]*in[0][ix*nz+nz-1]/(a*hcoef[0]*dz2);
+    }
+}
+
+void asat_dirichlet_left(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t hcoef[4] = {17.0/48, 59.0/48, 43.0/48, 49.0/48};
+    int nc1=4;
+    data_t dx2=dx*dx;
+
+    // SAT = + H-1 (S'.(f2*in_0)) - H-1(f2*in_0/(h.a))_0  f2=reciprocal of density
+    #pragma omp parallel for
+    for (int iz=izmin; iz<izmax; iz++){
+        for (int ix=0; ix<nc1; ix++){
+            out[ix*nz+iz] = add*out[ix*nz+iz] + 1.0/(hcoef[ix]*dx2)*scoef[ix]*par[1][iz]*in[0][iz];
+        }
+    }
+    #pragma omp parallel for
+    for (int iz=izmin; iz<izmax; iz++) out[iz] -= par[1][iz]*in[0][iz]/(a*hcoef[0]*dx2);
+}
+
+void asat_dirichlet_right(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t hcoef[4] = {17.0/48, 59.0/48, 43.0/48, 49.0/48};
+    int nc1=4;
+    data_t dx2=dx*dx;
+
+    // SAT = + H-1 (S'.(f2*in_0)) - H-1(f2*in_0/(h.a))_0  f2=reciprocal of density
+    #pragma omp parallel for
+    for (int iz=izmin; iz<izmax; iz++){
+        for (int ix=0; ix<nc1; ix++){
+            out[(nx-1-ix)*nz+iz] = add*out[(nx-1-ix)*nz+iz] + 1.0/(hcoef[ix]*dx2)*scoef[ix]*par[1][(nx-1)*nz+iz]*in[0][(nx-1)*nz+iz];
+        }
+    }
+    #pragma omp parallel for
+    for (int iz=izmin; iz<izmax; iz++) out[(nx-1)*nz+iz] -= par[1][(nx-1)*nz+iz]*in[0][(nx-1)*nz+iz]/(a*hcoef[0]*dx2);
+}
+
+void asat_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=1/(rho.v)=1/sqrt(rho.K)
+    #pragma omp parallel for private(sum)
+    for (int ix=ixmin; ix<ixmax; ix++){
+        sum=0;
+        for (int iz=0; iz<nc1; iz++){
+            sum += scoef[iz] * in[0][ix*nz+iz];
+        }
+        out[ix*nz] = add*out[ix*nz] - 1.0/(h0*dz) * ( par[1][ix*nz]*sum/dz - in[1][ix*nz]/(2*dt*sqrt(par[0][ix*nz]/par[1][ix*nz])));
+    }
+}
+
+void asat_absorbing_bottom(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=1/(rho.v)=1/sqrt(rho.K)
+    #pragma omp parallel for private(sum)
+    for (int ix=ixmin; ix<ixmax; ix++){
+        sum=0;
+        for (int iz=0; iz<nc1; iz++){
+            sum += scoef[iz] * in[0][ix*nz+nz-1-iz];
+        }
+        out[ix*nz+nz-1] = add*out[ix*nz+nz-1] - 1.0/(h0*dz) * ( par[1][ix*nz+nz-1]*sum/dz - in[1][ix*nz+nz-1]/(2*dt*sqrt(par[0][ix*nz+nz-1]/par[1][ix*nz+nz-1])));
+    }
+}
+
+void asat_absorbing_left(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int izmin, int izmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=1/(rho.v)=1/sqrt(rho.K)
+    #pragma omp parallel for private(sum)
+    for (int iz=izmin; iz<izmax; iz++){
+        sum=0;
+        for (int ix=0; ix<nc1; ix++){
+            sum += scoef[ix] * in[0][ix*nz+iz];
+        }
+        out[iz] = add*out[iz] - 1.0/(h0*dx) * ( par[1][iz]*sum/dx - in[1][iz]/(2*dt*sqrt(par[0][iz]/par[1][iz])));
+    }
+}
+
+void asat_absorbing_right(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int izmin, int izmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=1/(rho.v)=1/sqrt(rho.K)
+    #pragma omp parallel for private(sum)
+    for (int iz=izmin; iz<izmax; iz++){
+        sum=0;
+        for (int ix=0; ix<nc1; ix++){
+            sum += scoef[ix] * in[0][(nx-1-ix)*nz+iz];
+        }
+        out[(nx-1)*nz+iz] = add*out[(nx-1)*nz+iz] - 1.0/(h0*dx) * ( par[1][(nx-1)*nz+iz]*sum/dx - in[1][(nx-1)*nz+iz]/(2*dt*sqrt(par[0][(nx-1)*nz+iz]/par[1][(nx-1)*nz+iz])));
+    }
+}
+
+void asat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, data_t dt, bool top, bool bottom, bool left, bool right){
+
+    // par must at least contain K, 1/rho in this order
+    data_t h0 = 17.0/48;
+    data_t scaler;
+    data_t sc1=0, sc2=0, sc3=0, sc4=0;
+
+    // scale the top boundary without the corners
+    if (top){
+        sc1 = sqrt(par[0][0]*par[1][0])*dt / (2  * dz * h0); // top left
+        sc2 = sqrt(par[0][(nx-1)*nz]*par[1][(nx-1)*nz])*dt / (2 * dz * h0); // top right
+        if (izmin==0){
+            for (int ix = std::max(1,ixmin); ix < std::min(nx-1,ixmax); ix++){
+                scaler = sqrt(par[0][ix*nz]*par[1][ix*nz])*dt / (2 * dz * h0);
+                in[0][ix*nz] = in[0][ix*nz] / (1+scaler);
+            }
+        }
+    }
+
+    // scale the left boundary
+    if (left){
+        sc1 += sqrt(par[0][0]*par[1][0])*dt / (2 * dx * h0); // top left
+        in[0][0] = in[0][0] / (1+sc1);
+        sc1 = sqrt(par[0][nz-1]*par[1][nz-1])*dt / (2 * dx * h0); // bottom left
+        if (ixmin==0){
+            for (int iz = std::max(1,izmin); iz < std::min(nz-1,izmax); iz++){
+                scaler = sqrt(par[0][iz]*par[1][iz])*dt / (2 * dx * h0);
+                in[0][iz] = in[0][iz] / (1+scaler);
+            }
+        }
+    }
+    else{
+        if (izmin==0 && ixmin==0){
+            in[0][0] = in[0][0] / (1+sc1); // top left
+        }
+        sc1 = 0; // bottom left
+    }
+
+    // scale the bottom boundary
+    if (bottom){
+        sc1 += sqrt(par[0][nz-1]*par[1][nz-1])*dt / (2 * dz * h0); // bottom left
+        in[0][nz-1] = in[0][nz-1] / (1+sc1);
+        sc1 = sqrt(par[0][(nx-1)*nz+nz-1]*par[1][(nx-1)*nz+nz-1])*dt / (2 * dz * h0); // bottom right
+        if (izmax==nz){
+            for (int ix = std::max(1,ixmin); ix < std::min(nx-1,ixmax); ix++){
+                scaler = sqrt(par[0][ix*nz+nz-1]*par[1][ix*nz+nz-1])*dt / (2 * dz * h0);
+                in[0][ix*nz+nz-1] = in[0][ix*nz+nz-1] / (1+scaler);
+            }
+        }
+    }
+    else {
+        if (izmax==nz && ixmin==0){
+            in[0][nz-1] = in[0][nz-1] / (1+sc1); // bottom left
+        }
+        sc1 = 0; // bottom right
+    }
+
+    // scale the right boundary
+    if (right){
+        sc1 += sqrt(par[0][(nx-1)*nz+nz-1]*par[1][(nx-1)*nz+nz-1])*dt / (2 * dx * h0); // bottom right
+        in[0][(nx-1)*nz+nz-1] = in[0][(nx-1)*nz+nz-1] / (1+sc1);
+        if (ixmax==nx){
+            for (int iz = std::max(1,izmin); iz < std::min(nz-1,izmax); iz++){
+                scaler = sqrt(par[0][(nx-1)*nz+iz]*par[1][(nx-1)*nz+iz])*dt / (2 * dx * h0);
+                in[0][(nx-1)*nz+iz] = in[0][(nx-1)*nz+iz] / (1+scaler);
+            }
+        }
+        sc2 += sqrt(par[0][(nx-1)*nz]*par[1][(nx-1)*nz])*dt / (2 * dx *h0); // top right
+        if (izmin==0 && ixmax==nx){
+            in[0][(nx-1)*nz] = in[0][(nx-1)*nz] / (1+sc2);
+        }
+    }
+    else {
+        if (izmax==nz && ixmax==nx){
+            in[0][(nx-1)*nz+nz-1] = in[0][(nx-1)*nz+nz-1] / (1+sc1); // bottom right
+        }
+        if (izmin==0 && ixmax==nx){
+            in[0][(nx-1)*nz] = in[0][(nx-1)*nz] / (1+sc2); // top right
+        }
+    }
+}
+
 // variable coefficients expressions for 2nd derivative SBP operators
 static inline data_t expr1(const data_t ** par, int i){return par[0][i];} // e.g. = lambda
 static inline data_t expr2(const data_t ** par, int i){return par[1][i];} // e.g. = mu

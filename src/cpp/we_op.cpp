@@ -2,80 +2,17 @@
 #include "misc.hpp"
 #include "spatial_operators.hpp"
 
-std::shared_ptr<vecReg<data_t> > analyzeWavelet(std::shared_ptr<vecReg<data_t> > src, const param &par, bool verbose)
-{
-    if (verbose) fprintf(stderr,"\n==========================\n Source wavelet\n==========================\n");
-    if (src->getHyper()->getNdim()==1)
-    {
-        if (par.mt==false)
-        {
-            if (verbose) {
-                fprintf(stderr,"Vector force is assumed with an angle of %f rad clockwise wrt to the horizontal\n",par.fangle);
-                fprintf(stderr,"Input wavelet will be duplicated 2 x %d times with the appropriate scaling\n",par.ns);
-                fprintf(stderr,"Parameters mxx, mzz, mxz are ignored\n");
-            }
-            axis<data_t> T = src->getHyper()->getAxis(1);
-            axis<data_t> S(par.ns,0,1);
-            axis<data_t> C(2,0,1);
-            hypercube<data_t> hyp(T,S,C);
-            std::shared_ptr<vecReg<data_t> > allsrc = std::make_shared<vecReg<data_t> > (hyp);
-            const data_t * p = src->getCVals();
-            data_t (* pall) [S.n][T.n] = (data_t (*) [S.n][T.n]) allsrc->getVals();
-            for (int its=0; its<S.n; its++){
-                for (int it=0; it<T.n; it++){
-                    pall[0][its][it] = p[it]*cos(par.fangle); // fx component
-                    pall[1][its][it] = p[it]*sin(par.fangle); // fz component
-                }
-            }
-            return allsrc;
-        } 
-        else 
-        {
-            if (verbose){
-                fprintf(stderr,"Moment tensor is assumed with mxx=%f, mzz=%f, mxz=%f\n",par.mxx,par.mzz,par.mxz);
-                fprintf(stderr,"Input wavelet will be duplicated 3 x %d times with the appropriate scaling\n",par.ns);
-                fprintf(stderr,"Parameter fangle is ignored\n");
-            }
-            axis<data_t> T = src->getHyper()->getAxis(1);
-            axis<data_t> S(par.ns,0,1);
-            axis<data_t> C(3,0,1);
-            hypercube<data_t> hyp(T,S,C);
-            std::shared_ptr<vecReg<data_t> > allsrc = std::make_shared<vecReg<data_t> > (hyp);
-            const data_t * p = src->getCVals();
-            data_t (* pall) [S.n][T.n] = (data_t (*) [S.n][T.n]) allsrc->getVals();
-            for (int its=0; its<S.n; its++){
-                for (int it=0; it<T.n; it++){
-                    pall[0][its][it] = p[it]*par.mxx; // mxx component
-                    pall[1][its][it] = p[it]*par.mzz; // mzz component
-                    pall[2][its][it] = p[it]*par.mxz; // mxz component
-                }
-            }
-            return allsrc;
-        }
-    }
-    else
-    {
-        int ntr = src->getN123()/src->getHyper()->getAxis(1).n;
-        if (par.mt==false)
-        {
-            std::string msg = std::to_string(2*par.ns) + " wavelets are expected, " + std::to_string(ntr) + " are provided\n";
-            successCheck(ntr == 2*par.ns,__FILE__,__LINE__,msg);
-            if (verbose) fprintf(stderr,"Parameter fangle is ignored\n");
-        }
-        else
-        {
-            std::string msg = std::to_string(3*par.ns) + " wavelets are expected, " + std::to_string(ntr) + " are provided\n";
-            successCheck(ntr == 3*par.ns,__FILE__,__LINE__,msg);
-            if (verbose) fprintf(stderr,"Parameters mxx, mzz, mxz are ignored\n");
-        }
-        return src;
-    }
-}
-
 void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
 {
     successCheck(model.getNdim()==3,__FILE__,__LINE__,"The model must have three axes\n");
     par.nmodels = model.getAxis(3).n;
+    successCheck(par.nmodels==2 || par.nmodels==3 || par.nmodels==5,__FILE__,__LINE__,"The model must contain 2, 3, or 5 parameters\n");
+
+    if (par.nmodels==2){
+        par.mt=false;
+        par.gl=0;
+        par.free_surface_stiffness=std::max(par.free_surface_stiffness,(data_t)1.0);
+    }
 
     if (verbose) fprintf(stderr,"\n==========================\n Subsurface model geometry\n==========================\n");
     axis<data_t> Z = model.getAxis(1);
@@ -127,7 +64,10 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
         }
         std::string seismotype1[2] = {"displacement","velocity"};
         std::string seismotype2[2] = {"strain","strain rate"};
-        if (par.gl<=0) fprintf(stderr,"Receivers are point measurement of type particle %s\n",seismotype1[par.seismotype].c_str());
+        if (par.gl<=0) {
+            if (par.nmodels>=3) fprintf(stderr,"Receivers are point measurement of type particle %s\n",seismotype1[par.seismotype].c_str());
+            else fprintf(stderr,"Receivers are point measurement of type hydraulic pressure\n");
+        }
         else fprintf(stderr,"Receivers are DAS measurement of type %s with gauge length = %f km\n",seismotype2[par.seismotype].c_str(), par.gl);
     }
 
@@ -177,7 +117,10 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
         s++;
     }
     if (verbose){
-        if (par.gl<=0) fprintf(stderr,"Total number of 2-components receivers to be modeled = %d\n",par.nr);
+        if (par.gl<=0) {
+            if (par.nmodels>=3) fprintf(stderr,"Total number of 2-components receivers to be modeled = %d\n",par.nr);
+            else fprintf(stderr,"Total number of hydrophones to be modeled = %d\n",par.nr);
+        }
         else fprintf(stderr,"Total number of DAS channels to be modeled = %d\n",par.nr);
     }
     if (par.gl>0)
@@ -188,6 +131,99 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
                 par.rdip.push_back(par.rxz[s][r][2]);
             }
         }
+    }
+}
+
+std::shared_ptr<vecReg<data_t> > analyzeWavelet(std::shared_ptr<vecReg<data_t> > src, const param &par, bool verbose)
+{
+    if (verbose) fprintf(stderr,"\n==========================\n Source wavelet\n==========================\n");
+    if (src->getHyper()->getNdim()==1)
+    {
+        if (par.nmodels==2)
+        {
+            if (verbose) {
+                fprintf(stderr,"Pressure source is assumed\n");
+                fprintf(stderr,"Input wavelet will be duplicated %d times\n",par.ns);
+                fprintf(stderr,"Parameters fangle, mt, mxx, mzz, mxz are ignored\n");
+            }
+            axis<data_t> T = src->getHyper()->getAxis(1);
+            axis<data_t> S(par.ns,0,1);
+            axis<data_t> C(1,0,1);
+            hypercube<data_t> hyp(T,S,C);
+            std::shared_ptr<vecReg<data_t> > allsrc = std::make_shared<vecReg<data_t> > (hyp);
+            const data_t * p = src->getCVals();
+            data_t (* pall) [T.n] = (data_t (*) [T.n]) allsrc->getVals();
+            for (int its=0; its<S.n; its++) memcpy(pall[its], p, T.n*sizeof(data_t));
+            return allsrc;
+        }
+        else if (par.mt==false)
+        {
+            if (verbose) {
+                fprintf(stderr,"Vector force is assumed with an angle of %f rad clockwise wrt to the horizontal\n",par.fangle);
+                fprintf(stderr,"Input wavelet will be duplicated 2 x %d times with the appropriate scaling\n",par.ns);
+                fprintf(stderr,"Parameters mxx, mzz, mxz are ignored\n");
+            }
+            axis<data_t> T = src->getHyper()->getAxis(1);
+            axis<data_t> S(par.ns,0,1);
+            axis<data_t> C(2,0,1);
+            hypercube<data_t> hyp(T,S,C);
+            std::shared_ptr<vecReg<data_t> > allsrc = std::make_shared<vecReg<data_t> > (hyp);
+            const data_t * p = src->getCVals();
+            data_t (* pall) [S.n][T.n] = (data_t (*) [S.n][T.n]) allsrc->getVals();
+            for (int its=0; its<S.n; its++){
+                for (int it=0; it<T.n; it++){
+                    pall[0][its][it] = p[it]*cos(par.fangle); // fx component
+                    pall[1][its][it] = p[it]*sin(par.fangle); // fz component
+                }
+            }
+            return allsrc;
+        } 
+        else 
+        {
+            if (verbose){
+                fprintf(stderr,"Moment tensor is assumed with mxx=%f, mzz=%f, mxz=%f\n",par.mxx,par.mzz,par.mxz);
+                fprintf(stderr,"Input wavelet will be duplicated 3 x %d times with the appropriate scaling\n",par.ns);
+                fprintf(stderr,"Parameter fangle is ignored\n");
+            }
+            axis<data_t> T = src->getHyper()->getAxis(1);
+            axis<data_t> S(par.ns,0,1);
+            axis<data_t> C(3,0,1);
+            hypercube<data_t> hyp(T,S,C);
+            std::shared_ptr<vecReg<data_t> > allsrc = std::make_shared<vecReg<data_t> > (hyp);
+            const data_t * p = src->getCVals();
+            data_t (* pall) [S.n][T.n] = (data_t (*) [S.n][T.n]) allsrc->getVals();
+            for (int its=0; its<S.n; its++){
+                for (int it=0; it<T.n; it++){
+                    pall[0][its][it] = p[it]*par.mxx; // mxx component
+                    pall[1][its][it] = p[it]*par.mzz; // mzz component
+                    pall[2][its][it] = p[it]*par.mxz; // mxz component
+                }
+            }
+            return allsrc;
+        }
+    }
+    else
+    {
+        int ntr = src->getN123()/src->getHyper()->getAxis(1).n;
+        if (par.nmodels==2)
+        {
+            std::string msg = std::to_string(par.ns) + " wavelets are expected, " + std::to_string(ntr) + " are provided\n";
+            successCheck(ntr == par.ns,__FILE__,__LINE__,msg);
+            if (verbose) fprintf(stderr,"Parameters fangle, mt, mxx, mzz, mxz are ignored\n");
+        }
+        else if (par.mt==false)
+        {
+            std::string msg = std::to_string(2*par.ns) + " wavelets are expected, " + std::to_string(ntr) + " are provided\n";
+            successCheck(ntr == 2*par.ns,__FILE__,__LINE__,msg);
+            if (verbose) fprintf(stderr,"Parameters mxx, mzz, mxz are ignored\n");
+        }
+        else
+        {
+            std::string msg = std::to_string(3*par.ns) + " wavelets are expected, " + std::to_string(ntr) + " are provided\n";
+            successCheck(ntr == 3*par.ns,__FILE__,__LINE__,msg);
+            if (verbose) fprintf(stderr,"Parameter fangle is ignored\n");
+        }
+        return src;
     }
 }
 
@@ -764,8 +800,11 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     data_t dz = _domain.getAxis(1).d;
     hypercube<data_t> domain = *_allsrc->getHyper();
 
-    if (_par.sub>0) _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2),axis<data_t>(2,0,1), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
-    
+    if (_par.sub>0){
+        if (_par.nmodels>=3) _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2),axis<data_t>(2,0,1), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
+        else _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
+    }
+
     // setting up and apply the time resampling operator
     resampler * resamp;
 
@@ -774,6 +813,7 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     axis<data_t> Xr0 = _range.getAxis(2);
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
+    if (_par.nmodels==2) Xr.n = Xr0.n;
     Xs.n = domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -813,9 +853,15 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 
         // perform the wave propagation
         data_t * full = nullptr;
-        if (_par.sub>0) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
-        if (GPU==false) propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
-        else propagate_gpu(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        if (_par.sub>0) {
+            if (_par.nmodels>=3) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
+            else full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
+        }
+#ifdef CUDA
+        propagate_gpu(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+#else
+        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+#endif
 
         if (_par.verbose>2) fprintf(stderr,"Finish propagating shot %d\n",s);
 
@@ -868,10 +914,11 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     hypercube<data_t> domain = *_allsrc->getHyper();
 
     data_t * temp;
-    if (!add) memset(pmod, 0, 3*nx*nz*sizeof(data_t));
+    int nm=std::min(3,_par.nmodels);
+    if (!add) memset(pmod, 0, nm*nx*nz*sizeof(data_t));
     else { // copy pre-existant gradient to a temporary container
-        temp = new data_t[3*nx*nz];
-        memcpy(temp, pmod, 3*nx*nz*sizeof(data_t));
+        temp = new data_t[nm*nx*nz];
+        memcpy(temp, pmod, nm*nx*nz*sizeof(data_t));
     }
  
     // setting up and apply the time resampling operator
@@ -882,6 +929,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     axis<data_t> Xr0 = _range.getAxis(2);
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
+    if (_par.nmodels==2) Xr.n = Xr0.n;
     Xs.n = domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -905,7 +953,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     allrcv->revert(1);
     allrcv->scale(-alpha);
 
-    // convert from particle velocity or strain rate when relevant: adjoint  mode
+    // convert from particle velocity or strain rate when relevant: adjoint mode
     if (_par.seismotype==1)
     {
         std::shared_ptr<vecReg<data_t> > allrcv_dt = std::make_shared<vecReg<data_t> >(hyper_r);
@@ -940,8 +988,15 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
 
         // perform the wave propagation
         data_t * full = nullptr;
-        if (_par.sub>0) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
+        if (_par.sub>0) {
+            if (_par.nmodels>=3) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
+            else full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
+        }
+#ifdef CUDA
+        propagate_gpu(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz);
+#else
         propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz);
+#endif
 
         if (_par.verbose>2) fprintf(stderr,"Finish back-propagating shot %d with gradient computation\n",s);
 
@@ -953,36 +1008,51 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     int nxz=nx*nz;
     applyHz(false, false, pmod, pmod, nx, nz, dz, 0, nx, 0, nz);
     applyHz(false, false, pmod+nxz, pmod+nxz, nx, nz, dz, 0, nx, 0, nz);
-    applyHz(false, false, pmod+2*nxz, pmod+2*nxz, nx, nz, dz, 0, nx, 0, nz);
+    if (nm==3) applyHz(false, false, pmod+2*nxz, pmod+2*nxz, nx, nz, dz, 0, nx, 0, nz);
     applyHx(false, false, pmod, pmod, nx, nz, dx, 0, nx, 0, nz);
     applyHx(false, false, pmod+nxz, pmod+nxz, nx, nz, dx, 0, nx, 0, nz);
-    applyHx(false, false, pmod+2*nxz, pmod+2*nxz, nx, nz, dx, 0, nx, 0, nz);
+    if (nm==3) applyHx(false, false, pmod+2*nxz, pmod+2*nxz, nx, nz, dx, 0, nx, 0, nz);
 
-    // convert gradients from lambda, mu, rho to vp, vs, rho
+    // convert gradients from lambda, mu, rho to vp, vs, rho    or   from K-1, rho-1 to vp, rho
     // Grad_vp = 2.rho.vp.Grad_lambda = 2.sqrt(rho(lambda+2mu)).Grad_lambda
     // Grad_vs = 2.rho.vs.(Grad_mu - 2.Grad_lambda) = 2.sqrt(rho.mu).(Grad_mu - 2.Grad_lambda)
     // Grad_rho = (vp2 - 2.vs2).Grad_lambda + vs2.Grad_mu + Grad_rho = (lambda/rho).Grad_lambda + (mu/rho).Grad_mu + Grad_rho
+    // or
+    // Grad_vp = 2.rho.vp.Grad_K = 2.sqrt(K/rho-1).Grad_K
+    // Grad_rho = vp^2.Grad_K - 1/rho^2.Grad_rho-1 = K.rho-1.Grad_K - (rho-1)^2.Grad_rho-1
     data_t (*g) [nxz] = (data_t (*)[nxz]) pmod;
     data_t (*pm) [nxz] = (data_t (*)[nxz]) pm0;
-    #pragma omp parallel for
-    for(int i=0; i<nxz; i++)
+    if (nm>=3)
     {
-        g[2][i] = (pm[0][i]/pm[2][i])*g[0][i] + (pm[1][i]/pm[2][i])*g[1][i] + g[2][i]; // Rho Gradient
-        g[1][i] = 2*sqrt(pm[1][i]*pm[2][i])*(g[1][i] - 2*g[0][i]); // Vs gradient
-        g[0][i] = 2*sqrt(pm[2][i]*(pm[0][i]+2*pm[1][i]))*g[0][i]; // Vp gradient
+        #pragma omp parallel for
+        for(int i=0; i<nxz; i++)
+        {
+            g[2][i] = (pm[0][i]/pm[2][i])*g[0][i] + (pm[1][i]/pm[2][i])*g[1][i] + g[2][i]; // Rho Gradient
+            g[1][i] = 2*sqrt(pm[1][i]*pm[2][i])*(g[1][i] - 2*g[0][i]); // Vs gradient
+            g[0][i] = 2*sqrt(pm[2][i]*(pm[0][i]+2*pm[1][i]))*g[0][i]; // Vp gradient
+        }
+    }
+    else
+    {
+
+        #pragma omp parallel for
+        for(int i=0; i<nxz; i++)
+        {
+            g[1][i] = pm[1][i]*pm[0][i]*g[0][i] - pm[1][i]*pm[1][i]*g[1][i]; // rho gradient
+            g[0][i] = 2*sqrt(pm[0][i]/pm[1][i])*g[0][i]; // Vp gradient
+        }
     }
 
     if(add)
     {
         #pragma omp parallel for
-        for(int i=0; i<3*nxz; i++) pmod[i] += temp[i];
+        for(int i=0; i<nm*nxz; i++) pmod[i] += temp[i];
 
         delete [] temp;
     }
 
     delete resamp;
 }
-
 
 void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 {
@@ -1001,6 +1071,7 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     axis<data_t> Xr0 = _range.getAxis(2);
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
+    if (_par.nmodels==2) Xr.n = Xr0.n;
     Xs.n = _domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -1040,8 +1111,11 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         // perform the wave propagation
         data_t * full = nullptr;
         if (_par.sub>0) full = _full_wfld->getVals();
+#ifdef CUDA
+        propagate_gpu(false, _model->getCVals(), allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+#else
         propagate(false, _model->getCVals(), allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
-
+#endif
         delete inj;
         delete ext;
 
@@ -1088,6 +1162,7 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     axis<data_t> Xr0 = _range.getAxis(2);
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
+    if (_par.nmodels==2) Xr.n = Xr0.n;
     Xs.n = _domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -1147,8 +1222,11 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
         // perform the wave propagation
         data_t * full = nullptr;
         if (_par.sub>0) full = _full_wfld->getVals();
+#ifdef CUDA
+        propagate_gpu(true, _model->getCVals(), allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+#else
         propagate(true, _model->getCVals(), allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
-
+#endif
         delete inj;
         delete ext;
 
@@ -1165,7 +1243,6 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     
     delete resamp;
 }
-
 
 void nl_we_op_vti::convert_model(data_t * m, int n, bool forward) const
 {
@@ -1524,5 +1601,204 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
     delete [] dux;
     delete [] duz;
     if (par.version==2) delete [] mod_bis;
+    if (grad != nullptr) delete [] tmp;
+}
+
+void nl_we_op_a::convert_model(data_t * m, int n, bool forward) const
+{
+    data_t (* pm) [n] = (data_t (*) [n]) m;
+
+    if (forward)
+    {
+        for (int i=0; i<n; i++){
+            pm[0][i] = pm[1][i]*pm[0][i]*pm[0][i];
+            pm[1][i] = 1.0/pm[1][i];
+        }
+    }
+    else
+    {
+        for (int i=0; i<n; i++){
+            pm[0][i] = sqrt(pm[0][i]*pm[1][i]);
+            pm[1][i] = 1.0/pm[1][i];
+        }
+    }
+}
+
+void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const
+{
+    // Grad_K-1 = adjoint.H.Ht.forward_tt
+    // Grad_K = -(1/K^2).Grad_K-1
+    // Grad_rho-1 = adjoint_x.H.Ht.forward_x + adjoint_z.H.Ht.forward_z
+    // The H quadrature will be applied elsewhere to the final gradients (all shots included)
+
+    int nxz = nx*nz;
+    data_t (*pm) [nxz] = (data_t (*)[nxz]) model;
+    data_t (*pfor) [nxz] = (data_t (*) [nxz]) u_full;
+    const data_t *padj = curr;
+    data_t (*temp) [nxz] = (data_t (*)[nxz]) tmp;
+    data_t (*g) [nxz] = (data_t (*)[nxz]) grad;
+
+    Dx(false, pfor[par.nt/par.sub+1-it-1], temp[0], nx, nz, dx, 0, nx, 0, nz); // forward_x
+    Dz(false, pfor[par.nt/par.sub+1-it-1], temp[1], nx, nz, dz, 0, nx, 0, nz); // forward_z
+    Dx(false, curr, temp[2], nx, nz, dx, 0, nx, 0, nz); // adjoint_x
+    Dz(false, curr, temp[3], nx, nz, dz, 0, nx, 0, nz); // adjoint_z
+
+    #pragma omp parallel for
+    for (int i=0; i<nxz; i++) 
+    {
+        g[0][i] = g[0][i] - 1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-2*pfor[par.nt/par.sub+1-it-1][i]+pfor[par.nt/par.sub+1-it-2][i]); // K gradient
+        g[1][i] += dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
+    }
+}
+
+void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
+{
+    // wavefields allocations and pointers
+    int nxz=nx*nz;
+    data_t * u  = new data_t[3*nxz];
+    memset(u, 0, 3*nxz*sizeof(data_t));
+    data_t (*prev) [nxz] = (data_t (*)[nxz]) u;
+    data_t (*curr) [nxz] = (data_t (*)[nxz]) (u + nxz);
+    data_t (*next) [nxz] = (data_t (*)[nxz]) (u + 2*nxz);
+    data_t (*bucket) [nxz];
+    data_t (*u_full) [nxz];
+    data_t * tmp;
+
+    if (par.sub>0) u_full = (data_t (*) [nxz]) full_wfld;
+    if (grad != nullptr) 
+    {
+        tmp = new data_t[4*nxz];
+        memset(tmp, 0, 4*nxz*sizeof(data_t));
+    }
+	const data_t* mod[2] = {model, model+nxz};
+
+    // free surface stiffness
+    data_t alpha = 0.2508560249 / par.free_surface_stiffness;
+
+    // #############  PML stuff ##################
+    int l = std::max(par.taper_top,par.taper_bottom);
+    l = std::max(l, par.taper_left);
+    l = std::max(l, par.taper_right);
+    // ###########################################
+    
+    // source and receiver components for injection/extraction
+    int ns=par.ns;
+    int nr=par.nr;
+    if (adj)
+    {
+        ns = par.nr;
+        nr = par.ns;
+    }
+    const data_t * src[1] = {allsrc};
+    data_t * rcv[1] = {allrcv};
+
+    // prev = K/2 * dt2 * src
+    inj->inject(false, src, prev[0], nx, nz, par.nt, inj->_ntr, 0, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+    for (int i=0; i<nxz; i++) prev[0][i]  *= 0.5 * mod[0][i]*par.dt*par.dt;  
+
+    int pct10 = round(par.nt/10);
+
+    for (int it=0; it<par.nt-1; it++)
+    {
+        // copy the current wfld to the full wfld vector
+        if ((par.sub>0) && (it%par.sub==0) && (grad==nullptr)) memcpy(u_full[it/par.sub], curr, nxz*sizeof(data_t));
+
+        // extract receivers
+        if (grad == nullptr)
+        {
+            ext->extract(true, curr[0], rcv, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+        }
+
+        // compute FWI gradients except for first and last time samples
+        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+
+        // apply spatial SBP operators
+       
+        Dxx_var<expr2>(false, curr[0], next[0], nx, nz, dx, 0, nx, 0, nz, mod, 1.0);
+        Dzz_var<expr2>(true, curr[0], next[0], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
+
+        // inject sources
+        inj->inject(true, src, next[0], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+
+        // apply boundary conditions
+        if (par.bc_top==1)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_dirichlet_top(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha);
+        }
+        else if (par.bc_top==2)
+        {
+            const data_t * in[2] = {curr[0],prev[0]};
+            asat_absorbing_top(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+        }
+        if (par.bc_bottom==1)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_dirichlet_bottom(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha);
+        }
+        else if (par.bc_bottom==2)
+        {
+            const data_t * in[2] = {curr[0],prev[0]};
+            asat_absorbing_bottom(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+        }
+        if (par.bc_left==1)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_dirichlet_left(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, alpha);
+        }
+        else if (par.bc_left==2)
+        {
+            const data_t * in[2] = {curr[0],prev[0]};
+            asat_absorbing_left(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+        if (par.bc_right==1)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_dirichlet_right(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, alpha);
+        }
+        else if (par.bc_right==2)
+        {
+            const data_t * in[2] = {curr[0],prev[0]};
+            asat_absorbing_right(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+
+        // update wfld with the 2 steps time recursion
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++)
+        {
+            next[0][i] = par.dt*par.dt*next[0][i]*mod[0][i] + 2*curr[0][i] - prev[0][i];
+        }
+
+        // scale boundaries when relevant (for locally absorbing BC only)
+        data_t * in[1] = {next[0]};
+        asat_scale_boundaries(in, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
+        
+        taperz(curr[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+        taperz(curr[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+        taperx(curr[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+        taperx(curr[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+        taperz(next[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+        taperz(next[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+        taperx(next[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+        taperx(next[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+
+        bucket=prev;
+        prev=curr;
+        curr=next;
+        next=bucket;
+
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+    }
+
+    // copy the last wfld to the full wfld vector
+    if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (grad==nullptr)) memcpy(u_full[(par.nt-1)/par.sub], curr, nxz*sizeof(data_t));
+
+    // extract receivers last sample
+    if (grad == nullptr)
+    {
+        ext->extract(true, curr[0], rcv, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+    }
+    
+    delete [] u;
     if (grad != nullptr) delete [] tmp;
 }

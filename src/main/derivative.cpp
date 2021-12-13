@@ -25,7 +25,7 @@ void printdoc(){
     "\nParameters:\n"
     "   domain - string - ['time']:\n\t\t'time' or 'frequency'.\n"
     "\nExample:\n"
-    "   DERIVATIVE.x < infile.H domain=frequency > oufile.H.\n"
+    "   DERIVATIVE.x < infile.H domain=frequency > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }

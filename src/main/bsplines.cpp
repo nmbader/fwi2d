@@ -32,9 +32,9 @@ void printdoc(){
     "   The number of control points must be >= 3 in all cases.\n"
     "\nExamples:\n"
     "   BSPLINES.x < infile.H nx=11 nz=23 > oufile.H.\n"
-    "   BSPLINES.x < infile.H controlx=0,1,5.5,10 controlz=0,5,20 mx=2,1,1,2 mz=2,1,2 > oufile.H.\n"
-    "   BSPLINES.x < infile.H nx=11 controlz=0,5,20 mz=2,1,2 > oufile.H.\n"
-    "   BSPLINES.x < infile.H bsmodel=bsm.H nx=11 nz=23 > oufile.H.\n"
+    "   BSPLINES.x < infile.H controlx=0,1,5.5,10 controlz=0,5,20 mx=2,1,1,2 mz=2,1,2 > oufile.H\n"
+    "   BSPLINES.x < infile.H nx=11 controlz=0,5,20 mz=2,1,2 > oufile.H\n"
+    "   BSPLINES.x < infile.H bsmodel=bsm.H nx=11 nz=23 > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }

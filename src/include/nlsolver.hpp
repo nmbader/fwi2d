@@ -96,7 +96,7 @@ protected:
     bool _version; // defines the method for initializing the trial step length @ iter>0
 
 public:
-    regular_wolfe(data_t c1=1e-4, data_t c2=0.5, data_t a0=1, data_t a1=0, data_t step_max=1e6, bool version = 0){
+    regular_wolfe(data_t c1=1e-4, data_t c2=0.9, data_t a0=1, data_t a1=0, data_t step_max=1e6, bool version = 0){
         successCheck(((c1>0) && (c1<1) && (c2>c1) && (c2<1)),__FILE__,__LINE__,"The constants c1, c2 must satisfy 0<c1<c2<1\n");
         _c1 = c1;
         _c2 = c2;
@@ -156,7 +156,7 @@ public:
 // Line search using quadratic/cubic interpolation and satisfying the strong Wolfe conditions
 class strong_wolfe : public regular_wolfe{
 public:
-    strong_wolfe(data_t c1=1e-4, data_t c2=0.5, data_t a0=1, data_t a1=0, data_t step_max=1e6, bool version = 0){
+    strong_wolfe(data_t c1=1e-4, data_t c2=0.9, data_t a0=1, data_t a1=0, data_t step_max=1e6, bool version = 0){
         successCheck(((c1>0) && (c1<1) && (c2>c1) && (c2<1)),__FILE__,__LINE__,"The constants c1, c2 must satisfy 0<c1<c2<1\n");
         _c1 = c1;
         _c2 = c2;

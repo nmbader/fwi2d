@@ -58,7 +58,7 @@ void printdoc(){
     "   si - non-negative float - [0]:\n\t\tdesired output sampling. If > 0 it overwrites 'factor' and is valid for time domain only.\n"
     "   alpha - 0<=float<=1 or >0 - [0.5]:\n\t\tused in the cosine window for the sinc filter (1 means no taper). It is also used for kaiser window; recommended value 10.\n"
     "\nExample:\n"
-    "   RESAMPLE.x < infile.H domain=time type=linear si=0.1 > oufile.H.\n"
+    "   RESAMPLE.x < infile.H domain=time type=linear si=0.1 > oufile.H\n"
     "\n";
     fprintf(stderr,doc.c_str());
 }
