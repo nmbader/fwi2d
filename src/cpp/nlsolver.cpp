@@ -22,11 +22,15 @@ data_t cubic(data_t f, data_t df, data_t stp0, data_t f0, data_t stp1, data_t f1
     data_t b = (-stp0*stp0*stp0*x1+stp1*stp1*stp1*x2)/x3;
     data_t delta = b*b - 3*a*df;
     data_t step, func, ans;
+    // find which step gives the smalles functional
     if (f1<f0){step=stp1; func=f1;}
     else {step=stp0; func=f0;}
+    // cubic interpolation or revert back to quadratic interpolation
     if (std::abs(a)<ZERO || delta<0) ans = quadratic(f,df,step,func);
     else ans = (-b+sqrt(delta))/(3*a);
+    // check if the new step is close to zero or close to any of the two previous steps
     if ((ans/step < STOL) || (std::abs(step-ans)/step) < STOL) ans = step/2.0;
+    else if (std::abs(stp0+stp1-step-ans)/(stp0+stp1-step) < STOL) ans = (stp0+stp1-step)/2.0;
     return ans;
 }
 
@@ -336,7 +340,7 @@ bool regular_wolfe::zoom(bool reverse,
         }
         // Interpolate quadratic or cubic between stp0 and stp1
         if (alo==0) alpha =  quadratic(_f,_df,ahi,fhi);
-        else if (ahi==0) alpha =  quadratic(_f,_df,alo,flo);
+        else if (ahi==0) alpha =  quadratic(_f,_df,alo,flo); 
         else alpha = cubic(_f,_df,alo,flo,ahi,fhi);
 
         // Evaluate phi(alpha)

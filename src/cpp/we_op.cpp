@@ -834,13 +834,13 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     resamp->apply_forward(false,_allsrc->getCVals(),allsrc->getVals());
 
     // loop over shots
-    int nr=0;
     for (int s=0; s<_par.ns; s++)
     {
         if (_par.verbose>2) fprintf(stderr,"Start propagating shot %d\n",s);
 
         // cumulative number of receivers
-        if (s>0) nr += _par.rxz[s-1].size();
+        int nr=0;
+        if (s>0) {for (int i=0; i<s; i++) nr += _par.rxz[i].size();}
 
         // setting up the injection and extraction operators
         injector * inj;
@@ -969,13 +969,13 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     }
 
     // loop over shots
-    int nr=0;
     for (int s=0; s<_par.ns; s++)
     {
         if (_par.verbose>2) fprintf(stderr,"Start back-propagating shot %d\n",s);
 
         // cumulative number of receivers
-        if (s>0) nr += _par.rxz[s-1].size();
+        int nr=0;
+        if (s>0) {for (int i=0; i<s; i++) nr += _par.rxz[i].size();}
 
         // setting up the injection and extraction operators
         injector * ext = nullptr;
@@ -1091,13 +1091,13 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     resamp->apply_forward(false,pmod,allsrc->getVals());
 
     // loop over shots
-    int nr=0;
     for (int s=0; s<_par.ns; s++)
     {
         if (_par.verbose>2) fprintf(stderr,"Start propagating shot %d\n",s);
 
         // cumulative number of receivers
-        if (s>0) nr += _par.rxz[s-1].size();
+        int nr=0;
+        if (s>0) {for (int i=0; i<s; i++) nr += _par.rxz[i].size();}
 
         // setting up the injection and extraction operators
         injector * inj;
@@ -1202,13 +1202,13 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     }
 
     // loop over shots
-    int nr=0;
     for (int s=0; s<_par.ns; s++)
     {
         if (_par.verbose>2) fprintf(stderr,"Start back-propagating shot %d\n",s);
 
         // cumulative number of receivers
-        if (s>0) nr += _par.rxz[s-1].size();
+        int nr=0;
+        if (s>0) {for (int i=0; i<s; i++) nr += _par.rxz[i].size();}
         
         // setting up the injection and extraction operators
         injector * ext;

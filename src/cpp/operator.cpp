@@ -1071,8 +1071,8 @@ void gradient2d::apply_forward(bool add, const data_t * pmod, data_t * pdat){
         #pragma omp parallel for
         for (int ix=1; ix<nx-1; ix++){
             for (int iz=1; iz<nz-1; iz++){
-                pd[0][iy][ix][iz] += (pm[iy][ix+1][iz] - pm[iy][ix-1][iz])/dx;
-                pd[1][iy][ix][iz] += (pm[iy][ix][iz+1] - pm[iy][ix][iz-1])/dz;
+                pd[0][iy][ix][iz] += _xw*(pm[iy][ix+1][iz] - pm[iy][ix-1][iz])/dx;
+                pd[1][iy][ix][iz] += _zw*(pm[iy][ix][iz+1] - pm[iy][ix][iz-1])/dz;
             }
         }
     }
@@ -1095,10 +1095,10 @@ void gradient2d::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
     {
         for (int ix=1; ix<nx-1; ix++){
             for (int iz=1; iz<nz-1; iz++){
-                pm[iy][ix+1][iz] += pd[0][iy][ix][iz] / dx;
-                pm[iy][ix-1][iz] -= pd[0][iy][ix][iz] / dx;
-                pm[iy][ix][iz+1] += pd[1][iy][ix][iz] / dz;
-                pm[iy][ix][iz-1] -= pd[1][iy][ix][iz] / dz;
+                pm[iy][ix+1][iz] += _xw*pd[0][iy][ix][iz] / dx;
+                pm[iy][ix-1][iz] -= _xw*pd[0][iy][ix][iz] / dx;
+                pm[iy][ix][iz+1] += _zw*pd[1][iy][ix][iz] / dz;
+                pm[iy][ix][iz-1] -= _zw*pd[1][iy][ix][iz] / dz;
             }
         }
     }
@@ -1124,7 +1124,7 @@ void laplacian2d::apply_forward(bool add, const data_t * pmod, data_t * pdat){
         #pragma omp parallel for
         for (int ix=1; ix<nx-1; ix++){
             for (int iz=1; iz<nz-1; iz++){
-                pd[iy][ix][iz] += (pm[iy][ix+1][iz] -2*pm[iy][ix][iz] + pm[iy][ix-1][iz])/dx + (pm[iy][ix][iz+1] -2*pm[iy][ix][iz] + pm[iy][ix][iz-1])/dz;
+                pd[iy][ix][iz] += _xw*(pm[iy][ix+1][iz] -2*pm[iy][ix][iz] + pm[iy][ix-1][iz])/dx + _zw*(pm[iy][ix][iz+1] -2*pm[iy][ix][iz] + pm[iy][ix][iz-1])/dz;
             }
         }
     }
@@ -1149,12 +1149,101 @@ void laplacian2d::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
     {
         for (int ix=1; ix<nx-1; ix++){
             for (int iz=1; iz<nz-1; iz++){
-                pm[iy][ix][iz] -= 2*pd[iy][ix][iz]*(1.0/dx + 1.0/dz);
-                pm[iy][ix+1][iz] += pd[iy][ix][iz] / dx;
-                pm[iy][ix-1][iz] += pd[iy][ix][iz] / dx;
-                pm[iy][ix][iz+1] += pd[iy][ix][iz] / dz;
-                pm[iy][ix][iz-1] += pd[iy][ix][iz] / dz;
+                pm[iy][ix][iz] -= 2*pd[iy][ix][iz]*(_xw/dx + _zw/dz);
+                pm[iy][ix+1][iz] += _xw*pd[iy][ix][iz] / dx;
+                pm[iy][ix-1][iz] += _xw*pd[iy][ix][iz] / dx;
+                pm[iy][ix][iz+1] += _zw*pd[iy][ix][iz] / dz;
+                pm[iy][ix][iz-1] += _zw*pd[iy][ix][iz] / dz;
             }
         }
+    }
+}
+
+void extrapolator1d2d::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    int nz = _range.getAxis(1).n;
+    int nx = _range.getAxis(2).n;
+    int ny = _range.getN123() / (nz*nx);
+    data_t oz = _range.getAxis(1).o;
+    data_t dz = _range.getAxis(1).d;
+
+    data_t (* pm)[nz] = (data_t (*) [nz]) pmod;
+    data_t (* pd)[nx][nz] = (data_t (*) [nx][nz]) pdat;
+    const data_t * ph = _hrz->getCVals();
+
+    for (int iy=0; iy<ny; iy++)
+    {
+        #pragma omp parallel for
+        for (int ix=0; ix<nx; ix++){
+            data_t z0=oz+ph[ix]-ph[0];
+            if (z0<=oz){
+                int iz0min = floor((oz-z0)/dz);
+                data_t wmin=((iz0min+1)*dz+z0-oz)/dz;
+                for (int iz=0; iz<nz-iz0min-1; iz++) pd[iy][ix][iz] = add*pd[iy][ix][iz] + wmin*pm[iy][iz+iz0min] + (1-wmin)*pm[iy][iz+iz0min+1];
+                for (int iz=nz-iz0min-1; iz<nz; iz++) pd[iy][ix][iz] = add*pd[iy][ix][iz] + pm[iy][nz-1];
+            }
+            else{
+                int iz0min = floor((z0-oz)/dz);
+                data_t wmin=((iz0min+1)*dz+oz-z0)/dz;
+                for (int iz=0; iz<iz0min+1; iz++) pd[iy][ix][iz] = add*pd[iy][ix][iz] + pm[iy][0];
+                for (int iz=iz0min+1; iz<nz; iz++) pd[iy][ix][iz] = add*pd[iy][ix][iz] + (1-wmin)*pm[iy][iz-iz0min-1] + wmin*pm[iy][iz-iz0min];
+            }
+        }
+    }
+}
+
+void extrapolator1d2d::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+    if (!add) memset(pmod,0,_domain.getN123()*sizeof(data_t));
+
+    int nz = _range.getAxis(1).n;
+    int nx = _range.getAxis(2).n;
+    int ny = _range.getN123() / (nz*nx);
+    data_t oz = _range.getAxis(1).o;
+    data_t dz = _range.getAxis(1).d;
+
+    data_t (* pm)[nz] = (data_t (*) [nz]) pmod;
+    data_t (* pd)[nx][nz] = (data_t (*) [nx][nz]) pdat;
+    const data_t * ph = _hrz->getCVals();
+
+    for (int iy=0; iy<ny; iy++)
+    {
+        for (int ix=0; ix<nx; ix++){
+            data_t z0=oz+ph[ix]-ph[0];
+            if (z0<=oz){
+                int iz0min = floor((oz-z0)/dz);
+                data_t wmin=((iz0min+1)*dz+z0-oz)/dz;
+                for (int iz=0; iz<nz-iz0min-1; iz++) {
+                    pm[iy][iz+iz0min] += wmin*pd[iy][ix][iz];
+                    pm[iy][iz+iz0min+1] += (1-wmin)*pd[iy][ix][iz];
+                }
+                for (int iz=nz-iz0min-1; iz<nz; iz++) pm[iy][nz-1] += pd[iy][ix][iz];
+            }
+            else{
+                int iz0min = floor((z0-oz)/dz);
+                data_t wmin=((iz0min+1)*dz+oz-z0)/dz;
+                for (int iz=0; iz<iz0min+1; iz++) pm[iy][0] += pd[iy][ix][iz];
+                for (int iz=iz0min+1; iz<nz; iz++) {
+                    pm[iy][iz-iz0min-1] += (1-wmin)*pd[iy][ix][iz];
+                    pm[iy][iz-iz0min] += wmin*pd[iy][ix][iz];
+                }
+            }
+        }
+    }
+}
+
+void extrapolator1d2d::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
+
+
+    int nz = _range.getAxis(1).n;
+    int nx = _range.getAxis(2).n;
+    int ny = _range.getN123() / (nz*nx);
+
+    data_t (* pm)[nz] = (data_t (*) [nz]) pmod;
+    data_t (* pd)[nx][nz] = (data_t (*) [nx][nz]) pdat;
+
+    for (int iy=0; iy<ny; iy++)
+    {
+        for (int iz=0; iz<nz; iz++) pm[iy][iz] = add*pm[iy][iz] + pd[iy][0][iz]; 
     }
 }

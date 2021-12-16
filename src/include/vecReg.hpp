@@ -277,7 +277,7 @@ public:
         if (imax==-1) imax=_hyper.getN123();
         T1 val = 0;
         #pragma omp parallel for reduction(+: val)
-        for (long i=imin; i<imax; ++i) val += _vals[i]*_vals[i];
+        for (long i=imin; i<imax; i++) val += _vals[i]*_vals[i];
         return val;
     }
     T1 rms(long imin=0, long imax=-1) const {
@@ -488,7 +488,7 @@ public:
         if (imax==-1) imax=_hyper.getN123();
         T1 val = 0;
         #pragma omp parallel for reduction(+: val)
-        for (int i=imin; i<imax; ++i) val += std::norm(_vals[i]);
+        for (int i=imin; i<imax; i++) val += std::norm(_vals[i]);
         return val;
     }
     T1 absMax(long imin=0, long imax=-1) const {

@@ -132,8 +132,8 @@ if (par.bsplines)
     nloper * D = nullptr;
     loper * R;
     if (par.regularization==0) R = new identity (*model->getHyper());
-    else if (par.regularization==1) R = new gradient2d(*model->getHyper());
-    else if (par.regularization==2) R = new laplacian2d(*model->getHyper());
+    else if (par.regularization==1) R = new gradient2d(*model->getHyper(),par.reg_xweight,par.reg_zweight);
+    else if (par.regularization==2) R = new laplacian2d(*model->getHyper(),par.reg_xweight,par.reg_zweight);
     else R = nullptr;
     if (R!=nullptr){
         if (op==nullptr) D = R->clone();
@@ -143,9 +143,9 @@ if (par.bsplines)
 
     nlls_fwi_eco * prob;
     if (D != nullptr) {
-        prob = new nlls_fwi_reg(L, D, bsmodel, data, par.lambda, bsprior, op, bsmask, w, par.normalize, par.integrate, par.envelop);
+        prob = new nlls_fwi_reg(L, D, bsmodel, data, par.lambda, bsprior, op, bsmask, w);
     }
-    else prob = new nlls_fwi_eco(L, bsmodel, data, op, bsmask, w, par.normalize, par.integrate, par.envelop);
+    else prob = new nlls_fwi_eco(L, bsmodel, data, op, bsmask, w);
 
     lsearch * ls;
     if (par.lsearch=="weak_wolfe") ls = new weak_wolfe(par.ls_c1, par.ls_a0, par.ls_a1, par.ls_version);

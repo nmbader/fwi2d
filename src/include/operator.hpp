@@ -603,15 +603,19 @@ public:
 // low order 2D gradient operator to be used in first order Tikhonov regularization
 // the boundary gradient is discarded
 class gradient2d : public loper {
+protected:
+    data_t _xw, _zw; // directional weights
 public:
     gradient2d(){}
     ~gradient2d(){}
-    gradient2d(const hypercube<data_t> &domain){
+    gradient2d(const hypercube<data_t> &domain, data_t xw=1, data_t zw=1){
         successCheck(domain.getNdim()>=2,__FILE__,__LINE__,"The domain must contain at least 2 dimensions\n");
         _domain = domain;
         std::vector<axis<data_t> > axes = domain.getAxes();
         axes.push_back(axis<data_t>(2,0,1));
         _range = hypercube<data_t>(axes);
+        _xw=xw;
+        _zw=zw;
     }
     gradient2d * clone() const {
         gradient2d * op = new gradient2d(_domain);
@@ -624,13 +628,17 @@ public:
 // low order 2D laplacian operator to be used in second order Tikhonov regularization
 // the boundary laplacian is discarded
 class laplacian2d : public loper {
+protected:
+    data_t _xw, _zw; // directional weights
 public:
     laplacian2d(){}
     ~laplacian2d(){}
-    laplacian2d(const hypercube<data_t> &domain){
+    laplacian2d(const hypercube<data_t> &domain, data_t xw=1, data_t zw=1){
         successCheck(domain.getNdim()>=2,__FILE__,__LINE__,"The domain must contain at least 2 dimensions\n");
         _domain = domain;
         _range = domain;
+        _xw=xw;
+        _zw=zw;
     }
     laplacian2d * clone() const {
         laplacian2d * op = new laplacian2d(_domain);
@@ -638,4 +646,29 @@ public:
     }    
     void apply_forward(bool add, const data_t * pmod, data_t * pdat);
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};
+
+// Model extrapolation from 1D to 2D along a given horizon in the second dimension
+class extrapolator1d2d : public loper {
+protected:
+    std::shared_ptr<vecReg<data_t> > _hrz; // 1D horizon for extrapolation
+public:
+    extrapolator1d2d(){}
+    ~extrapolator1d2d(){}
+    extrapolator1d2d(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > hrz){
+        successCheck(hrz->getHyper()->getNdim()==1,__FILE__,__LINE__,"The horizon must be 1D\n");
+        _domain = domain;
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        axis<data_t> X = hrz->getHyper()->getAxis(1);
+        axes.insert(axes.begin()+1, X);
+        _range = hypercube<data_t>(axes);
+        _hrz = hrz->clone();
+    }
+    extrapolator1d2d * clone() const {
+        extrapolator1d2d * op = new extrapolator1d2d(_domain, _hrz);
+        return op;
+    }    
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+    void apply_inverse(bool add, data_t * pmod, const data_t * pdat);
 };

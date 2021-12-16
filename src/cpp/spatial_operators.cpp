@@ -461,7 +461,7 @@ void asat_dirichlet_top(bool add, const data_t** in, data_t* out, int nx, int nz
     int nc1=4;
     data_t dz2=dz*dz;
 
-    // SAT = + H-1 (S'.(f2*in_0)) - H-1(f2*in_0/(h.a))_0  f2=reciprocal of density
+    // SAT = + H-1 (-S'.(f2*in_0)) - H-1(f2*in_0/(h.a))_0  f2=reciprocal of density
     #pragma omp parallel for
     for (int ix=ixmin; ix<ixmax; ix++){
         for (int iz=0; iz<nc1; iz++){
@@ -497,7 +497,7 @@ void asat_dirichlet_left(bool add, const data_t** in, data_t* out, int nx, int n
     int nc1=4;
     data_t dx2=dx*dx;
 
-    // SAT = + H-1 (S'.(f2*in_0)) - H-1(f2*in_0/(h.a))_0  f2=reciprocal of density
+    // SAT = + H-1 (-S'.(f2*in_0)) - H-1(f2*in_0/(h.a))_0  f2=reciprocal of density
     #pragma omp parallel for
     for (int iz=izmin; iz<izmax; iz++){
         for (int ix=0; ix<nc1; ix++){
@@ -535,7 +535,7 @@ void asat_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz
     int nc1=4;
     data_t sum=0;
 
-    // SAT = - H-1 (f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=1/(rho.v)=1/sqrt(rho.K)
+    // SAT = - H-1 (-f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=1/(rho.v)=1/sqrt(rho.K)
     #pragma omp parallel for private(sum)
     for (int ix=ixmin; ix<ixmax; ix++){
         sum=0;
@@ -573,7 +573,7 @@ void asat_absorbing_left(bool add, const data_t** in, data_t* out, int nx, int n
     int nc1=4;
     data_t sum=0;
 
-    // SAT = - H-1 (f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=1/(rho.v)=1/sqrt(rho.K)
+    // SAT = - H-1 (-f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=1/(rho.v)=1/sqrt(rho.K)
     #pragma omp parallel for private(sum)
     for (int iz=izmin; iz<izmax; iz++){
         sum=0;

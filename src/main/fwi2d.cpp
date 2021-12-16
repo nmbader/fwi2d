@@ -92,7 +92,7 @@ if (par.bsplines)
 // ----------------------------------------------------------------------------------------//
 
     nloper * op;
-    nl_we_op_e * L;
+    nl_we_op * L;
     if (par.nmodels==2) L=new nl_we_op_a(*model->getHyper(),allsrc,par);
     else if (par.nmodels==3) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
     else if (par.nmodels==5) L=new nl_we_op_vti(*model->getHyper(),allsrc,par);

@@ -464,29 +464,24 @@ protected:
     std::shared_ptr<vecReg<data_t> > _pg; // gradient before applying preconditioner Jacobian
     std::shared_ptr<vecReg<data_t> > _gmask; // gradient mask vector
     std::shared_ptr<vecReg<data_t> > _w; // residual weighting vector
-    bool _normalize; // apply or not trace normalization
-    bool _integrate; // apply or not time integration
-    int _envelop; // compute or not the envelop (or envelop squared) of the data
     data_t _dnorm; // data normalization factor
     data_t _f; // objective function
-    bool _flag; // flag to re-evvaluate or not the objective function 
+    bool _flag; // flag to re-evaluate or not the objective function
+    int _scale_source_times;
 
 public:
     std::vector <data_t> _dfunc; // vector that stores data objective function values for all trials (used in the regularization class)
     std::vector <data_t> _mfunc; // vector that stores model objective function values for all trials (used in the regularization class)
+    std::vector<data_t> _scalers; // scalers applied to each source at a given trial
     nlls_fwi_eco(){}
     virtual ~nlls_fwi_eco(){}
-    nlls_fwi_eco(nl_we_op * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr, bool normalize=false, bool integrate=false, int envelop=0){
+    nlls_fwi_eco(nl_we_op * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr){
         _L = L;
         _P = P;
         _m = m;
         _d = d;
         _gmask = gmask;
         _w = w;
-        _normalize=normalize;
-        _integrate=integrate;
-        if (envelop==1 || envelop==2) _envelop = envelop;
-        else _envelop=0;
         _f = 0;
         _flag = true;
        
@@ -511,24 +506,29 @@ public:
             successCheck(w->min()>=0,__FILE__,__LINE__,"Data weights  must be non-negative\n");
         }
         
-        if (_integrate){
+        if (_L->_par.integrate){ // apply time integration
             integral S(*_d->getHyper());
             S.forward(false, _d, _d);
         }
         if (_w != nullptr) _d->mult(_w);
-        if (_normalize) {
+        if (_L->_par.normalize) { // apply trace normalization
             int nt=_d->getHyper()->getAxis(1).n;
             int ntr=_d->getN123()/nt;
             data_t * norms = new data_t[ntr];
             ttnormalize(_d->getVals(), norms, nt, ntr);
             delete [] norms;
         }
-        if (_envelop==1) envelop1(_d);
-        else if (_envelop==2) envelop2(_d);
+        if (_L->_par.envelop==1) envelop1(_d); // compute the envelop (or envelop squared) of the data
+        else if (_L->_par.envelop==2) envelop2(_d);
 
         _dnorm = _d->norm2();
         _dnorm *= _d->getHyper()->getAxis(1).d;
         if (_dnorm<ZERO) _dnorm=1;
+
+        _scale_source_times=0;
+        if (_L->_par.scale_source_times>0) {
+            for (int s=0; s<_L->_par.ns; s++) _scalers.push_back(1.0);
+        }
     }
 
     void compute_res_and_grad(data_t * r, std::shared_ptr<vecReg<data_t> > g){       
@@ -544,14 +544,14 @@ public:
         int ns = _L->_par.ns;
         int nt = _d->getHyper()->getAxis(1).n;
         data_t dt = _d->getHyper()->getAxis(1).d;
-        int nr=0;
 
         for (int s=0; s<ns; s++)
         {
             if (_L->_par.verbose>1) fprintf(stderr,"Start processing shot %d\n",s);
-
+            
             // cumulative number of receivers
-            if (s>0) nr += _L->_par.rxz[s-1].size();
+            int nr=0;
+            if (s>0) {for (int i=0; i<s; i++) nr += _L->_par.rxz[i].size();}
 
             // adjust param object to a single shot
             param par = _L->_par;
@@ -567,11 +567,13 @@ public:
             hypercube<data_t> hyper_s = *_L->_allsrc->getHyper();
             std::shared_ptr<vecReg<data_t> > src = std::make_shared<vecReg<data_t> > (hypercube<data_t>(hyper_s.getAxis(1),axis<data_t>(1,0,1),hyper_s.getAxis(3)));
             memcpy(src->getVals(), _L->_allsrc->getVals() + s*nt, sizeof(data_t)*nt);
-            memcpy(src->getVals()+nt, _L->_allsrc->getVals() + (ns+s)*nt, sizeof(data_t)*nt);
-            if (par.mt) memcpy(src->getVals()+2*nt, _L->_allsrc->getVals() + (2*ns+s)*nt, sizeof(data_t)*nt);
+            if (par.nmodels>=3){
+                memcpy(src->getVals()+nt, _L->_allsrc->getVals() + (ns+s)*nt, sizeof(data_t)*nt);
+                if (par.mt) memcpy(src->getVals()+2*nt, _L->_allsrc->getVals() + (2*ns+s)*nt, sizeof(data_t)*nt);
+            }
 
             // build the we operator for a single shot
-            nl_we_op * L;
+            nl_we_op * L = _L;
             if (par.nmodels==2) L=new nl_we_op_a(*_p->getHyper(),src,par);
             else if (par.nmodels==3) L=new nl_we_op_e(*_p->getHyper(),src,par);
             else if (par.nmodels==5) L=new nl_we_op_vti(*_p->getHyper(),src,par);
@@ -581,7 +583,25 @@ public:
             L->forward(false,_p,rs);
             data_t * pr = rs->getVals();
 
-            if (_integrate){
+            // rescale the synthetics by u'd/u'u (equivalent to Variable Projection with the variable being a single scaler multiplying the source time function)
+            data_t * pd = _d->getVals()+nr*nt;
+            if (par.scale_source_times>0){
+                if (par.scale_source_times>_scale_source_times){
+                    data_t scaler1=0;
+                    data_t scaler2=0;
+                    #pragma omp parallel for reduction(+: scaler1,scaler2)
+                    for (int i=0; i<par.nr*nt; i++) {
+                        scaler1 += pr[i]*pd[i];
+                        scaler2 += pr[i]*pr[i];
+                    }
+                    _scalers[s] = scaler1/scaler2;
+                    if (std::abs(std::log(_scalers[s]))>par.scale_source_log_clip) _scalers[s]=std::exp(((_scalers[s]>=1) - (_scalers[s]<1))*par.scale_source_log_clip);
+                }
+                rs->scale(_scalers[s]);
+                if (_L->_par.verbose>0) fprintf(stderr,"Shot %d rescaled by a factor of %f\n",s,_scalers[s]);
+            }
+
+            if (par.integrate){
                 integral S(*rs->getHyper());
                 S.forward(false, rs, rs);
             }
@@ -599,7 +619,7 @@ public:
 
             std::shared_ptr<vecReg<data_t> > norms;
             std::shared_ptr<vecReg<data_t> > syn1;
-            if (_normalize){
+            if (par.normalize){
                 norms = std::make_shared<vecReg<data_t> >(hypercube<data_t>(ntr));
                 syn1 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(rs->getN123()));
                 memcpy(syn1->getVals(), rs->getVals(), rs->getN123()*sizeof(data_t));
@@ -607,36 +627,35 @@ public:
             }
 
             std::shared_ptr<vecReg<data_t> > syn2;
-            if (_envelop != 0){
+            if (par.envelop != 0){
                 syn2 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(rs->getN123()));
                 memcpy(syn2->getVals(), rs->getVals(), rs->getN123()*sizeof(data_t));
-                if (_envelop==1) envelop1(rs);
+                if (par.envelop==1) envelop1(rs);
                 else envelop2(rs);
             }
 
             // compute the residual u-d
-            data_t * pd = _d->getVals()+nr*nt;
             #pragma omp parallel for
             for (int i=0; i<par.nr*nt; i++) pr[i] -= pd[i];
 
-            if (par.gl==0){
+            if (par.nmodels>=3 && par.gl==0){
                 #pragma omp parallel for
                 for (int i=0; i<par.nr*nt; i++) pr[par.nr*nt+i] -= pd[_L->_par.nr*nt+i];
             }
 
             memcpy(r+nr*nt, rs->getVals(), par.nr*nt*sizeof(data_t));
-            if (par.gl==0) memcpy(r+(_L->_par.nr+nr)*nt, rs->getVals()+par.nr*nt, par.nr*nt*sizeof(data_t));
+            if (par.nmodels>=3 && par.gl==0) memcpy(r+(_L->_par.nr+nr)*nt, rs->getVals()+par.nr*nt, par.nr*nt*sizeof(data_t));
         
             // compute the gradient per shot
             applyHt(false, false, pr, pr, ntr, nt, dt, 0, ntr);
 
-            if (_envelop != 0){
+            if (par.envelop != 0){
                 std::shared_ptr<vecReg<data_t> > temp = syn2->clone();
                 hilbert(temp);
                 std::shared_ptr<vecReg<data_t> > temp2;
                 data_t * ptemp = temp->getVals();
                 data_t * psyn = syn2->getVals();
-                if (_envelop==1) {
+                if (par.envelop==1) {
                     temp2 = temp->clone();
                     data_t * ptemp2 = temp2->getVals();
                     for (int i=0; i<temp->getN123(); i++) {
@@ -649,7 +668,7 @@ public:
                 }
                 hilbert(temp);
                 ptemp = temp->getVals();
-                if (_envelop==1) {
+                if (par.envelop==1) {
                     data_t * ptemp2 = temp2->getVals();
                     for (int i=0; i<temp->getN123(); i++) pr[i] = psyn[i]/ptemp2[i] * pr[i] - ptemp[i];
                 }
@@ -658,7 +677,7 @@ public:
                 }
             }
 
-            if (_normalize){
+            if (par.normalize){
                 data_t * psyn = syn1->getVals();
                 data_t * pnorm = norms->getVals();
                 for (int ix=0; ix<ntr; ix++){
@@ -686,7 +705,7 @@ public:
                 }
             }
 
-            if (_integrate){
+            if (par.integrate){
                 integral S(*rs->getHyper());
                 S.adjoint(false, rs, rs);
             }
@@ -702,6 +721,8 @@ public:
         if (_P != nullptr) _P->jacobianT(false,_g,_m,_pg);
 
         if (_gmask != nullptr) _g->mult(_gmask);
+
+        if (_L->_par.scale_source_times>0) _scale_source_times++;
     }
 
     virtual void res(){compute_res_and_grad(_r->getVals(), _g); _flag = true;}
@@ -739,7 +760,7 @@ protected:
 public:
     nlls_fwi_reg(){}
     virtual ~nlls_fwi_reg(){}
-    nlls_fwi_reg(nl_we_op * L, nloper * D, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, data_t lambda, std::shared_ptr<vecReg<data_t> > mprior = nullptr, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr, bool normalize=false, bool integrate=false, int envelop=0){
+    nlls_fwi_reg(nl_we_op * L, nloper * D, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, data_t lambda, std::shared_ptr<vecReg<data_t> > mprior = nullptr, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr){
         _L = L;
         _D = D;
         _P = P;
@@ -748,10 +769,6 @@ public:
         _lambda = lambda;    
         _gmask = gmask;
         _w = w;
-        _normalize=normalize;
-        _integrate=integrate;
-        if (envelop==1 || envelop==2) _envelop = envelop;
-        else _envelop=0;
         _f = 0;
         _flag = true;
 
@@ -784,20 +801,20 @@ public:
             successCheck(w->min()>=0,__FILE__,__LINE__,"Data weights  must be non-negative\n");
         }
         
-        if (_integrate){
+        if (_L->_par.integrate){
             integral S(*_d->getHyper());
             S.forward(false, _d, _d);
         }
         if (_w != nullptr) _d->mult(_w);
-        if (_normalize) {
+        if (_L->_par.normalize) {
             int nt=_d->getHyper()->getAxis(1).n;
             int ntr=_d->getN123()/nt;
             data_t * norms = new data_t[ntr];
             ttnormalize(_d->getVals(), norms, nt, ntr);
             delete [] norms;
         }
-        if (_envelop==1) envelop1(_d);
-        else if (_envelop==2) envelop2(_d);
+        if (_L->_par.envelop==1) envelop1(_d);
+        else if (_L->_par.envelop==2) envelop2(_d);
 
         _dnorm = _d->norm2();
         _dnorm *= _d->getHyper()->getAxis(1).d;
@@ -806,6 +823,11 @@ public:
         _mnorm = _Dmp->norm2();
         if (_mnorm<ZERO) _mnorm=1;
         //_mnorm = std::max((data_t)1.0, _mnorm);
+
+        _scale_source_times=0;
+        if (_L->_par.scale_source_times>0) {
+            for (int s=0; s<_L->_par.ns; s++) _scalers.push_back(1.0);
+        }
     }
 
     void initRes() {
