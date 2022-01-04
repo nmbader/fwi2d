@@ -567,7 +567,7 @@ public:
             hypercube<data_t> hyper_s = *_L->_allsrc->getHyper();
             std::shared_ptr<vecReg<data_t> > src = std::make_shared<vecReg<data_t> > (hypercube<data_t>(hyper_s.getAxis(1),axis<data_t>(1,0,1),hyper_s.getAxis(3)));
             memcpy(src->getVals(), _L->_allsrc->getVals() + s*nt, sizeof(data_t)*nt);
-            if (par.nmodels>=3){
+            if ((par.nmodels>=3 && !par.acoustic_elastic) || (par.acoustic_elastic && !par.acoustic_source) ){
                 memcpy(src->getVals()+nt, _L->_allsrc->getVals() + (ns+s)*nt, sizeof(data_t)*nt);
                 if (par.mt) memcpy(src->getVals()+2*nt, _L->_allsrc->getVals() + (2*ns+s)*nt, sizeof(data_t)*nt);
             }
@@ -575,7 +575,8 @@ public:
             // build the we operator for a single shot
             nl_we_op * L = _L;
             if (par.nmodels==2) L=new nl_we_op_a(*_p->getHyper(),src,par);
-            else if (par.nmodels==3) L=new nl_we_op_e(*_p->getHyper(),src,par);
+            else if (par.nmodels==3 && !par.acoustic_elastic) L=new nl_we_op_e(*_p->getHyper(),src,par);
+            else if (par.nmodels==3 && par.acoustic_elastic) L=new nl_we_op_ae(*_p->getHyper(),src,par);
             else if (par.nmodels==5) L=new nl_we_op_vti(*_p->getHyper(),src,par);
             std::shared_ptr<vecReg<data_t> > rs = std::make_shared<vecReg<data_t> >(*L->getRange());
             int ntr = rs->getN123()/nt;
@@ -608,12 +609,20 @@ public:
 
             if (_w != nullptr) {
                 data_t * pw = _w->getVals()+nr*nt;
+                // first component
                 #pragma omp parallel for
                 for (int i=0; i<par.nr*nt; i++) pr[i] *= pw[i];
 
-                if (par.gl==0){
+                // second component
+                if ((par.nmodels>=3 && par.gl==0) || par.acoustic_elastic){
                     #pragma omp parallel for
                     for (int i=0; i<par.nr*nt; i++) pr[par.nr*nt+i] *= pw[_L->_par.nr*nt+i];
+                }
+
+                // third component
+                if (par.gl==0 && par.acoustic_elastic){
+                    #pragma omp parallel for
+                    for (int i=0; i<par.nr*nt; i++) pr[2*par.nr*nt+i] *= pw[2*_L->_par.nr*nt+i];
                 }
             }
 
@@ -635,17 +644,25 @@ public:
             }
 
             // compute the residual u-d
+            // first component
             #pragma omp parallel for
             for (int i=0; i<par.nr*nt; i++) pr[i] -= pd[i];
 
-            if (par.nmodels>=3 && par.gl==0){
+            // second component
+            if ((par.nmodels>=3 && par.gl==0) || par.acoustic_elastic){
                 #pragma omp parallel for
                 for (int i=0; i<par.nr*nt; i++) pr[par.nr*nt+i] -= pd[_L->_par.nr*nt+i];
             }
+            // third component
+            if (par.gl==0 && par.acoustic_elastic){
+                #pragma omp parallel for
+                for (int i=0; i<par.nr*nt; i++) pr[2*par.nr*nt+i] -= pd[2*_L->_par.nr*nt+i];
+            }
 
             memcpy(r+nr*nt, rs->getVals(), par.nr*nt*sizeof(data_t));
-            if (par.nmodels>=3 && par.gl==0) memcpy(r+(_L->_par.nr+nr)*nt, rs->getVals()+par.nr*nt, par.nr*nt*sizeof(data_t));
-        
+            if ((par.nmodels>=3 && par.gl==0) || par.acoustic_elastic) memcpy(r+(_L->_par.nr+nr)*nt, rs->getVals()+par.nr*nt, par.nr*nt*sizeof(data_t));
+            if (par.gl==0 && par.acoustic_elastic) memcpy(r+(2*_L->_par.nr+nr)*nt, rs->getVals()+2*par.nr*nt, par.nr*nt*sizeof(data_t));
+
             // compute the gradient per shot
             applyHt(false, false, pr, pr, ntr, nt, dt, 0, ntr);
 
@@ -696,12 +713,20 @@ public:
 
             if (_w != nullptr) {
                 data_t * pw = _w->getVals()+nr*nt;
+                // first component
                 #pragma omp parallel for
                 for (int i=0; i<par.nr*nt; i++) pr[i] *= pw[i];
 
-                if (par.gl==0){
+                // second component
+                if ((par.nmodels>=3 && par.gl==0) || par.acoustic_elastic){
                     #pragma omp parallel for
                     for (int i=0; i<par.nr*nt; i++) pr[par.nr*nt+i] *= pw[_L->_par.nr*nt+i];
+                }
+
+                // third component
+                if (par.gl==0 && par.acoustic_elastic){
+                    #pragma omp parallel for
+                    for (int i=0; i<par.nr*nt; i++) pr[2*par.nr*nt+i] *= pw[2*_L->_par.nr*nt+i];
                 }
             }
 

@@ -1,0 +1,22 @@
+#################################################################################################################################
+#################################################################################################################################
+#################################################################################################################################
+THIS SOFTWARE IS FREELY AVAILABLE, BUT WE EXPECT THAT ALL PUBLICATIONS DESCRIBING WORK USING THIS SOFTWARE OR PART OF IT, OR ALL COMMERCIAL PRODUCTS USING IT, QUOTE THE REFERENCE GIVEN BELOW.
+
+REFERENCE LIST:
+
+Bader, M., Almquist, M., & Dunham, E. M. (2021, October). Acoustic-elastic waveform modeling and inversion using energy-stable summation-by-parts finite-difference operators. In SEG/AAPG/SEPM First International Meeting for Applied Geoscience & Energy. OnePetro.
+
+#################################################################################################################################
+#################################################################################################################################
+#################################################################################################################################
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+    * Neither the name of Stanford University, nor the name of Stanford Exploration Project, nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+    * If the software is used to develop scientific or technical material that is published in any peer-reviewed papers, conference abstracts or similar publications, the recipient agrees to acknowledge the authors of the source code in a manner consistent with industry practice by citing the provided references.
+    * The authors would appreciate being notified of any errors found in the supplied code by emailing: nmbader@sep.stanford.edu 
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

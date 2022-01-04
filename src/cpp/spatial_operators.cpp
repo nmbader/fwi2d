@@ -527,6 +527,82 @@ void asat_dirichlet_right(bool add, const data_t** in, data_t* out, int nx, int 
     for (int iz=izmin; iz<izmax; iz++) out[(nx-1)*nz+iz] -= par[1][(nx-1)*nz+iz]*in[0][(nx-1)*nz+iz]/(a*hcoef[0]*dx2);
 }
 
+void asat_neumann_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (-f2.S.in )_0  f2=reciprocal of density
+    #pragma omp parallel for private(sum)
+    for (int ix=ixmin; ix<ixmax; ix++){
+        sum=0;
+        for (int iz=0; iz<nc1; iz++){
+            sum += scoef[iz] * in[0][ix*nz+iz];
+        }
+        out[ix*nz] = add*out[ix*nz] - 1.0/(h0*dz) * par[1][ix*nz]*sum/dz;
+    }
+}
+
+void asat_neumann_bottom(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (f2.S.in )_0  f2=reciprocal of density
+    #pragma omp parallel for private(sum)
+    for (int ix=ixmin; ix<ixmax; ix++){
+        sum=0;
+        for (int iz=0; iz<nc1; iz++){
+            sum += scoef[iz] * in[0][ix*nz+nz-1-iz];
+        }
+        out[ix*nz+nz-1] = add*out[ix*nz+nz-1] - 1.0/(h0*dz) * par[1][ix*nz+nz-1]*sum/dz;
+    }
+}
+
+void asat_neumann_left(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (-f2.S.in)_0  f2=reciprocal of density
+    #pragma omp parallel for private(sum)
+    for (int iz=izmin; iz<izmax; iz++){
+        sum=0;
+        for (int ix=0; ix<nc1; ix++){
+            sum += scoef[ix] * in[0][ix*nz+iz];
+        }
+        out[iz] = add*out[iz] - 1.0/(h0*dx) * par[1][iz]*sum/dx;
+    }
+}
+
+void asat_neumann_right(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (f2.S.in)_0  f2=reciprocal of density
+    #pragma omp parallel for private(sum)
+    for (int iz=izmin; iz<izmax; iz++){
+        sum=0;
+        for (int ix=0; ix<nc1; ix++){
+            sum += scoef[ix] * in[0][(nx-1-ix)*nz+iz];
+        }
+        out[(nx-1)*nz+iz] = add*out[(nx-1)*nz+iz] - 1.0/(h0*dx) * par[1][(nx-1)*nz+iz]*sum/dx;
+    }
+}
+
 void asat_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, data_t a)
 {
 

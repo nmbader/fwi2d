@@ -79,6 +79,7 @@ void readCoord(std::string srcoord, param &par){
 void readParam(int argc, char **argv, param &par){
     readParam<std::string>(argc, argv, "resampling", par.resampling);
     readParam<std::string>(argc, argv, "srcoord", par.srcoord);
+    readParam<std::string>(argc, argv, "horizon", par.horizon_file);
     readParam<std::string>(argc, argv, "nlsolver", par.nlsolver);
     readParam<std::string>(argc, argv, "lsearch", par.lsearch);
     readParam<std::string>(argc, argv, "mask", par.mask_file);
@@ -112,6 +113,8 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "vsmax", par.vsmax);
     readParam<data_t>(argc, argv, "rhomin", par.rhomin);
     readParam<data_t>(argc, argv, "rhomax", par.rhomax);
+    readParam<data_t>(argc, argv, "water_velocity", par.water_velocity);
+    readParam<data_t>(argc, argv, "water_density", par.water_density);
     readParam<data_t>(argc, argv, "bs_controlx", par.bs_controlx);
     readParam<data_t>(argc, argv, "bs_controlz", par.bs_controlz);
     readParam<data_t>(argc, argv, "threshold", par.threshold);
@@ -150,8 +153,12 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "verbose", par.verbose);
     readParam<bool>(argc, argv, "mt", par.mt);
     readParam<bool>(argc, argv, "pml", par.pml);
+    readParam<bool>(argc, argv, "acoustic_elastic", par.acoustic_elastic);
+    readParam<bool>(argc, argv, "acoustic_source", par.acoustic_source);
+    readParam<bool>(argc, argv, "acoustic_wavefield", par.acoustic_wavefield);
     readParam<bool>(argc, argv, "bsplines", par.bsplines);
     readParam<bool>(argc, argv, "soft_clip", par.soft_clip);
+    readParam<bool>(argc, argv, "inversion1d", par.inversion1d);
     readParam<bool>(argc, argv, "normalize", par.normalize);
     readParam<bool>(argc, argv, "integrate", par.integrate);
     readParam<bool>(argc, argv, "ls_version", par.ls_version);
@@ -225,6 +232,7 @@ void analyzeNLInversion(param &par)
         fprintf(stderr,"Maximum number of trials per iteration = %d\n",par.max_trial);
         fprintf(stderr,"Threshold to stop the inversion = %f\n",par.threshold);
     }
+    if (par.inversion1d && par.verbose>0) fprintf(stderr,"A 1D inversion will be performed in the z-dimension. If \"horizon\" is not provided, the extrapolation will be flat in the x-dimension where any possible B-splines will be ignored\n");
     if (par.mask_file != "none" && par.verbose>0) fprintf(stderr,"A gradient mask file is expected and will be applied at each trial\n");
     if (par.weights_file != "none" && par.verbose>0) fprintf(stderr,"A data weights file is expected and will be applied to modeled and observed data\n");
     if (par.prior_file != "none" && par.verbose>0) fprintf(stderr,"A prior model file is expected and will be used in the regularization if any\n");

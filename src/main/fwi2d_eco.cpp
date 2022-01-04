@@ -27,7 +27,7 @@ int main(int argc, char **argv){
     readParameters(argc, argv, par);
 
 // Read inputs/outputs files
-    std::string source_file="none", model_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none", inverse_diagonal_hessian_file="none";
+    std::string source_file="none", model_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none";
     readParam<std::string>(argc, argv, "source", source_file);
     readParam<std::string>(argc, argv, "model", model_file);
     readParam<std::string>(argc, argv, "data", data_file);
@@ -43,6 +43,7 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> data = sepRead<data_t>(data_file);
     std::shared_ptr<vec> model = sepRead<data_t>(model_file);
 
+    std::shared_ptr<vec> hrz = nullptr;
     std::shared_ptr<vec> gmask = nullptr;
     std::shared_ptr<vec> w = nullptr;
     std::shared_ptr<vec> invDiagH = nullptr;
@@ -58,13 +59,56 @@ int main(int argc, char **argv){
     analyzeBsplines(*model->getHyper(),par);
     analyzeNLInversion(par);
 
+// Build model precon if 1D inversion is activated
+// ----------------------------------------------------------------------------------------//
+    std::shared_ptr<vec> model1d = model;
+    std::shared_ptr<vec> gmask1d = gmask;
+    std::shared_ptr<vec> invDiagH1d = invDiagH;
+    std::shared_ptr<vec> prior1d = prior;
+    loper * ext1d;
+
+if (par.inversion1d)
+{
+    if (par.horizon_file!="none") {
+        hrz = sepRead<data_t>(par.horizon_file);
+        successCheck(hrz->getN123()==model->getHyper()->getAxis(2).n,__FILE__,__LINE__,"The provided horizon must have the same size as the x-dimension of the model\n");
+    }
+    else{
+        hrz = std::make_shared<vec>(hyper(model->getHyper()->getAxis(2)));
+        hrz->zero();
+    }
+    std::vector<ax> axes = model->getHyper()->getAxes();
+    axes.erase(axes.begin()+1);
+    model1d = std::make_shared<vec> (hyper(axes));
+    model1d->zero();
+    ext1d = new extrapolator1d2d(*model1d->getHyper(),hrz);
+    ext1d->inverse(false,model1d,model);
+
+    if (par.mask_file != "none") {
+        gmask1d = std::make_shared<vec> (hyper(axes));
+        gmask1d->zero();
+        ext1d->inverse(false,gmask1d,gmask);
+    }
+    if (par.inverse_diagonal_hessian_file != "none"){
+        invDiagH1d = std::make_shared<vec> (hyper(axes));
+        invDiagH1d->zero();
+        ext1d->inverse(false,invDiagH1d,invDiagH);
+    }
+    if (par.prior_file != "none"){
+        prior1d = std::make_shared<vec> (hyper(axes));
+        prior1d->zero();
+        ext1d->inverse(false,prior1d,prior);
+    }
+}
+// ----------------------------------------------------------------------------------------//
+
 // Build model precon if B-splines are activated
 // ----------------------------------------------------------------------------------------//
-    std::shared_ptr<vecReg<data_t> > bsmodel = model;
-    std::shared_ptr<vecReg<data_t> > bsmask = gmask;
-    std::shared_ptr<vecReg<data_t> > bsinvDiagH = invDiagH;
-    std::shared_ptr<vecReg<data_t> > bsprior = prior;
-    chainLOper * BD;
+    std::shared_ptr<vec> bsmodel = model1d;
+    std::shared_ptr<vec> bsmask = gmask1d;
+    std::shared_ptr<vec> bsinvDiagH = invDiagH1d;
+    std::shared_ptr<vec> bsprior = prior1d;
+    loper * BD;
 
 if (par.bsplines)
 {
@@ -73,26 +117,38 @@ if (par.bsplines)
     setKnot(kx,par.bs_controlx,par.bs_mx);
     setKnot(kz,par.bs_controlz,par.bs_mz);
 
-    std::vector<axis<data_t> > axes = model->getHyper()->getAxes();
+    std::vector<ax > axes = model->getHyper()->getAxes();
     axes[0].n=par.bs_nz; axes[1].n=par.bs_nx;
-    bsmodel = std::make_shared<vecReg<data_t> >(vecReg<data_t>(hypercube<data_t>(axes)));
-    fillin(bsmodel,model,par.bs_controlx,par.bs_controlz);
+    if (par.inversion1d) axes.erase(axes.begin()+1);
+    bsmodel = std::make_shared<vec>(vec(hyper(axes)));
+    if (par.inversion1d) fillin1d(bsmodel,model1d,par.bs_controlz);
+    else fillin(bsmodel,model,par.bs_controlx,par.bs_controlz);
     if (par.mask_file != "none"){
-        bsmask = std::make_shared<vecReg<data_t> >(vecReg<data_t>(hypercube<data_t>(axes)));
-        fillin(bsmask,gmask,par.bs_controlx,par.bs_controlz);
+        bsmask = std::make_shared<vec>(vec(hyper(axes)));
+        if (par.inversion1d) fillin1d(bsmask,gmask1d,par.bs_controlz);
+        else fillin(bsmask,gmask,par.bs_controlx,par.bs_controlz);
     }
     if (par.inverse_diagonal_hessian_file != "none"){
-        bsinvDiagH = std::make_shared<vecReg<data_t> >(vecReg<data_t>(hypercube<data_t>(axes)));
-        fillin(bsinvDiagH,invDiagH,par.bs_controlx,par.bs_controlz);
+        bsinvDiagH = std::make_shared<vec>(vec(hyper(axes)));
+        if (par.inversion1d) fillin1d(bsinvDiagH,invDiagH1d,par.bs_controlz);
+        else fillin(bsinvDiagH,invDiagH,par.bs_controlx,par.bs_controlz);
     }
     if (par.prior_file != "none"){
-        bsprior = std::make_shared<vecReg<data_t> >(vecReg<data_t>(hypercube<data_t>(axes)));
-        fillin(bsprior,prior,par.bs_controlx,par.bs_controlz);
+        bsprior = std::make_shared<vec>(vec(hyper(axes)));
+        if (par.inversion1d) fillin1d(bsprior,prior1d,par.bs_controlz);
+        else fillin(bsprior,prior,par.bs_controlx,par.bs_controlz);
     }
 
-    duplicate D(*bsmodel->getHyper(),par.bs_mx,par.bs_mz);
-    bsplines3 B(*D.getRange(),*model->getHyper(),kx,kz);
-    BD = new chainLOper(&B,&D);
+    if (par.inversion1d){
+        duplicate1d D(*bsmodel->getHyper(),par.bs_mz);
+        bsplines31d B(*D.getRange(),*model1d->getHyper(),kz);
+        BD = new chainLOper(&B,&D);
+    }
+    else{
+        duplicate D(*bsmodel->getHyper(),par.bs_mx,par.bs_mz);
+        bsplines3 B(*D.getRange(),*model->getHyper(),kx,kz);
+        BD = new chainLOper(&B,&D);
+    }
 }    
 // ----------------------------------------------------------------------------------------//
 
@@ -108,26 +164,38 @@ if (par.bsplines)
     nloper * op = nullptr;
     nl_we_op * L;
     if (par.nmodels==2) L=new nl_we_op_a(*model->getHyper(),allsrc,par);
-    else if (par.nmodels==3) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
+    else if (par.nmodels==3 && !par.acoustic_elastic) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
+    else if (par.nmodels==3 && par.acoustic_elastic) L=new nl_we_op_ae(*model->getHyper(),allsrc,par);
     else if (par.nmodels==5) L=new nl_we_op_vti(*model->getHyper(),allsrc,par);
+    
 
     if (par.bsplines)
     {
         if (par.soft_clip)
         {
-            op  = new chainNLOper(S,BD);
+            if (par.inversion1d) {
+                chainLOper EBD(ext1d,BD);
+                op = new chainNLOper(S,&EBD);
+            }
+            else op  = new chainNLOper(S,BD);
         }
         else{
-            op  = BD;
+            if (par.inversion1d) op = new chainLOper(ext1d,BD);
+            else op  = BD->clone();
         }
     }
     else
     {
         if (par.soft_clip)
         {
-            op  = S;
+            if (par.inversion1d) op = new chainNLOper(S,ext1d);
+            else op  = S->clone();
         }
+        else if (par.inversion1d) op = ext1d->clone();
     }
+    if (par.bsplines) delete BD;
+    if (par.inversion1d) delete ext1d;
+    if (par.soft_clip) delete S;
 
     nloper * D = nullptr;
     loper * R;
@@ -169,12 +237,12 @@ if (par.bsplines)
 
     if (output_file!="none") sepWrite<data_t>(model, output_file);
     if (obj_func_file!="none") {
-        std::shared_ptr<vecReg<data_t> > func = std::make_shared<vecReg<data_t> > (hypercube<data_t>(solver->_func.size()));
+        std::shared_ptr<vec > func = std::make_shared<vec > (hyper(solver->_func.size()));
         memcpy(func->getVals(), solver->_func.data(), solver->_func.size()*sizeof(data_t));
         sepWrite(func,obj_func_file);
         if (D != nullptr){
-            std::shared_ptr<vecReg<data_t> > dfunc = std::make_shared<vecReg<data_t> > (hypercube<data_t>(prob->_dfunc.size()));
-            std::shared_ptr<vecReg<data_t> > mfunc = std::make_shared<vecReg<data_t> > (hypercube<data_t>(prob->_mfunc.size()));
+            std::shared_ptr<vec > dfunc = std::make_shared<vec > (hyper(prob->_dfunc.size()));
+            std::shared_ptr<vec > mfunc = std::make_shared<vec > (hyper(prob->_mfunc.size()));
             memcpy(dfunc->getVals(), prob->_dfunc.data(), prob->_dfunc.size()*sizeof(data_t));
             memcpy(mfunc->getVals(), prob->_mfunc.data(), prob->_mfunc.size()*sizeof(data_t));
             sepWrite(dfunc,obj_func_file+".d");

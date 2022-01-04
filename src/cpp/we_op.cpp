@@ -7,12 +7,16 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
     successCheck(model.getNdim()==3,__FILE__,__LINE__,"The model must have three axes\n");
     par.nmodels = model.getAxis(3).n;
     successCheck(par.nmodels==2 || par.nmodels==3 || par.nmodels==5,__FILE__,__LINE__,"The model must contain 2, 3, or 5 parameters\n");
+    if (par.acoustic_elastic) successCheck(par.nmodels==3,__FILE__,__LINE__,"For acoustic-elastic option, the model must contain 3 parameters\n");
 
     if (par.nmodels==2){
         par.mt=false;
         par.gl=0;
         par.free_surface_stiffness=std::max(par.free_surface_stiffness,(data_t)1.0);
+        par.soft_clip=0;
+        par.pml=false;
     }
+    if (par.acoustic_elastic && par.acoustic_source) par.mt=false;
 
     if (verbose) fprintf(stderr,"\n==========================\n Subsurface model geometry\n==========================\n");
     axis<data_t> Z = model.getAxis(1);
@@ -20,6 +24,11 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
     if (verbose){
         fprintf(stderr,"xmin=%.5f km, xmax=%.5f km, dx=%0.5f km, nx=%d\n",X.o,(X.n-1)*X.d+X.o,X.d,X.n);
         fprintf(stderr,"zmin=%.5f km, zmax=%.5f km, dz=%0.5f km, nz=%d\n",Z.o,(Z.n-1)*Z.d+Z.o,Z.d,Z.n);
+    }
+    if (par.acoustic_elastic) {
+        successCheck(Z.o>0 && Z.o/Z.d==floor(Z.o/Z.d),__FILE__,__LINE__,"For acoustic-elastic option, the z-origin must be positive multiple of the sampling\n");
+        par.nza = floor(Z.o/Z.d) + 1;
+        if (verbose) fprintf(stderr,"A fluid layer is implicitly added on top of the model, all the way up to z=0 km with nz=%d samples v=%.2f km/s and rho=%.2f g/cc\n",par.nza,par.water_velocity,par.water_density);
     }
 
     if (verbose) fprintf(stderr,"\n==========================\n Boundary conditions\n==========================\n");
@@ -64,24 +73,40 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
         }
         std::string seismotype1[2] = {"displacement","velocity"};
         std::string seismotype2[2] = {"strain","strain rate"};
+        std::string seismotype3[2] = {" "," derivative of "};
+        std::string seismotype4[2] = {"momentum potential","hydraulic pressure"};
         if (par.gl<=0) {
-            if (par.nmodels>=3) fprintf(stderr,"Receivers are point measurement of type particle %s\n",seismotype1[par.seismotype].c_str());
-            else fprintf(stderr,"Receivers are point measurement of type hydraulic pressure\n");
+            if (par.nmodels>=3 && !par.acoustic_elastic) fprintf(stderr,"Receivers are point measurement of type particle %s\n",seismotype1[par.seismotype].c_str());
+            else if (par.acoustic_elastic) fprintf(stderr,"Receivers are dual point measurement of type %s and particle %s\n",seismotype4[par.seismotype].c_str(),seismotype1[par.seismotype].c_str());
+            else fprintf(stderr,"Receivers are point measurement of type%shydraulic pressure\n",seismotype3[par.seismotype].c_str());
         }
-        else fprintf(stderr,"Receivers are DAS measurement of type %s with gauge length = %f km\n",seismotype2[par.seismotype].c_str(), par.gl);
+        else {
+            if (!par.acoustic_elastic) fprintf(stderr,"Receivers are DAS measurement of type %s with gauge length = %f km\n",seismotype2[par.seismotype].c_str(), par.gl);
+            else fprintf(stderr,"Receivers are dual point measurement of type %s and DAS of type %s with gauge length = %f km\n",seismotype4[par.seismotype].c_str(),seismotype2[par.seismotype].c_str(), par.gl);
+        }
     }
 
     if (verbose) fprintf(stderr,"Number of sources = %d\n",par.ns);
+    if (par.acoustic_elastic && par.acoustic_source) fprintf(stderr,"All sources must fall within the fluid layer\n");
+    else if (par.acoustic_elastic && !par.acoustic_source) fprintf(stderr,"All sources must fall within the solid layer\n");
     bool check=true;
     int s=0;
     par.nr=0;
+    data_t precision = std::min(X.d,Z.d)*1e-3;
+    if (par.acoustic_elastic) par.rxza = par.rxz;
     while (s<par.ns)
     {
         int nr = par.rxz[s].size();
         par.nr+=nr;
         // check source inside model boundaries
+        data_t oz = Z.o; int nz=Z.n;
+        data_t ozs = Z.o; int nzs=Z.n;
+        if (par.acoustic_elastic) {
+            oz=0; nz=Z.n+par.nza-1;
+            if (par.acoustic_source){ozs=0; nzs=par.nza;}
+        }
         if (verbose) fprintf(stderr,"Shot %d located at x=%.5f km, z=%.5f km, has %d receivers\n",s,par.sxz[s][0],par.sxz[s][1],nr);
-        check = ((par.sxz[s][0] >= X.o) && (par.sxz[s][0] <= X.o+(X.n-1)*X.d) && (par.sxz[s][1] >= Z.o) && (par.sxz[s][1] <= Z.o+(Z.n-1)*Z.d));
+        check = ((par.sxz[s][0] - X.o >= -precision) && (-precision <= -par.sxz[s][0] + X.o+(X.n-1)*X.d) && (par.sxz[s][1] -ozs >= -precision) && (-precision <= -par.sxz[s][1] + ozs+(nzs-1)*Z.d));
         successCheck(check,__FILE__,__LINE__,"Shot falls outside subsurface model boundaries\n");
 
         // check receivers inside model boundaries
@@ -91,9 +116,15 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
             data_t rx=par.rxz[s][r][0];
             data_t rz=par.rxz[s][r][1];
             data_t dip=par.rxz[s][r][2];
+
+            // project receivers to fluid-solid interface when relevant
+            if (par.acoustic_elastic){
+                if (rz<Z.o && rz>=0) {par.rxz[s][r][1]=Z.o; rz=Z.o;}
+                else if (rz>=Z.o) par.rxza[s][r][1]=Z.o;
+            }
             if (par.gl<=0)
             {
-                check = ((rx >= X.o) && (rx <= X.o+(X.n-1)*X.d) && (rz >= Z.o) && (rz <= Z.o+(Z.n-1)*Z.d));
+                check = ((rx -X.o >= -precision) && (-precision <= -rx + X.o+(X.n-1)*X.d) && (rz -Z.o >= -precision) && (-precision <= -rz + Z.o+(Z.n-1)*Z.d));
                 std::string msg = "Receiver "+std::to_string(r)+" at x="+std::to_string(rx)+" km, z="+std::to_string(rz)+" km, falls outside subsurface model boundaries\n";
                 successCheck(check,__FILE__,__LINE__,msg);
             }
@@ -118,10 +149,14 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
     }
     if (verbose){
         if (par.gl<=0) {
-            if (par.nmodels>=3) fprintf(stderr,"Total number of 2-components receivers to be modeled = %d\n",par.nr);
+            if (par.nmodels>=3 && !par.acoustic_elastic) fprintf(stderr,"Total number of 2-components receivers to be modeled = %d\n",par.nr);
+            else if (par.nmodels==3 && par.acoustic_elastic) fprintf(stderr,"Total number of 3-components receivers to be modeled = %d\n",par.nr);
             else fprintf(stderr,"Total number of hydrophones to be modeled = %d\n",par.nr);
         }
-        else fprintf(stderr,"Total number of DAS channels to be modeled = %d\n",par.nr);
+        else {
+            if (!par.acoustic_elastic) fprintf(stderr,"Total number of DAS channels to be modeled = %d\n",par.nr);
+            else fprintf(stderr,"Total number of hydrophones+DAS channels to be modeled = %d\n",par.nr);
+        }
     }
     if (par.gl>0)
     {
@@ -139,10 +174,10 @@ std::shared_ptr<vecReg<data_t> > analyzeWavelet(std::shared_ptr<vecReg<data_t> >
     if (verbose) fprintf(stderr,"\n==========================\n Source wavelet\n==========================\n");
     if (src->getHyper()->getNdim()==1)
     {
-        if (par.nmodels==2)
+        if (par.nmodels==2 || (par.acoustic_elastic && par.acoustic_source))
         {
             if (verbose) {
-                fprintf(stderr,"Pressure source is assumed\n");
+                fprintf(stderr,"Acoustic source (pressure or momentum potential) is assumed\n");
                 fprintf(stderr,"Input wavelet will be duplicated %d times\n",par.ns);
                 fprintf(stderr,"Parameters fangle, mt, mxx, mzz, mxz are ignored\n");
             }
@@ -205,7 +240,7 @@ std::shared_ptr<vecReg<data_t> > analyzeWavelet(std::shared_ptr<vecReg<data_t> >
     else
     {
         int ntr = src->getN123()/src->getHyper()->getAxis(1).n;
-        if (par.nmodels==2)
+        if (par.nmodels==2 || (par.acoustic_elastic && par.acoustic_source))
         {
             std::string msg = std::to_string(par.ns) + " wavelets are expected, " + std::to_string(ntr) + " are provided\n";
             successCheck(ntr == par.ns,__FILE__,__LINE__,msg);
@@ -325,6 +360,11 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
 
         par.vmax=vpmax;
         par.vmin=vsmin;
+
+        if (par.acoustic_elastic){
+            par.vmax = std::max(par.vmax, par.water_velocity);
+            par.vmin = std::min(par.vmin, par.water_velocity);
+        }
     }
 
     else
@@ -460,7 +500,7 @@ void nl_we_op_e::compute_gradients(const data_t * model, const data_t * u_full, 
     }
 }
 
-void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
+void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const
 {
     // wavefields allocations and pointers
     data_t * u  = new data_t[6*nx*nz];
@@ -798,11 +838,16 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     int nz = _domain.getAxis(1).n;
     data_t dx = _domain.getAxis(2).d;
     data_t dz = _domain.getAxis(1).d;
+    data_t ox = _domain.getAxis(2).o;
+    data_t oz = _domain.getAxis(1).o;
     hypercube<data_t> domain = *_allsrc->getHyper();
 
     if (_par.sub>0){
         if (_par.nmodels>=3) _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2),axis<data_t>(2,0,1), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
         else _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
+        if (_par.acoustic_elastic && _par.acoustic_wavefield) {
+            _full_wflda=std::make_shared<vecReg<data_t> > (hypercube<data_t>(axis<data_t>(_par.nza,0,dz),_domain.getAxis(2), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub)));
+        }
     }
 
     // setting up and apply the time resampling operator
@@ -814,6 +859,7 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
     if (_par.nmodels==2) Xr.n = Xr0.n;
+    if (_par.acoustic_elastic) Xr.n = 3*Xr0.n;
     Xs.n = domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -858,9 +904,9 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
             else full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
         }
 #ifdef CUDA
-        propagate_gpu(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        propagate_gpu(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #else
-        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
 
         if (_par.verbose>2) fprintf(stderr,"Finish propagating shot %d\n",s);
@@ -873,16 +919,18 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     if (_par.gl>0) 
     {
         //fprintf(stderr,"Convert 2-components dipole data to strain\n");
-        dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        if (!_par.acoustic_elastic) dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        else dipole_to_strain(false, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
     }
 
-    // convert to particle velocity or strain rate when relevant: forward  mode
+    // convert to particle velocity or strain rate or pressure when relevant: forward  mode
     if (_par.seismotype==1)
     {
         std::shared_ptr<vecReg<data_t> > allrcv_dt = std::make_shared<vecReg<data_t> >(hyper_r);
         allrcv_dt->zero();
         Dt(false, false, allrcv->getCVals(), allrcv_dt->getVals(), Xr.n, T.n, T.d, 0, Xr.n);
         allrcv = allrcv_dt;
+        if (_par.acoustic_elastic) allrcv->scale(-1,0,Xr0.n*T.n);
     }
 
     // resample in time (decimation)
@@ -911,6 +959,8 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     int nz = _domain.getAxis(1).n;
     data_t dx = _domain.getAxis(2).d;
     data_t dz = _domain.getAxis(1).d;
+    data_t ox = _domain.getAxis(2).o;
+    data_t oz = _domain.getAxis(1).o;
     hypercube<data_t> domain = *_allsrc->getHyper();
 
     data_t * temp;
@@ -930,6 +980,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
     if (_par.nmodels==2) Xr.n = Xr0.n;
+    if (_par.acoustic_elastic) Xr.n = 3*Xr0.n;
     Xs.n = domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -953,19 +1004,21 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     allrcv->revert(1);
     allrcv->scale(-alpha);
 
-    // convert from particle velocity or strain rate when relevant: adjoint mode
+    // convert from particle velocity or strain rate or pressure when relevant: adjoint mode
     if (_par.seismotype==1)
     {
         std::shared_ptr<vecReg<data_t> > allrcv_dt = std::make_shared<vecReg<data_t> >(hyper_r);
         allrcv_dt->zero();
         Dt(true, false, allrcv->getCVals(), allrcv_dt->getVals(), Xr.n, T.n, T.d, 0, Xr.n);
         allrcv = allrcv_dt;
+        if (_par.acoustic_elastic) allrcv->scale(-1,0,Xr0.n*T.n);
     }
 
     // convert from DAS (strain) to dipole data when relevant
     if (_par.gl>0) 
     {
-        dipole_to_strain(true, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        if (!_par.acoustic_elastic) dipole_to_strain(true, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        else dipole_to_strain(true, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
     }
 
     // loop over shots
@@ -993,9 +1046,9 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
             else full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
         }
 #ifdef CUDA
-        propagate_gpu(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz);
+        propagate_gpu(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz, ox, oz, s);
 #else
-        propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz);
+        propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
 
         if (_par.verbose>2) fprintf(stderr,"Finish back-propagating shot %d with gradient computation\n",s);
@@ -1062,6 +1115,8 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     int nz = _model->getHyper()->getAxis(1).n;
     data_t dx = _model->getHyper()->getAxis(2).d;
     data_t dz = _model->getHyper()->getAxis(1).d;
+    data_t ox = _model->getHyper()->getAxis(2).o;
+    data_t oz = _model->getHyper()->getAxis(1).o;
 
     // setting up and apply the time resampling operator
     resampler * resamp;
@@ -1072,6 +1127,7 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
     if (_par.nmodels==2) Xr.n = Xr0.n;
+    if (_par.acoustic_elastic) Xr.n = 3*Xr0.n;
     Xs.n = _domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -1112,9 +1168,9 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         data_t * full = nullptr;
         if (_par.sub>0) full = _full_wfld->getVals();
 #ifdef CUDA
-        propagate_gpu(false, _model->getCVals(), allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        propagate_gpu(false, _model->getCVals(), allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #else
-        propagate(false, _model->getCVals(), allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        propagate(false, _model->getCVals(), allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
         delete inj;
         delete ext;
@@ -1125,16 +1181,18 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     // convert to DAS (strain) data when relevant
     if (_par.gl>0) 
     {
-        dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        if (!_par.acoustic_elastic) dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        else dipole_to_strain(false, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
     }
 
-    // convert to particle velocity or strain rate when relevant: forward  mode
+    // convert to particle velocity or strain rate or pressure when relevant: forward  mode
     if (_par.seismotype==1)
     {
         std::shared_ptr<vecReg<data_t> > allrcv_dt = std::make_shared<vecReg<data_t> >(hyper_r);
         allrcv_dt->zero();
         Dt(false, false, allrcv->getCVals(), allrcv_dt->getVals(), Xr.n, T.n, T.d, 0, Xr.n);
         allrcv = allrcv_dt;
+        if (_par.acoustic_elastic) allrcv->scale(-1,0,Xr0.n*T.n);
     }
 
     // resample in time (decimation)
@@ -1153,6 +1211,8 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     int nz = _model->getHyper()->getAxis(1).n;
     data_t dx = _model->getHyper()->getAxis(2).d;
     data_t dz = _model->getHyper()->getAxis(1).d;
+    data_t ox = _model->getHyper()->getAxis(2).o;
+    data_t oz = _model->getHyper()->getAxis(1).o;
 
     // setting up and apply the time resampling operator
     resampler * resamp;
@@ -1163,6 +1223,7 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
     if (_par.nmodels==2) Xr.n = Xr0.n;
+    if (_par.acoustic_elastic) Xr.n = 3*Xr0.n;
     Xs.n = _domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -1186,19 +1247,21 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     allrcv->revert(1);
     allrcv->scale(alpha);
 
-    // convert from particle velocity or strain rate when relevant: adjoint  mode
+    // convert from particle velocity or strain rate or pressure when relevant: adjoint mode
     if (_par.seismotype==1)
     {
         std::shared_ptr<vecReg<data_t> > allrcv_dt = std::make_shared<vecReg<data_t> >(hyper_r);
         allrcv_dt->zero();
         Dt(true, false, allrcv->getCVals(), allrcv_dt->getVals(), Xr.n, T.n, T.d, 0, Xr.n);
         allrcv = allrcv_dt;
+        if (_par.acoustic_elastic) allrcv->scale(-1,0,Xr0.n*T.n);
     }
 
     // convert from DAS (strain) to dipole data when relevant
     if (_par.gl>0) 
     {
-        dipole_to_strain(true, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        if (!_par.acoustic_elastic) dipole_to_strain(true, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        else dipole_to_strain(true, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
     }
 
     // loop over shots
@@ -1223,9 +1286,9 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
         data_t * full = nullptr;
         if (_par.sub>0) full = _full_wfld->getVals();
 #ifdef CUDA
-        propagate_gpu(true, _model->getCVals(), allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        propagate_gpu(true, _model->getCVals(), allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #else
-        propagate(true, _model->getCVals(), allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz);
+        propagate(true, _model->getCVals(), allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
         delete inj;
         delete ext;
@@ -1321,7 +1384,7 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
     }
 }
 
-void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
+void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const
 {
     // wavefields allocations and pointers
     data_t * u  = new data_t[6*nx*nz];
@@ -1651,7 +1714,7 @@ void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, 
     }
 }
 
-void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
+void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const
 {
     // wavefields allocations and pointers
     int nxz=nx*nz;
@@ -1800,5 +1863,448 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
     }
     
     delete [] u;
+    if (grad != nullptr) delete [] tmp;
+}
+
+
+void nl_we_op_ae::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const
+{
+    // wavefields allocations and pointers
+    int nxz=nx*nz;
+    int nza = par.nza;
+    int nxza=nx*nza; // for water layer
+    data_t * u  = new data_t[6*nxz];
+    data_t * dux  = new data_t[2*nxz];
+    data_t * duz  = new data_t[2*nxz];
+    data_t * phi  = new data_t[3*nxza]; // momentum potential in the water layer
+    data_t * modela  = new data_t[2*nxza]; // acoustic model
+    memset(u, 0, 6*nxz*sizeof(data_t));
+    memset(dux, 0, 2*nxz*sizeof(data_t));
+    memset(duz, 0, 2*nxz*sizeof(data_t));
+    memset(phi, 0, 3*nxza*sizeof(data_t));
+    data_t (*prev) [nxz] = (data_t (*)[nxz]) u;
+    data_t (*curr) [nxz] = (data_t (*)[nxz]) (u + 2*nxz);
+    data_t (*next) [nxz] = (data_t (*)[nxz]) (u + 4*nxz);
+    data_t (*bucket) [nxz];
+    data_t (*preva) [nxza] = (data_t (*)[nxza]) phi;
+    data_t (*curra) [nxza] = (data_t (*)[nxza]) (phi + nxza);
+    data_t (*nexta) [nxza] = (data_t (*)[nxza]) (phi + 2*nxza);
+    data_t (*bucketa) [nxza];
+    data_t (*u_x) [nxz] = (data_t (*)[nxz]) dux;
+    data_t (*u_z) [nxz] = (data_t (*)[nxz]) duz;
+    data_t (*u_full) [2][nxz];
+    data_t (*phi_full) [nxza];
+    data_t * tmp;
+
+    data_t K = par.water_density*par.water_velocity*par.water_velocity; // bulk modulus
+    data_t rho = par.water_density; // density
+    for (int i=0; i<nxza; i++) {
+        modela[i] = K;
+        modela[nxza+i] = 1.0/rho;
+    }
+
+    if (par.sub>0) u_full = (data_t (*) [2][nxz]) full_wfld;
+    if (par.sub>0 && par.acoustic_wavefield) phi_full = (data_t (*) [nxza]) _full_wflda->getVals();
+    if (grad != nullptr) 
+    {
+        tmp = new data_t[4*nxz];
+        memset(tmp, 0, 4*nxz*sizeof(data_t));
+    }
+	const data_t* mod[3] = {model, model+nxz, model+2*nxz};
+	const data_t* moda[2] = {modela, modela+nxza};
+
+    // free surface stiffness
+    data_t alpha = 0.2508560249 / par.free_surface_stiffness;
+
+    // #############  PML stuff ##################
+    int l = std::max(par.taper_top,par.taper_bottom);
+    l = std::max(l, par.taper_left);
+    l = std::max(l, par.taper_right);
+    // ###########################################
+    
+    // source and receiver components for injection/extraction
+    int ns=par.ns;
+    int nr=par.nr;
+    if (adj)
+    {
+        ns = par.nr;
+        nr = par.ns;
+    }
+
+    // in the elastic medium
+    const data_t * srcx[2] = {nullptr, nullptr};
+    const data_t * srcz[2] = {nullptr, nullptr};
+    data_t * rcvx[2] = {nullptr, nullptr};
+    data_t * rcvz[2] = {nullptr, nullptr};
+
+    if (!adj){
+        rcvx[0] = allrcv + nr*par.nt;
+        rcvz[0] = allrcv + 2*nr*par.nt;
+        if (!par.acoustic_source){
+            srcx[0] = allsrc;
+            srcz[0] = allsrc + ns*par.nt;
+        }
+    }
+    else{
+        srcx[0] = allsrc + ns*par.nt;
+        srcz[0] = allsrc + 2*ns*par.nt;
+        if (!par.acoustic_source){
+            rcvx[0] = allrcv;
+            rcvz[0] = allrcv + nr*par.nt;
+        }
+    }
+    
+    if (par.mt==true)
+    {
+        if (!adj)
+        {
+            srcx[1] = allsrc + 2*ns*par.nt;
+            srcz[0] = allsrc + 2*ns*par.nt;
+            srcz[1] = allsrc + ns*par.nt;
+        }
+        else
+        {
+            rcvx[1] = allrcv + 2*nr*par.nt;
+            rcvz[0] = allrcv + 2*nr*par.nt;
+            rcvz[1] = allrcv + nr*par.nt;
+        }
+    }
+
+    // in the water layer
+    const data_t * src[1] = {allsrc};
+    data_t * rcv[1] = {allrcv};
+
+    // injector/extractor in the water layer
+    hypercube<data_t> domaina (axis<data_t>(par.nza,0,dz),axis<data_t>(nx,ox,dx));
+    injector *inja=nullptr, *exta=nullptr;
+    if (!adj){
+        if (par.acoustic_source) inja = new delta_m3(domaina,{par.sxz[s]});
+        exta = new delta_m3(domaina,par.rxza[s]);
+    }
+    else{
+        if (par.acoustic_source) exta = new delta_m3(domaina,{par.sxz[s]});
+        inja = new delta_m3(domaina,par.rxza[s]);
+    }
+    
+    // prev = 1/(2 * rho) * dt2 * src
+    if (!par.acoustic_source) {
+        inj->inject(false, srcx, prev[0], nx, nz, par.nt, inj->_ntr, 0, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+        inj->inject(false, srcz, prev[1], nx, nz, par.nt, inj->_ntr, 0, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+        for (int i=0; i<nxz; i++)
+        {
+            prev[0][i]  *= 0.5 * par.dt*par.dt/ mod[2][i];
+            prev[1][i]  *= 0.5 * par.dt*par.dt/ mod[2][i];
+        }
+    }
+    else { // preva = K/2 * dt2 * src
+        inja->inject(false, src, preva[0], nx, nza, par.nt, inja->_ntr, 0, 0, inja->_ntr, inja->_xind.data(), inja->_zind.data(), inja->_xw.data(), inja->_zw.data());
+        for (int i=0; i<nxza; i++) preva[0][i]  *= 0.5 * moda[0][i]*par.dt*par.dt;
+    }   
+
+    int pct10 = round(par.nt/10);
+
+    for (int it=0; it<par.nt-1; it++)
+    {
+        // copy the current wfld to the full wfld vector
+        if ((par.sub>0) && (it%par.sub==0) && (grad==nullptr)) memcpy(u_full[it/par.sub], curr, 2*nxz*sizeof(data_t));
+        if ((par.sub>0) && par.acoustic_wavefield && (it%par.sub==0) && (grad==nullptr)) memcpy(phi_full[it/par.sub], curra, nxza*sizeof(data_t));
+
+        // extract receivers
+        if (grad == nullptr)
+        {
+            if (!adj){
+                ext->extract(true, curr[0], rcvx, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+                ext->extract(true, curr[1], rcvz, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+                exta->extract(true, curra[0], rcv, nx, nza, par.nt, exta->_ntr, it, 0, exta->_ntr, exta->_xind.data(), exta->_zind.data(), exta->_xw.data(), exta->_zw.data());
+            }
+            else{
+                if (!par.acoustic_source) {
+                    ext->extract(true, curr[0], rcvx, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+                    ext->extract(true, curr[1], rcvz, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+                }
+                else exta->extract(true, curra[0], rcv, nx, nza, par.nt, exta->_ntr, it, 0, exta->_ntr, exta->_xind.data(), exta->_zind.data(), exta->_xw.data(), exta->_zw.data());
+            }
+        }
+
+        // compute FWI gradients except for first and last time samples
+        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+
+        // apply spatial SBP operators
+        Dxx_var<expr2>(false, curra[0], nexta[0], nx, nza, dx, 0, nx, 0, nza, moda, 1.0);
+        Dzz_var<expr2>(true, curra[0], nexta[0], nx, nza, dz, 0, nx, 0, nza, moda, 1.0);
+
+        if (par.version==1)
+        {
+            Dxx_var<expr4a>(false, curr[0], next[0], nx, nz, dx, 0, nx, 0, nz, mod, 1.0);
+            Dzz_var<expr4a>(false, curr[1], next[1], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
+        }
+        else
+        {
+            Dxx_var<expr4b>(false, curr[0], next[0], nx, nz, dx, 0, nx, 0, nz, mod, 1.0);
+            Dzz_var<expr4b>(false, curr[1], next[1], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
+        }
+        
+        Dxx_var<expr2>(true, curr[1], next[1], nx, nz, dx, 0, nx, 0, nz, mod, 1.0);
+        Dzz_var<expr2>(true, curr[0], next[0], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
+        
+        Dx(false, curr[0], u_x[0], nx, nz, dx, 0, nx, 0, nz);
+        Dz(false, curr[1], u_z[1], nx, nz, dz, 0, nx, 0, nz);
+        
+        if (par.version==2)
+        {
+            mult_Dx(true, u_x[0], next[0], nx, nz, dx, 0, nx, 0, nz, mod[0], 1.0);
+            mult_Dz(true, u_z[1], next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
+        }
+        
+        mult_Dx(true, u_z[1], next[0], nx, nz, dx, 0, nx, 0, nz, mod[0], 1.0);
+        mult_Dz(true, u_x[0], next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
+
+        Dx(false, curr[1], u_x[1], nx, nz, dx, 0, nx, 0, nz);
+        Dz(false, curr[0], u_z[0], nx, nz, dz, 0, nx, 0, nz);
+        
+        mult_Dx(true, u_z[0], next[1], nx, nz, dx, 0, nx, 0, nz, mod[1], 1.0);
+        mult_Dz(true, u_x[1], next[0], nx, nz, dz, 0, nx, 0, nz, mod[1], 1.0);
+
+        // inject sources
+        if (adj){
+            inj->inject(true, srcx, next[0], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+            inj->inject(true, srcz, next[1], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+            inja->inject(true, src, nexta[0], nx, nza, par.nt, inja->_ntr, it, 0, inja->_ntr, inja->_xind.data(), inja->_zind.data(), inja->_xw.data(), inja->_zw.data());
+        }
+        else{
+            if (!par.acoustic_source){
+                inj->inject(true, srcx, next[0], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+                inj->inject(true, srcz, next[1], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+            }
+            else{
+                inja->inject(true, src, nexta[0], nx, nza, par.nt, inja->_ntr, it, 0, inja->_ntr, inja->_xind.data(), inja->_zind.data(), inja->_xw.data(), inja->_zw.data());
+            }
+        }
+
+        // apply boundary conditions
+        if (par.bc_top==1)
+        {
+            const data_t * in[1] = {curra[0]};
+            asat_dirichlet_top(true, in, nexta[0], nx, nza, dx, dz, par.pml_L*l, nx-par.pml_R*l, moda, alpha);
+        }
+        else if (par.bc_top==2)
+        {
+            const data_t * in[2] = {curra[0],preva[0]};
+            asat_absorbing_top(true, in, nexta[0], nx, nza, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, moda, 1.0);
+        }
+        if (par.bc_bottom==1)
+        {
+            const data_t * in[2] = {curr[1],curr[0]};
+            esat_neumann_bottom<expr2,expr2>(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            in[0] = curr[0]; in[1] = curr[1];
+            if (par.version==1) esat_neumann_bottom<expr1,expr4a>(true, in, next[1], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            else
+            {
+                esat_neumann_bottom<expr1,expr4b>(true, in, next[1], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+                esat_Dz_bottom<expr1>(true, curr[1], next[1], nx, nz, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+        }
+        else if (par.bc_bottom==2)
+        {
+            const data_t * in[3] = {curr[1],curr[0],prev[0]};
+            esat_absorbing_bottom<expr2,expr2,expr5>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            in[0] = curr[0]; in[1] = curr[1]; in[2] = prev[1];
+            if (par.version==1) esat_absorbing_bottom<expr1,expr4a,expr6>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            else
+            {
+                esat_absorbing_bottom<expr1,expr4b,expr6>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+                esat_Dz_bottom<expr1>(true, curr[1], next[1], nx, nz, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+        }
+        if (par.bc_left==1)
+        {
+            const data_t * ina[1] = {curra[0]};
+            asat_dirichlet_left(true, ina, nexta[0], nx, nza, dx, dz, par.pml_T*l, nza-par.pml_B*l, moda, alpha);
+
+            const data_t * in[2] = {curr[1],curr[0]};
+            if (par.version==1) esat_neumann_left<expr1,expr4a>(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            else
+            {
+                esat_neumann_left<expr1,expr4b>(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+                esat_Dx_left<expr1>(true, curr[0], next[0], nx, nz, dx, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            in[0] = curr[0]; in[1] = curr[1];
+            esat_neumann_left<expr2,expr2>(true, in, next[1], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+        else if (par.bc_left==2)
+        {
+            const data_t * ina[2] = {curra[0],preva[0]};
+            asat_absorbing_left(true, ina, nexta[0], nx, nza, dx, dz, par.dt, par.pml_T*l, nza-par.pml_B*l, moda, 1.0);
+
+            const data_t * in[3] = {curr[1],curr[0],prev[0]};
+            if (par.version==1) esat_absorbing_left<expr1,expr4a,expr6>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            else
+            {
+                esat_absorbing_left<expr1,expr4b,expr6>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+                esat_Dx_left<expr1>(true, curr[0], next[0], nx, nz, dx, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            in[0] = curr[0]; in[1] = curr[1]; in[2] = prev[1];
+            esat_absorbing_left<expr2,expr2,expr5>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+        if (par.bc_right==1)
+        {
+            const data_t * ina[1] = {curra[0]};
+            asat_dirichlet_right(true, ina, nexta[0], nx, nza, dx, dz, par.pml_T*l, nza-par.pml_B*l, moda, alpha);
+
+            const data_t * in[2] = {curr[1],curr[0]};
+            if (par.version==1) esat_neumann_right<expr1,expr4a>(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            else
+            {
+                esat_neumann_right<expr1,expr4b>(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+                esat_Dx_right<expr1>(true, curr[0], next[0], nx, nz, dx, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            in[0] = curr[0]; in[1] = curr[1];
+            esat_neumann_right<expr2,expr2>(true, in, next[1], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+        else if (par.bc_right==2)
+        {
+            const data_t * ina[2] = {curra[0],preva[0]};
+            asat_absorbing_right(true, ina, nexta[0], nx, nza, dx, dz, par.dt, par.pml_T*l, nza-par.pml_B*l, moda, 1.0);
+
+            const data_t * in[3] = {curr[1],curr[0],prev[0]};
+            if (par.version==1) esat_absorbing_right<expr1,expr4a,expr6>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            else
+            {
+                esat_absorbing_right<expr1,expr4b,expr6>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+                esat_Dx_right<expr1>(true, curr[0], next[0], nx, nz, dx, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            in[0] = curr[0]; in[1] = curr[1]; in[2] = prev[1];
+            esat_absorbing_right<expr2,expr2,expr5>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+
+        // apply boundary conditions at the interface without coupling 
+        {
+            const data_t * ina[1] = {curra[0]};
+            asat_neumann_bottom(true, ina, nexta[0], nx, nza, dx, dz, par.pml_L*l, nx-par.pml_R*l, moda, 1.0);
+
+            const data_t * in[2] = {curr[1],curr[0]};
+            esat_neumann_top<expr2,expr2>(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            in[0] = curr[0]; in[1] = curr[1];
+            if (par.version==1) esat_neumann_top<expr1,expr4a>(true, in, next[1], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            else
+            {
+                esat_neumann_top<expr1,expr4b>(true, in, next[1], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+                esat_Dz_top<expr1>(true, curr[1], next[1], nx, nz, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+        }
+
+        // update wfld with the 2 steps time recursion
+        #pragma omp parallel for
+        for (int i=0; i<nxza; i++)
+        {
+            nexta[0][i] = par.dt*par.dt*nexta[0][i]*moda[0][i] + 2*curra[0][i] - preva[0][i];
+        }
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++)
+        {
+            next[0][i] = par.dt*par.dt*next[0][i]/mod[2][i] + 2*curr[0][i] - prev[0][i];
+            next[1][i] = par.dt*par.dt*next[1][i]/mod[2][i] + 2*curr[1][i] - prev[1][i];
+        }
+
+        // scale boundaries when relevant (for locally absorbing BC only)
+        data_t * ina[1] = {nexta[0]};
+        data_t * in[2] = {next[0],next[1]};
+        asat_scale_boundaries(ina, nx, nza, dx, dz, 0, nx, 0, nza, moda, par.dt, par.bc_top==2, false, par.bc_left==2, par.bc_right==2);
+        esat_scale_boundaries(in, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, false, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
+
+        // apply the coupling at the interface
+        // next_phi = next_phi +- K.dt/2.1/Hz.(next_uz - prev_uz)
+        // next_uz = next_uz -+ dt/(2.rho).1/Hz.(next_phi - prev_phi)
+        int sign=(1-2*adj); // = 1 for forward modeling and = -1 for adjoint modeling
+        data_t h = dz*(17.0/48);
+        data_t val0 = par.dt/(2*h);
+        if (it==-1){
+            #pragma omp parallel for
+            for (int ix=0; ix<nx; ix++)
+            {
+                data_t val1 =  K*2*val0*(next[1][ix*nz]-curr[1][ix*nz] + sign*2*val0/mod[2][ix*nz]*curra[0][ix*nza+nza-1]); // K.dt.1/Hz.(next_uz - curr_uz +- dt/rho.1/Hz.curr_phi)
+                data_t val2 = 1 + 4*val0*val0*K/mod[2][ix*nz]; // 1 + K.dt2/rho.1/Hz.1/Hz
+                nexta[0][ix*nza+nza-1] = (nexta[0][ix*nza+nza-1] + sign*val1)/val2;
+                next[1][ix*nz] = next[1][ix*nz] - sign*2*val0/mod[2][ix*nz]*(nexta[0][ix*nza+nza-1] - curra[0][ix*nza+nza-1]);
+            }
+        }
+        else{
+            #pragma omp parallel for
+            for (int ix=0; ix<nx; ix++)
+            {
+                data_t val1 =  K*val0*(next[1][ix*nz]-prev[1][ix*nz] + sign*val0/mod[2][ix*nz]*preva[0][ix*nza+nza-1]); // K.dt/2.1/Hz.(next_uz - prev_uz +- dt/(2.rho).1/Hz.prev_phi)
+                data_t val2 = 1 + val0*val0*K/mod[2][ix*nz]; // 1 + K.dt2/(4.rho).1/Hz.1/Hz
+                nexta[0][ix*nza+nza-1] = (nexta[0][ix*nza+nza-1] + sign*val1)/val2;
+                next[1][ix*nz] = next[1][ix*nz] - sign*val0/mod[2][ix*nz]*(nexta[0][ix*nza+nza-1] - preva[0][ix*nza+nza-1]);
+            }
+        }
+        
+        taperz(curra[0], nx, nza, 0, nx, par.taper_top, 0, par.taper_strength);
+        taperz(curra[0], nx, nza, 0, nx, nza-par.taper_bottom, nza, par.taper_strength);
+        taperx(curra[0], nx, nza, 0, nza, par.taper_left, 0, par.taper_strength);
+        taperx(curra[0], nx, nza, 0, nza, nx-par.taper_right, nx, par.taper_strength);
+        taperz(nexta[0], nx, nza, 0, nx, par.taper_top, 0, par.taper_strength);
+        taperz(nexta[0], nx, nza, 0, nx, nza-par.taper_bottom, nza, par.taper_strength);
+        taperx(nexta[0], nx, nza, 0, nza, par.taper_left, 0, par.taper_strength);
+        taperx(nexta[0], nx, nza, 0, nza, nx-par.taper_right, nx, par.taper_strength);
+
+        taperz(curr[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+        taperz(curr[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+        taperx(curr[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+        taperx(curr[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+        taperz(curr[1], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+        taperz(curr[1], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+        taperx(curr[1], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+        taperx(curr[1], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+        taperz(next[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+        taperz(next[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+        taperx(next[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+        taperx(next[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+        taperz(next[1], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+        taperz(next[1], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+        taperx(next[1], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+        taperx(next[1], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+
+        bucketa=preva;
+        preva=curra;
+        curra=nexta;
+        nexta=bucketa;
+
+        bucket=prev;
+        prev=curr;
+        curr=next;
+        next=bucket;
+
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+    }
+
+    // copy the last wfld to the full wfld vector
+    if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (grad==nullptr)) memcpy(u_full[(par.nt-1)/par.sub], curr, 2*nxz*sizeof(data_t));
+    if ((par.sub>0) && par.acoustic_wavefield && ((par.nt-1)%par.sub==0) && (grad==nullptr)) memcpy(phi_full[(par.nt-1)/par.sub], curra, nxza*sizeof(data_t));
+
+    // extract receivers last sample
+    if (grad == nullptr)
+    {
+        if (!adj){
+            ext->extract(true, curr[0], rcvx, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+            ext->extract(true, curr[1], rcvz, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+            exta->extract(true, curra[0], rcv, nx, nza, par.nt, exta->_ntr, par.nt-1, 0, exta->_ntr, exta->_xind.data(), exta->_zind.data(), exta->_xw.data(), exta->_zw.data());
+        }
+        else{
+            if (!par.acoustic_source) {
+                ext->extract(true, curr[0], rcvx, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+                ext->extract(true, curr[1], rcvz, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+            }
+            else exta->extract(true, curra[0], rcv, nx, nza, par.nt, exta->_ntr, par.nt-1, 0, exta->_ntr, exta->_xind.data(), exta->_zind.data(), exta->_xw.data(), exta->_zw.data());
+        }
+    }
+    
+    delete [] u;
+    delete [] dux;
+    delete [] duz;
+    delete [] phi;
+    delete [] modela;
+    delete inja;
+    delete exta;
     if (grad != nullptr) delete [] tmp;
 }

@@ -69,8 +69,8 @@ void loper::dotProduct(){
     std::shared_ptr<vecReg<data_t> > d (new vecReg<data_t>(_range));
 
     //time_t timer; unsigned int seed=time(&timer);
-    m->random();
-    d->random();
+    m->random(-1,1,123);
+    d->random(-1,1,123);
 
     std::shared_ptr<vecReg<data_t> > mtild = m->clone();
     std::shared_ptr<vecReg<data_t> > dtild = d->clone();
@@ -1170,7 +1170,6 @@ void extrapolator1d2d::apply_forward(bool add, const data_t * pmod, data_t * pda
     data_t (* pm)[nz] = (data_t (*) [nz]) pmod;
     data_t (* pd)[nx][nz] = (data_t (*) [nx][nz]) pdat;
     const data_t * ph = _hrz->getCVals();
-
     for (int iy=0; iy<ny; iy++)
     {
         #pragma omp parallel for

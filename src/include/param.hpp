@@ -20,6 +20,7 @@ struct param{
     bool srcoord_from_file = false;
     std::vector<std::vector<data_t> > sxz;
     std::vector<std::vector<std::vector<data_t> > > rxz;
+    std::vector<std::vector<std::vector<data_t> > > rxza;
     std::vector<data_t> rdip;
     data_t gl=0;
 
@@ -39,12 +40,18 @@ struct param{
     data_t vpmin=0.2, vpmax=7, vsmin=0.2, vsmax=7, rhomin=0, rhomax=7, deltamin=-0.5, deltamax=1, epsilonmin=0, epsilonmax=1;
     data_t vmax=7, vmin=0.3;
 
+    // for acoustic-elastic coupling
+    bool acoustic_elastic=false, acoustic_source=true, acoustic_wavefield=false;
+    int nza=0;
+    data_t water_velocity=1.5, water_density=1;
+
     // model parameterization
     int nmodels=3;
-    bool bsplines=false, soft_clip=false;
+    bool bsplines=false, soft_clip=false, inversion1d=false;
     int bs_nx=3, bs_nz=3;
     std::vector<int> bs_mx, bs_mz;
     std::vector<data_t> bs_controlx, bs_controlz;
+    std::string horizon_file = "none";
 
     // inversion parameters
     std::string nlsolver="lbfgs", lsearch="regular_wolfe", mask_file="none", weights_file="none", inverse_diagonal_hessian_file="none";

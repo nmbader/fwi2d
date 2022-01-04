@@ -7,7 +7,7 @@
 
 extern cudaStream_t streams[5]; // CUDA kernel and memory copy streams
 
-void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
+void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const
 {
     int ndevices;
     int iGpu = par.devices[0];

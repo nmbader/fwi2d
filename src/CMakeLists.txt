@@ -71,8 +71,8 @@ target_link_libraries(fwi2d fftw3f fftw3)
 #add_library(nlsolvers ${SRC_NLSOLVER})
 
 #building the executables
-add_executable(TEST.x ${MAIN_DIR}/test.cpp)
-target_link_libraries(TEST.x fwi2d sep)
+#add_executable(TEST.x ${MAIN_DIR}/test.cpp)
+#target_link_libraries(TEST.x fwi2d sep)
 
 #add_executable(TEST_FD.x ${MAIN_DIR}/test_fd.cpp)
 #target_link_libraries(TEST_FD.x fwi2d sep)
@@ -137,5 +137,5 @@ install(TARGETS WE_MODELING.x
                 #FK_FILTER.x
                 #FWI2D0.x
                 #TEST_FD.x
-                TEST.x
+                #TEST.x
         DESTINATION bin)

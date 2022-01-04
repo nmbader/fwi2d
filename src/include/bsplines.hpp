@@ -133,6 +133,71 @@ public:
     }
 };
 
+// same as duplicate but in one dimension
+class duplicate1d : public loper {
+protected: 
+    std::vector<int> _mz; // multiplicity vector
+public:
+    duplicate1d(){}
+    ~duplicate1d(){}
+    duplicate1d(const hypercube<data_t> &domain, const std::vector<int> &mz){
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        successCheck(axes[0].n == mz.size(),__FILE__,__LINE__,"Domain first axis must match the size of multiplicity vector mz\n");
+        int nz=0;
+        for (int i=0; i<mz.size(); i++) {successCheck(mz[i]>=1,__FILE__,__LINE__,"Multiplicity must be >=1\n") ; nz += mz[i];}
+        axes[0].n = nz;
+        _domain = domain;
+        _range = hypercube<data_t>(axes);
+        _mz = mz;
+    }
+    duplicate1d * clone() const {
+        duplicate1d * op = new duplicate1d(_domain, _mz);
+        return op;
+    }
+    bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > dat) const {
+        return checkCompatible(mod, dat);
+    }
+    void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
+        successCheck(domain.isCompatible(_domain) && range.isCompatible(_range),__FILE__,__LINE__,"Domain or range and incompatible with the operator\n");
+        _domain = domain;
+        _range = range;
+    }
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat) {
+        
+        int nz = _domain.getAxis(1).n;
+        int nz2 = _range.getAxis(1).n;
+        int ny = _domain.getN123()/(nz);
+
+        int count;
+        #pragma omp parallel for private(count)
+        for (int i=0; i<ny; i++){
+            int count = 0;
+            for (int iz=0; iz<nz; iz++){
+                for (int j=count; j<count+_mz[iz]; j++) pdat[i*nz2+j] = add*pdat[i*nz2+j] + pmod[i*nz+iz];
+                count += _mz[iz];
+            }
+        }
+    }
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+        int nz = _domain.getAxis(1).n;
+        int nz2 = _range.getAxis(1).n;
+        int ny = _domain.getN123()/(nz);
+
+        if (add == false) memset(pmod, 0, _domain.getN123()*sizeof(data_t));
+
+        int count;
+        #pragma omp parallel for private(count)
+        for (int i=0; i<ny; i++){
+            count = 0;
+            for (int iz=0; iz<nz; iz++){
+                for (int j=count; j<count+_mz[iz]; j++) pmod[i*nz+iz] += pdat[i*nz2+j];
+                count += _mz[iz];
+            }
+        }
+    }
+};
+
 // Cubic B-splines model preconditioner
 // The 1st and last knots are always repeated 4 times
 // The control points are assumed to be the same as the knots except the 1st and last
@@ -145,10 +210,11 @@ public:
     bsplines3(){}
     ~bsplines3(){}
     bsplines3(const hypercube<data_t> &domain, const hypercube<data_t> &range, const std::vector<data_t> &kx, const std::vector<data_t> &kz){
+        successCheck(domain.getNdim()>=2,__FILE__,__LINE__,"Domain must have at least 2 dimensions\n");
         successCheck(domain.getAxis(1).n == kz.size()-4,__FILE__,__LINE__,"Domain first axis must have 4 samples less than the z knot vector\n");
         successCheck(domain.getAxis(2).n == kx.size()-4,__FILE__,__LINE__,"Domain second axis must have 4 samples less than the x knot vector\n");
         successCheck(domain.getNdim() == range.getNdim(),__FILE__,__LINE__,"Domain and range must have the same number of dimensions\n");
-        if (domain.getNdim() == 3) successCheck(domain.getAxis(3).n == range.getAxis(3).n,__FILE__,__LINE__,"Domain and range must have the same size in the 3rd dimension\n");
+        for (int i=3; i<=domain.getNdim(); i++) successCheck(domain.getAxis(i).n == range.getAxis(i).n,__FILE__,__LINE__,"Domain and range must have the same size in the other dimensions\n");
         for (int i=0; i<kx.size()-1; i++){
             successCheck(kx[i]<=kx[i+1],__FILE__,__LINE__,"Ux knot vector entries must be in ascending order.\n");
         }
@@ -260,6 +326,96 @@ public:
     }
 };
 
+// same as bsplines3 but in one dimension 
+class bsplines31d : public loper {
+protected:
+    std::vector<data_t> _kz; // knot vector
+    std::vector<int> _kzmin; // first useful index of the knot vector
+public:
+    bsplines31d(){}
+    ~bsplines31d(){}
+    bsplines31d(const hypercube<data_t> &domain, const hypercube<data_t> &range, const std::vector<data_t> &kz){
+        successCheck(domain.getAxis(1).n == kz.size()-4,__FILE__,__LINE__,"Domain first axis must have 4 samples less than the z knot vector\n");
+        successCheck(domain.getNdim() == range.getNdim(),__FILE__,__LINE__,"Domain and range must have the same number of dimensions\n");
+        for (int i=2; i<=domain.getNdim(); i++) successCheck(domain.getAxis(i).n == range.getAxis(i).n,__FILE__,__LINE__,"Domain and range must have the same size in the other dimensions\n");
+        for (int i=0; i<kz.size()-1; i++){
+            successCheck(kz[i]<=kz[i+1],__FILE__,__LINE__,"Uz knot vector entries must be in ascending order.\n");
+        }
+        for (int i=1; i<4; i++){
+            successCheck( (kz[i]==kz[0]) && (kz[kz.size()-1-i]==kz[kz.size()-1]),__FILE__,__LINE__,"The first and last 4 knots in the knot vector must be the same.\n");
+        }
+        successCheck(kz[0] == range.getAxis(1).o,__FILE__,__LINE__,"The origin of z knot and range z axis must be the same\n");
+
+        _domain = domain;
+        _range = range;
+        _kz = kz;
+
+        _kz[kz.size()-1] += 1e-06;
+        _kz[kz.size()-2] += 1e-06;
+        _kz[kz.size()-3] += 1e-06;
+        _kz[kz.size()-4] += 1e-06;
+
+        axis<data_t> Z = _range.getAxis(1);
+        data_t z;
+        _kzmin.resize(Z.n,0);
+        int count=0;
+        for (int i=1; i<Z.n; i++){
+            z = Z.o + i*Z.d;
+            while (z > _kz[count]) count++;
+            _kzmin[i] = count-4;
+        }
+    }
+    bsplines31d * clone() const {
+        bsplines31d * op = new bsplines31d(_domain, _range, _kz);
+        return op;
+    }
+    bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > dat) const {
+        return checkSame(mod, dat);
+    }
+    void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
+        successCheck(domain==_domain && range==_range,__FILE__,__LINE__,"Domain or range and different than the operator\n");
+        _domain = domain;
+        _range = range;
+    }
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+        axis<data_t> Z = _range.getAxis(1);
+        int ny = _range.getN123()/(Z.n);
+        int kz = _kz.size()-4;
+        data_t z;
+
+        if (add == false) memset(pdat, 0, _range.getN123()*sizeof(data_t));
+
+        #pragma omp parallel for private(z)
+        for (int iy=0; iy<ny; iy++){
+            for (int iz=0; iz<Z.n; iz++){
+                z = iz*Z.d+Z.o;
+                for (int j=_kzmin[iz]; j<_kzmin[iz]+4; j++){
+                    pdat[iy*Z.n+iz] += N3(j,z,_kz)*pmod[iy*kz+j];
+                }
+            }
+        }
+    }
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+        
+        axis<data_t> Z = _range.getAxis(1);
+        int ny = _range.getN123()/(Z.n);
+        int kz = _kz.size()-4;
+        data_t z;
+
+        if (add == false) memset(pmod, 0, _domain.getN123()*sizeof(data_t));
+
+        for (int iy=0; iy<ny; iy++){
+            for (int iz=0; iz<Z.n; iz++){
+                z = iz*Z.d+Z.o;
+                for (int j=_kzmin[iz]; j<_kzmin[iz]+4; j++){
+                    pmod[iy*kz+j] += N3(j,z,_kz)*pdat[iy*Z.n+iz];
+                }
+            }
+        }
+    }
+};
+
 // set the knot vector from control points and multiplicity vectors
 void setKnot(std::vector<data_t> &u, std::vector<data_t> &c, std::vector<int> &m){
     successCheck(c.size() == m.size(),__FILE__,__LINE__,"Control and multiplicity vectors must have the same size\n");
@@ -273,7 +429,7 @@ void setKnot(std::vector<data_t> &u, std::vector<data_t> &c, std::vector<int> &m
     u.push_back(c[c.size()-1]);
 }
 
-// populate the coarse spline vector from a dense regular vector using nearest neighbor
+// populate the coarse spline vector from a dense regular vector using linear interpolation
 void fillin(std::shared_ptr<vecReg<data_t> > c, const std::shared_ptr<vecReg<data_t> > v, const std::vector<data_t> &cx, const std::vector<data_t> &cz){
     axis<data_t> Z = c->getHyper()->getAxis(1);
     axis<data_t> Z2 = v->getHyper()->getAxis(1);
@@ -284,14 +440,39 @@ void fillin(std::shared_ptr<vecReg<data_t> > c, const std::shared_ptr<vecReg<dat
     int ny = c->getN123()/(X.n*Z.n);
     data_t * pc = c->getVals();
     const data_t * pv = v->getCVals();
-    int ix2, iz2;
+    int ix2, iz2, ix3, iz3;
+    data_t wx, wz;
     for (int iy=0; iy<ny; iy++){
         for (int ix=0; ix<X.n; ix++){
-            ix2 = round((cx[ix]-X2.o)/X2.d);
+            ix2 = floor((cx[ix]-X2.o)/X2.d);
+            ix3 = std::min(X2.n-1,ix2+1);
+            wx = (cx[ix] - X2.o - ix2*X2.d)/X2.d;
             for (int iz=0; iz<Z.n; iz++){
-                iz2 = round((cz[iz]-Z2.o)/Z2.d);
-                pc[iy*X.n*Z.n+ix*Z.n+iz] = pv[iy*X2.n*Z2.n+ix2*Z2.n+iz2];
+                iz2 = floor((cz[iz]-Z2.o)/Z2.d);
+                iz3 = std::min(Z2.n-1,iz2+1);
+                wz = (cz[iz] - Z2.o - iz2*Z2.d)/Z2.d;
+                pc[iy*X.n*Z.n+ix*Z.n+iz] = (1-wx)*(1-wz)*pv[iy*X2.n*Z2.n+ix2*Z2.n+iz2]  + wx*(1-wz)*pv[iy*X2.n*Z2.n+ix3*Z2.n+iz2] + (1-wx)*wz*pv[iy*X2.n*Z2.n+ix2*Z2.n+iz3] + wx*wz*pv[iy*X2.n*Z2.n+ix3*Z2.n+iz3];
             }
+        }
+    }
+}
+
+// same as fillin but in one dimension
+void fillin1d(std::shared_ptr<vecReg<data_t> > c, const std::shared_ptr<vecReg<data_t> > v, const std::vector<data_t> &cz){
+    axis<data_t> Z = c->getHyper()->getAxis(1);
+    axis<data_t> Z2 = v->getHyper()->getAxis(1);
+    successCheck(Z.n == cz.size(),__FILE__,__LINE__,"The coarse spline vector must have the same z size as the control vector\n");
+    int ny = c->getN123()/(Z.n);
+    data_t * pc = c->getVals();
+    const data_t * pv = v->getCVals();
+    int iz2, iz3;
+    data_t wz;
+    for (int iy=0; iy<ny; iy++){
+        for (int iz=0; iz<Z.n; iz++){
+            iz2 = floor((cz[iz]-Z2.o)/Z2.d);
+            iz3 = std::min(Z.n-1,iz2+1);
+            wz = (cz[iz] - Z2.o - iz2*Z2.d)/Z2.d;
+            pc[iy*Z.n+iz] = (1-wz)*pv[iy*Z2.n+iz2] + wz*pv[iy*Z2.n+iz3];
         }
     }
 }

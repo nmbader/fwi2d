@@ -833,6 +833,10 @@ void asat_dirichlet_top(bool add, const data_t** in, data_t* out, int nx, int nz
 void asat_dirichlet_bottom(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a);
 void asat_dirichlet_left(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a);
 void asat_dirichlet_right(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a);
+void asat_neumann_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a);
+void asat_neumann_bottom(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a);
+void asat_neumann_left(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a);
+void asat_neumann_right(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int izmin, int izmax, const data_t ** par, data_t a);
 void asat_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, data_t a);
 void asat_absorbing_bottom(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, data_t a);
 void asat_absorbing_left(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int izmin, int izmax, const data_t ** par, data_t a);
