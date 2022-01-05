@@ -1,0 +1,170 @@
+#
+# This file contains SEP distribution defs
+# 
+# These don't really fit are general makefile rules
+# but are needed for installing sep-distr
+#
+SEP=/usr/local/SEP
+#SEP=/usr/local/SEP_santa
+
+ifndef MAKE_DEPEND
+MAKE_DEPEND=yes
+endif
+
+BINDIR                 =  ${SEPBINDIR}
+OBJDIR                 =  ${SEP_ARCH}
+DEFAULT_DOC_PATH      :=  $(strip $(shell $(SEPINC)/fullpath $(SEPINC)/.. ))
+DEFAULT_DATA_DIR      :=  $(SEP)/scr
+MANSUFFIX             :=  ${SEPMANDIR}/man1
+MANSUBDIR             :=  .1
+MIX_LDFLAGS            =   ${CLDFLAGS}
+MIX_LIBDIRS            =   ${CLIBDIRS}
+MIX_LIBS               =   ${CLIBS}
+MIX_LD                 =   ${CLD}
+Native_xdr            :=   yes
+PEN_SPOOL              =  \"$(SEP)/scr/tmp\"
+SIGNED_CHAR            =  "char"
+SEPMANDIR             :=  ${SEP}/man
+VPLOT_FONT_DIRECTORY   =  $(SEPLIBDIR)/vplotfonts/
+SYSTEM_FONT_DIRECTORY  =  \"${VPLOT_FONT_DIRECTORY}\"
+
+#MACHINE SPECIFIC OVERIDES
+ifeq (${SEP_ARCH}, HP700)
+MANSUBDIR     :=   ${SEPMANDIR}/cat9
+MANSUFFIX     :=   .9
+endif
+
+ifeq (${SEP_ARCH}, DEC3100)
+SIGNED_CHAR           :=  "signed char"
+endif
+
+ifeq (${SEP_ARCH}, LINUX)
+Native_xdr            :=  no
+endif
+
+ifeq (${SEP_ARCH}, RS6000)
+SIGNED_CHAR           :=  "signed char"
+endif
+
+ifeq (${SEP_ARCH}, SGI)
+MIX_LDFLAGS            =   ${F77FLAGS}
+MIX_LIBDIRS            =   ${F77LIBDIRS}
+MIX_LIBS               =   ${F77LIBS}
+MIX_LD                 =   ${F77LD}
+SIGNED_CHAR           :=  "signed char"
+endif
+
+ifeq (${SEP_ARCH}, SGI32)
+MIX_LDFLAGS            =   ${F77FLAGS}
+MIX_LIBDIRS            =   ${F77LIBDIRS}
+MIX_LIBS               =   ${F77LIBS}
+MIX_LD                 =   ${F77LD}
+SIGNED_CHAR           :=  "signed char"
+endif
+
+ifeq (${SEP_ARCH}, SGI64)
+MIX_LDFLAGS            =   ${F77LDFLAGS}
+MIX_LIBDIRS            =   ${F77LIBDIRS}
+MIX_LIBS               =   ${F77LIBS}
+MIX_LD                 =   ${F77LD}
+SIGNED_CHAR           :=  "signed char"
+endif
+
+ifndef SITE_LIBDIRS
+	SITE_LIBDIRS = ${SEPLIBDIR}
+endif
+
+#A general rule for making sub-directories
+#It doesn't really belong here but in the distr.rules 
+#but with a generic clean rule it useful
+#Rather opaque
+
+
+ifndef MakeSubDirs
+define MakeSubDirs
+	@${SEPINC}/mtest.x SEP_ARCH=$(SEP_ARCH) COPY_TO=${COPY_TO}/#DIR# COMPILE_LEVEL=${COMPILE_LEVEL} $@ SUBDIRS="${SUBDIRS}"
+endef
+endif
+
+
+#
+
+#============================================================================
+# SET THE ALL VARIABLE AND SUBDIRS DIRECTORY VARIABLE
+#
+# Wierd  way to set what we want 
+# to actually compile.  distr is the basic stuff
+# local includes stuff we use, but haven't sufficiently tested,
+# all is everything we have a rule for
+# 
+#
+ifeq ($(COMPILE_LEVEL),local)
+ALL = ${DISTR} ${LOCAL}
+ifndef UF77LIBS
+UF77LIBS = ${UF77LOCALLIBS} ${UF77DISTRLIBS}
+endif
+ifndef UF90LIBS
+UF90LIBS = ${UF90LOCALLIBS} ${UF90DISTRLIBS} 
+endif
+ifndef UCLIBS
+UCLIBS = ${UCLOCALLIBS} ${UCDISTRLIBS} 
+endif
+else
+
+ifeq ($(COMPILE_LEVEL),all)
+ALL = ${DISTR} ${LOCAL} ${OLD}
+ifndef UF77LIBS
+UF77ALLLIBS = ${UF77ALLLIBS}   ${UF90LOCALLIBS} ${UF90DISTRLIBS}
+endif
+ifndef UF90LIBS
+UF90LIBS = ${UF90ALLLIBS}  ${UF77LOCALLIBS} ${UF77DISTRLIBS}
+endif
+ifndef UCLIBS
+UCLIBS = ${UCALLLIBS}  ${UCLOCALLIBS} ${UCDISTRLIBS}
+endif
+else
+ALL = ${DISTR}
+ifndef UF77RLIBS
+	UF77LIBS = ${UF77DISTRLIBS}
+endif
+ifndef UF90LIBS
+	UF90LIBS = ${UF90DISTRLIBS}
+endif
+ifndef UCLIBS
+	UCLIBS = ${UCDISTRLIBS}
+endif
+endif #COMPILE_LEVEL=all
+endif #COMPILE_LEVEL=loval
+
+
+
+#SET UP DEFAUL DIRECTORY LOCATIONS
+
+
+ifndef  Add_Mtype
+   Add_Mtype := after
+endif
+
+
+ifeq ($(Add_Mtype),after)
+   SEPBINDIR                      =        $(SEP)/bin/$(SEP_ARCH)
+   SEPLIBDIR                      =        $(SEP)/lib/$(SEP_ARCH)
+   SEPINCDIR                      =        $(SEP)/include/$(SEP_ARCH)
+   SEPMANDIR                      =        $(SEP)/man
+endif 
+
+ifeq ($(Add_Mtype),before)
+   SEPBINDIR                      =        $(SEP)/$(SEP_ARCH)/bin
+   SEPLIBDIR                      =        $(SEP)/$(SEP_ARCH)/lib
+   SEPINCDIR                      =        $(SEP)/$(SEP_ARCH)/include
+   SEPMANDIR                      =        $(SEP)/$(SEP_ARCH)/man
+endif
+
+ifeq ($(Add_Mtype),no)
+   SEPBINDIR                      =        $(SEP)/bin
+   SEPLIBDIR                      =        $(SEP)/lib
+   SEPINCDIR                      =        $(SEP)/include
+   SEPMANDIR                      =        $(SEP)/man
+endif
+
+

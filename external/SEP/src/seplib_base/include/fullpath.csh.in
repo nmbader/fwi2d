@@ -1,0 +1,13 @@
+#!@CSH@ -f
+
+#
+# A shell to return an absolute path given a relative one
+# Used by Makefile.SEP.defs to find the absolute path of
+# this directory.
+#
+
+pushd $1 >&/dev/null
+#pwd | sed -e 's+^/tmp_mnt/+/+' 
+#pwd 
+echo $cwd
+popd >& /dev/null

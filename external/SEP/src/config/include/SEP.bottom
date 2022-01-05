@@ -1,0 +1,14 @@
+#
+# SEP.bottom
+#
+# Belongs after local defines (most likely at the bottom) of Makefile
+#
+
+include ${SEPINC}/SEP.local.rules
+include ${SEPINC}/Doc.rules.test
+include ${SEPINC}/Doc.rules.fig
+include ${SEPINC}/Doc.rules.html
+include ${SEPINC}/Doc.rules.action
+include ${SEPINC}/Doc.rules.clean
+include ${SEPINC}/Doc.defs.bottom
+include ${SEPINC}/Prog.rules.bottom

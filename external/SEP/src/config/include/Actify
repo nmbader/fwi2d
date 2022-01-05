@@ -1,0 +1,277 @@
+#!/usr/bin/perl
+# author: Sergey Fomel,   22Jan97 
+# Hector Urdaneta (HU): 9/97
+# * Modified Actify so that for any command specified in the @commands
+# list, Actify will remove it and its argument from the output file.
+# The filosophy is to be able to remove ``comment'' commands from
+# the tex file, like for example, Jon's \todo command. It is easier
+# to get read of them at this level than to have to handle them
+# in latex2html
+
+
+$usage = "Usage: $0 file.tex [file2.tex ...]\n";
+$selfdoc = "Reads a list of results from the makefile in the current directory
+and supplies correct \\figdir and correct buttons for activeplot macros. 
+Prepends directory (and chapter) names to user-defined bibliographies, 
+input commands, labels, and references.
+
+See also: Latify latex2dvi (based on former texpr)
+";
+
+die ($usage . $selfdoc) if ($#ARGV < 0);
+
+unshift (@INC, '/opt/SEP/SEP8.0/share');
+require ("septex.pl");
+
+if (-e "makefile" || -e "Makefile" || -e "GNUmakefile") {
+		($book, $logfile) = &getBook ('(book|report|book_active)');
+    ($thesis, $logfile) = &getBook ('thesis-report');
+}
+
+$* =  1;             # change to multi-line mode
+$/ = "";             # change to paragraph mode
+# $b matches the contents of {} allowing a single level of nesting
+# If an argument of activeplot has more than one level of nesting,
+# this will not work (Joel)
+$b = "\{((?:[^\}\{]*)(?:[^\{\}]*\{[^\}]*\}[^\{\}]*)*)\}";
+
+# The following list of commands and its "{...}" argument will
+# be taken out from the output file.
+# Bugs: It assumes only one set of {}, for its argumets
+# Typical use is for not outputting "comment" commands.
+@commands = ( 'todo' );
+
+&setMake;
+while ($file = shift (@ARGV)) {
+    &search_n_replace ($file) ;
+#    &ignore_commands ($file) ; # erase @commands from output
+}
+exit (0);
+
+#---------------- Subroutines -----------------------------------------
+
+sub search_n_replace {
+    local ($infile) = @_;
+    local ($dir, $paper,$inpaper,$topdir);
+    open (INFILE, $infile) or die "$0: Couldn't open infile $infile\n";
+    print "$0: opened $infile\n";
+    $dir = $infile;
+    $dir =~ s/[\/]?(?:[^\/]+)$//;
+    if ($dir ne $olddir) {
+	$topdir = $ENV{"PWD"} or chomp ($topdir = `pwd`);
+	chdir ($dir) or die "$0: Wrong directory $dir\n";
+	print "$0: chdir $dir\n";
+	undef %results;
+	&setMake;       # set $resdir, %results
+	$olddir = $dir;
+	chdir ($topdir);
+    }
+    if ($book) {
+	$paper = $dir;
+	$paper =~ s/^.*\///;
+	$inpaper = $paper;	
+    }
+    local (@pars) = <INFILE>; # split into paragraphs
+    close (INFILE);
+    if ($book) {
+	foreach $par (@pars) {
+	    my @lines = split (/\n/,$par);
+	    foreach (@lines) {
+		my $comment = '';
+		$comment = $3 if (s/([^\%]*([^\\]))?(\%.*)$/$1/o);
+#		print "comment is $3\n char is $1\n" if ($comment);
+		%includes = map {$_, 1} split (/\,/,$1) 
+		    if (/\\includeonly\{([^\}]+)/);
+		$paper = $2 if (/\\label\{([^\}\s]+\/)?paper\:([^\}\s]+)/);
+		if ($paper) {
+		    s/(\\label\{)([^\/])/$1$paper\/$2/g;
+		    s/(\\[v]?(?:page)?ref\{)([^\s\}]+)/$1 . &Ref ($2)/eg;
+		}
+		$_ .= $comment;
+	    }
+	    $par = join ("\n",@lines) . "\n";
+	}
+    }    
+
+    $plots = 0;
+    foreach (@pars) {
+	s/\\(?:def|renewcommand)\s*[\{]?\\(?:figdir|papername)[\}]?\s*\{[^\}]*\}//g; 
+	s/((?:^|\n)[^\%\n]*)(\\active\w*plot[\[]?\w*[\]]?)\s*$b\s*$b\s*$b/&Plot ($1,$2,$3,$4)/eg;
+	s/((?:^|\n)[^\%\n]*)\\((?:side)?plot(?:\[\w*\])?)\s*$b\s*$b/&Plot ($1, '\active' . $2,$3,$4)/eg;
+	s/((?:^|\n)[^\%]*)\\(floatplot(?:\[\w*\])?)\s*$b\s*$b\s*$b/&FloatPlot ($1,$2,$3,$4,$5)/eg;
+	$dir   = $1 if (/\\inputdir\{([^\}]+)/);
+	s/\\(?:sep)?((?:verbatimtab)?input\{|include\{)([^\}\s]+)\}/join($1,"\\",&Input($2))/eg;
+	s/(\\putbib\[|\\bibliography\{)([^\]\}\s]+)/$1 . &checkBib ($2)/eg;
+	s/^\\beq[\%\n\s](\s+)?/\\begin\{equation\}\n/g;
+	s/(^|\s)\\eeq[\%\n\s](\s+)?/\\end\{equation\}\n/g;
+    }
+
+    &printOut ($infile);
+    foreach (@pars) {
+	&checkInputs (split (/\n/));
+    }
+}
+
+sub FloatPlot {
+    my ($before,$plot, $width, $name, $size) = @_;
+    $plots++;
+    my $result = $results{$name};
+    $name =~ s/\./\\DOT /g;
+    print "$0: found floatplot\{$name\}\n";
+    join('',$before,'\active',$plot,'{',$width,'}{',
+	 $name,'}{',$size,'}{',$result,'}');
+}
+
+sub Plot {
+    my ($before,$plot, $name, $size) = @_;
+    $plots++;
+    my $result = $results{$name};
+    $name =~ s/\./\\DOT /g;
+    print "$0: found $plot\{$name\}\n";    
+    join('',$before,$plot,'{',$name,'}{',$size,'}{',$result,'}');
+}
+
+sub Ref {
+    my $ref = shift;
+    $ref =~ /\// ? $ref : join ('/',$paper,$ref);
+}
+
+sub printOut {
+    my $outfile = shift;
+    $outfile =~ s/\.tex$//;
+    $outfile .= '_act.tex';
+    open (OUTFILE, "> $outfile") or die "$0: Couldn't write to outfile $outfile\n";
+    if (($book || $thesis) && ($infile =~ /paper\.tex$/)) {
+	print "$0: papername is $paper\n" if ($paper);
+	print OUTFILE join ("\n",'\cleardoublepage',
+			    '\thispagestyle{septwo}',
+			    join ($inpaper, '\label{','.start}'),
+			    join ($paper, '\def\papername{',"\}\n"));
+    }
+    print OUTFILE "\\inputdir\{\}\n" if ($resdir =~ /^\//);
+    print OUTFILE join ($resdir,"\\def\\figdir\{","\}\n") if ($plots);
+    print OUTFILE (@pars);
+    if (($book || $thesis) && ($infile =~ /paper\.tex$/)) {
+	print OUTFILE "\\clearpage\n";
+	print OUTFILE join ($inpaper, "\\label\{",".end\}\n");
+    }    
+    close (OUTFILE);
+    print "$0: wrote $outfile\n";
+}
+
+sub Input {
+    local ($input) = @_;
+    if ($dir) {
+	$input = join ('/',$dir,$input) unless ($input =~ /^(\.\.|\/)/);
+    }
+    $input =~ s/\.tex$//;
+    join ('_act',$input,'}');
+}
+
+sub checkBib {
+    local ($bibstring) = @_;
+    local (@bibs) = split (/\s*\,\s*/,$bibstring);
+    foreach $bib (@bibs) {
+	$bib =~ s/^.*\///;
+	if (-e "$dir/$bib.bib") {
+	    $bib = join ('/',$dir,$bib) if ($dir);
+	    print "$0: including bibliography $bib\n"; 
+	}
+    }
+    join (',',@bibs);
+}
+
+# set $resdir to the result directory using makefile's RESDIR variable
+# forms an associative array %results for RESULTS(ER|CR|NR)
+sub setMake {
+    if (-e "makefile" || -e "Makefile" || -e "GNUmakefile") {
+	chomp ($resdir = `gmake RESDIR.varvalue`);
+	print "Resdir is $resdir\n";
+	foreach $rep ("ER","CR","NR") {
+	    my $res = join ($rep, " RESULTS", "\.varvalue");
+	    chomp ($_ = `gmake $res`);
+	    foreach $fig (split (/\s/)) {
+		$results{$fig} = $rep;         # %results is a hash
+		print "Figure $fig is $rep\n";
+		if (-e "$resdir/$fig.v3") {
+		    $results{$fig} .= ",M";
+		    print "Figure $fig has a movie\n";
+		}
+	    }
+	}
+	if (my $resnum = keys (%results)) {
+	    die "$0: No such directory $resdir\n" unless (-d $resdir);
+	}
+    } else {
+	print "No makefile\n";
+    }
+}
+
+# Goes through paper_act.tex file and removes all commands defined
+# in @commands. Used for removing Jon's \todo{...} command
+sub ignore_commands {
+    local ($file) = @_;
+    local ($pos, $count) = (0, 0);
+    local (@out) ;
+
+    $file =~ s/\.tex$//;
+    $file .= '_act.tex';
+    open (FILE, "+< $file") or die "$0: Couldn't open file $file\n";
+
+    $tmp1 = $* ; $tmp2 = $/ ;
+    $* = 1 ; $/ = "{";     # set input record separator to {
+
+LINE:
+    while(<FILE>) {
+	foreach $command (@commands) {
+	    if ( /^[^\%]*\\$command\s*\{/ ) {
+		$pos = length $_ ;
+		$pos = rindex($_, $command, $pos) ;
+		$pos = $pos - length($_) -1; 
+		# erase $command from $_
+		substr($_,$pos) = "" ;
+		$out[$count++] = $_ ; 
+		$/ = "}" ; 
+		$str = "{".<FILE> ;
+		&close_bracket(*str, *FILE) ;
+		$/ = "{" ;
+		next LINE ;
+	    }
+	}
+	$out[$count++] = $_ ;
+    }
+    $* = $tmp1 ; $/ = $tmp2 ; # reset old parsing values
+    close (FILE) ;   
+
+    # write output to file
+    open (FILE, ">$file") or die "$0: Couldn't open file $file\n" ;
+    print FILE join('', @out) ; 
+    close (FILE) ;
+}
+
+# Search for closing brackets (allowing nesting)
+sub close_bracket{
+   local(*str, *IFILE) = @_;
+   $nest_level = 0;
+   &nest_depth(*nest_level, $str);
+   if ($nest_level > 0) {
+       while (<IFILE>) {
+	   $str = $str.$_;
+	   &nest_depth(*nest_level, $_);
+	   if ($nest_level <= 0) { last; }
+       }
+   }
+}
+
+sub nest_depth{
+   local(*count, $str) = @_;
+   $count = $count + ($str =~ s/{//g);
+   $count = $count - ($str =~ s/}//g);
+}
+
+
+
+
+
+
+

@@ -1,0 +1,84 @@
+
+SEP's laboratory-wide standard rules 
+for reproducible electronic documents
+
+				
+These rules are adapted to SEP's compute environment. 
+docs/Rules contains a more generic version. 
+
+		(matt@sep.stanford.edu)
+
+  SUMMARY 
+
+To organize computational scientific research 
+and hence to conveniently transfer our technology,
+we impose a simple filing discipline on the authors in our laboratory.
+A document's makefile includes laboratory-wide standard rules
+that offer readers these four standard commands:
+   make burn  removes the document's result figures, 
+   make build  recomputes them, 
+   make view  displays the figures, and 
+   make clean  removes any intermediate files.
+Although we developed these standards to aid readers
+we discovered that authors are often the principal beneficiaries.
+
+
+Contents:
+
+ o Doc files:	implements SEP's make rules and variable definitions 
+		for SEP's electronic reproducible documents.
+
+ o Prg files: 	implements SEP's make rules and variable definitions for 
+		compiling, linking, and installation of executables.
+
+ o SEP files:	organizes the inclusion of the various make source code.
+
+ o Adm dir: 	contains administrative files 
+
+ o docs dir: 	contains the documentation for SEP's reproducible research
+		system.
+
+
+ o docs/cip dir: 	contains our white paper on reproducible electronic
+			documents (if you want to find out what it is all
+			about start here).
+
+ o docs/Rules dir: 	contains a generic set of rules for reproducible
+			electronic documents.
+
+ o docs/Frog dir: 	contains a generic example of a reproducible
+			electronic document.
+
+ o docs/index file:	offers our reproducible research software on the
+			World Wide Web.
+
+ o docs/sephelp dir: 	describes the SEP specific rules for reproducible
+			document (not yet in great shape).
+
+ o docs/cake.ps: 	discusses an earlier implementation of our reproducible
+			electronic document.
+
+ o docs/seg92.html:	reports on our first reproducible electronic document
+			efforts to the Society of Exploration Geophysicists.
+
+ o docs/blurb.html:	reports to SEP's sponsors on our progress in various
+			technology areas, such as reproducible electronic 
+			documents.
+
+ o docs/cdvswww.html: 	expresses SEP's disappointment delivering reproducible
+			research using CD-ROM technology for UNIX workstations.
+
+
+To Do List: 
+
+ o Matt: we need SEP.shell.rules that implements 
+	cross platform installations (as in our/word/Adm/Src ...)
+
+ o Matt: {\it every} document level (book, chapter, figure level) should
+	offer the same standard commands  (clean,burn,build,view).
+	Book level is missing. Chapter level should be automatically
+	up dated. 
+
+ o Matt: How to extract single chapters (for web distribution)?
+
+

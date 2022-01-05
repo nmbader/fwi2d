@@ -1,0 +1,29 @@
+#Generic copy rule
+
+ifeq ($(COMPILE_LEVEL),all)
+ALL_FILES = $(wildcard $(notdir $(addsuffix .*, ${ALL} $(basename ${OBJECTS}) )) ${EXTRA_DISTR_FILES} ${EXTRA_LOCAL_FILES} ${EXTRA_OLD_FILES} README Makefile ${SOURCES} )
+endif 
+ifeq ($(COMPILE_LEVEL),local)
+ALL_FILES = $(wildcard $(notdir $(addsuffix .*, ${ALL} $(basename ${OBJECTS}) )) ${EXTRA_DISTR_FILES} ${EXTRA_LOCAL_FILES}  README Makefile ${SOURCES})
+endif 
+ifeq ($(COMPILE_LEVEL),distr)
+ALL_FILES = $(wildcard $(notdir $(addsuffix .*, ${ALL} $(basename ${OBJECTS}) )) ${EXTRA_DISTR_FILE} README Makefile ${SOURCES})
+endif
+
+copy:
+ifdef COPY_TO
+	@if [ ! -d $(COPY_TO) ]; then \
+	${MKDIR} $(COPY_TO); \
+	fi;
+	@-${CP} -r ${ALL_FILES} ${COPY_TO}
+	
+
+ifdef SUBDIRS
+	${MakeSubDirs}
+endif
+else
+	@echo COPY_TO undefined
+endif
+
+.DEFAULT: 
+	$(MakeSubDirs)

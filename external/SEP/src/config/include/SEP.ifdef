@@ -1,0 +1,32 @@
+#
+# SEP.distr.ifdef
+#
+# Certain variables  can be overriden in SEP.site.defs
+# which can effect variable declerations
+
+
+ifeq ($(Have_PPM),yes)
+PPM_SRC := /usr/local/src/pub/X11R5.$(SEP_ARCH)/contrib/clients/pbmplus
+PPM_INCLUDES := -I$(PPM_SRC) -I$(PPM_SRC)/ppm -I$(PPM_SRC)/pgm -I$(PPM_SRC)/pbm
+PPM_LIBS := $(PPM_SRC)/ppm/libppm.a $(PPM_SRC)/pgm/libpgm.a $(PPM_SRC)/pbm/libpbm.a
+endif
+
+ifndef SEPINCDIR
+	SEPINCDIR =  ${SEP}/include
+endif
+
+ifndef SEPBINDIR
+	SEPBINDIR =  ${SEP}/bin
+endif
+
+ifndef SEPLIBDIR
+	SEPLIBDIR =  ${SEP}/lib
+endif
+
+OCFLAGS := -I${SEPINCDIR}  ${OCFLAGS} 
+OC++FLAGS := -I${SEPINCDIR} ${OC++FLAGS} 
+ifeq (${SEP_ARCH}, SOLARIS)
+OF90FLAGS := -M${SEPINCDIR} -M. ${OF90FLAGS} 
+else
+OF90FLAGS := -I${SEPINCDIR} -I. ${OF90FLAGS} 
+endif

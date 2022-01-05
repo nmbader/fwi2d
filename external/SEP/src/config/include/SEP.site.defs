@@ -1,0 +1,8 @@
+ifndef SEP
+SEP=/usr/local/SEP
+endif
+COMPILE_LEVEL=local
+ifeq (${SEP_ARCH}, SOLARIS)
+	X11LIBDIR = /usr/pubsw/X/lib
+	SEP=/sepwww/httpd/htdocs/pub/sep/bob/test_it
+endif

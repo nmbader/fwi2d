@@ -1,0 +1,45 @@
+#
+#Prog.rules.shell
+#
+# File for csh, lex, sh, perl, etc
+
+
+# First a mechanism for handeling lex
+%.c: %.l
+ifeq (${SEP_ARCH}, SOLARIS)
+	<$*.l  $(LEX) >$@
+else
+	<$*.l  $(LEX)
+	$(MV) lex.yy.c $*.c
+endif
+
+
+#Next a general mechanism for installing shells
+
+ifndef INSTALL_SHELL
+define INSTALL_SHELL
+	${compile.init}
+	  sed -e s,CSH_LOC,${CSH},g $^ | \
+	  sed -e s,SH_LOC,${SH},g  |\
+	  sed -e s,PERL_LOC,${PERL},g|  \
+	  sed -e s,BINDIR,${BINDIR},g |  \
+	  sed -e s,PROGRAM_NAME,$@,g  \
+		 > ${OBJDIR}/a.out
+	${INSTALL_AOUT}
+endef
+endif
+	
+# Rules for installing various shells
+
+${BINDIR}/%.x:	${SRCDIR}/%.sh
+	${INSTALL_SHELL}
+	
+${BINDIR}/%.x:	${SRCDIR}/%.csh
+	${INSTALL_SHELL}
+
+${BINDIR}/%.x:	${SRCDIR}/%.tcsh
+	${INSTALL_SHELL}
+	
+${BINDIR}/%.x:	${SRCDIR}/%.pl
+	${INSTALL_SHELL}
+	

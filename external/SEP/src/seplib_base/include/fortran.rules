@@ -1,0 +1,87 @@
+
+SUFFIXES = .f90s .r90 .lop .F90sep .rs90 .f90 _mpi.f90 \
+	.o _mpi.o M.o M.lo .lo _mpi.lo .csep .c M.c M.o M.lo
+
+# rs90   - main program in ratfor90
+# r90    - non-main in ratfor90
+# F90sep - main program in fortran90
+# lop    - library program in loptran (an even more condensed way to write
+#          an operator)
+# f90s   - fortran90 in which a preprocessor should be run to generate final
+#          fortran90
+# f90    - fortran90 without preprocessor calls
+
+
+#LINK = $(LIBTOOL) --tag=F77 --mode=link $(FC) $(AM_CFLAGS) $(CFLAGS) \
+#	$(AM_LDFLAGS) $(LDFLAGS) $(CFCLDFLAGS) -o $@
+
+F77COMPILE = $(FC) $(FCFLAGS) $(FCFLAGS_F90) $(FCFLAGS_f90)
+
+LTF77COMPILE = $(LIBTOOL) --tag=F77 --mode=compile $(FC) \
+	$(AM_FFLAGS) $(FCFLAGS) $(FCFLAGS_f90) $(FCFLAGS_F90)
+
+FCLINK = $(LIBTOOL) --tag=F77 --mode=link $(FC) \
+	$(AM_FFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+
+F77LINK = $(LIBTOOL) --tag=F77 --mode=link $(FC) \
+	$(AM_FFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+
+RATSEPME = $(SEPRAT)
+
+%.o: %.f90
+	$(F77COMPILE) -c -o $@ $<
+
+%_mpi.o: %_mpi.f90
+	$(F77COMPILE) $(MPI_FLAGS) -c -o $@ $<
+
+%.lo: %.f90
+	$(LTF77COMPILE) -c -o $@ $<
+
+%_mpi.lo: %_mpi.f90
+	$(LTF77COMPILE) $(MPI_FLAGS) -c -o $@ $<
+
+%M.f90: %M.f90s Makefile
+	$(RATSEPME) -dofpp $(FCDEFINES) $(MPI_FLAGS) $<
+
+%_mpi.f90: %_mpi.f90s Makefile
+	$(RATSEPME) -dofpp $(FCDEFINES) $(MPI_FLAGS) $<
+
+%.f90: %.f90s Makefile
+	$(RATSEPME) -dofpp $(FCDEFINES) $<
+
+%.f90s: %.r90
+	 $(RATSEPME) -c -dof90 $<
+
+%.f90s: %.lop
+	$(RATSEPME) -c -dof90 $<
+
+%.f90s: %.F90sep
+	$(RATSEPME)  -dof90  $<
+
+%.f90s: %.rs90 
+	$(RATSEPME) -c -dof90 -sepmain $<
+
+%.c: %.csep
+	$(SEPDOCIT) -C < $< > $@
+
+%M.o: %M.c
+	$(COMPILE) $(MPI_FLAGS) -c -o $@ $<
+
+%M.lo: %M.c
+	$(LTCOMPILE) $(MPI_FLAGS) -c -o $@ $<
+
+
+clean-local:
+	-rm -rf work.pc
+
+install-data-local:
+	$(mkinstalldirs) $(includedir)
+	@for suffix in $(FCMODSUFFIX); do \
+	  touch junk.$$suffix;\
+	  ${MAKE} SUFFIX=$$suffix move_mod;\
+	done
+                                                                                
+move_mod:
+	@for file in $(wildcard $(addprefix *., ${SUFFIX})); do \
+	  $(CP) $$file $(includedir); \
+	done

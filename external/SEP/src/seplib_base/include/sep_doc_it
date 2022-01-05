@@ -1,0 +1,89 @@
+#!/usr/bin/env perl
+use Pod::Text;
+
+
+
+$start=0;
+$buffer="";
+$tot_bef="";
+$tot_aft="";
+$found=0;
+$type=$ARGV[0];
+$file=$ARGV[1];
+$look_for="ADD_SEP_DOC";
+
+$doc.="";
+if($type eq "-fortran"){
+$look_for="call SEP_ADD_DOC";
+ $line_n_bef='call sep_add_doc_line("';
+ $line_n_aft="\")\n";
+}
+elsif($type eq "-C"){
+ $line_d_bef="\\\n sep_add_doc_line(\"";
+ $line_d_aft='");';
+ $doc_d.="#define MY_SEP_DOC ";
+
+ $line_n_bef='sep_add_doc_line("';
+ $line_n_aft="\");\n";
+ $doc_n.="";
+}
+
+#open(MYFILE,$file);
+$myd=0;
+while ($line=<STDIN>) {
+ if($line=~/^\s*$look_for\s*/) {
+    $found=1;
+    $doc=$doc_n;
+    $line_bef=$line_n_bef;
+    $line_aft=$line_n_aft;
+  }
+ elsif($line=~/^\s*ADD_DEF_SEP_DOC\s*/) {
+    $found=1;
+    $doc=$doc_d;
+    $line_bef=$line_d_bef;
+    $line_aft=$line_d_aft;
+  }
+ else{
+   if($found==1) { $tot_aft.=$line;}
+   else {$tot_bef.=$line;}
+ if ($start == 0 && $line=~/^\s*\=head1\s+NAME/) {
+  	$start = 2;
+    $comment="";
+  }
+  elsif ($start == 0 && $line=~/^(.*)\=head1 NAME/) {
+     $test=$1;
+     $comment = quotemeta $1;
+     if($test =~/^!/ || $test =~ /^#/){ $start = 1; $look=0; }
+  }
+  if($start==1){ $line=~s/$comment//;}
+	if($line=~/^\s*$/){ $line="\n";}
+  if($line=~/^=head1\s+(\S.+\S)\s*$/){ $line="=head1 $1\n\n";}
+  if($start >0 ) {$buffer.=$line;}
+
+}
+}
+
+#close(MYFILE);
+$d=`date`; chomp($d);
+$d=~s/ /_/gm;
+$file=$ENV{"USER"}.$d;
+$file1="/tmp/$file"."1";
+$file2="/tmp/$file"."2";
+open(JUNKT,">$file1");
+
+#PRINT STDERR "CHECK THIS $tot_bef $tot_aft \n";
+
+if($start>0){ print JUNKT "$buffer  \n"; }
+else{  print STDERR "die $0: no POD found\n";}
+close(JUNKT);
+system("pod2text <$file1 >$file2 ");
+open(JUNKT,"$file2");
+while ($line=<JUNKT>) {
+ chomp($line);
+ $doc.="$line_bef$line$line_aft";
+}
+close(JUNKT);
+print STDOUT  $tot_bef;
+print STDOUT  "$doc\n";
+print STDOUT $tot_aft;
+

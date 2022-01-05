@@ -1,0 +1,68 @@
+#SEP.machine.type
+
+#This file simply tries
+#to figure out machine type
+#and set the variable SEP_ARCH accordingly
+#
+# This is quite slow, so better to set enviornmental
+# variable or set in SEP.overide.defaults
+
+
+#First check to see if the enviornmental variable 
+#SEP_ARCH is already set.  If so we are done
+
+ifndef SEP_ARCH
+	#First run config.guess to get a clue
+	GUESS=$(strip $(shell $(SEPINC)/config.guess))	
+      	
+
+	#NOW WE NEED TO MAKE A GUESS ON WHAT TYPE OF SEP_ARCH THIS IS EQUIVILANT TO
+	#Lets go from what we understand best to worst
+ifeq (sgi,$(findstring sgi,${GUESS}))
+ifeq (irix6,$(findstring irix6, ${GUESS}))
+	SEP_ARCH=SGI64
+else
+	SEP_ARCH=SGI
+endif
+endif
+
+ifeq (linux,$(findstring linux,${GUESS}))
+SEP_ARCH=LINUX
+endif
+
+ifeq (hpux,$(findstring hpux,${GUESS}))
+	SEP_ARCH=HP700
+endif
+
+ifeq (sun,$(findstring sun,${GUESS}))
+ifeq (solaris,$(findstring solaris, ${GUESS}))
+	SEP_ARCH=SOLARIS
+endif
+ifeq (sunos4,$(findstring sunos4, ${GUESS}))
+	SEP_ARCH=SUN4
+endif
+endif
+
+
+ifeq (rs6000,$(findstring rs6000,${GUESS}))
+	SEP_ARCH=RS600
+endif
+
+ifeq (convex,$(findstring convex,${GUESS}))
+	SEP_ARCH=CONVEX
+endif
+
+ifeq (cray,$(findstring cray,${GUESS}))
+	SEP_ARCH=CRAY
+endif
+
+ifeq (dec,$(findstring dec,${GUESS}))
+ifeq (alpha,$(findstring alpha,${GUESS}))
+ifeq (osf,$(findstring osf, ${GUESS))
+	SEP_ARCH=DECalpha
+endif
+endif
+endif
+
+
+endif #ENDIF FOR DEFINED ARCH

@@ -1,0 +1,25 @@
+# This is the top level configuration file for SEP.distr
+
+#INCLUDE ANY FORCED SITE DEFINITIONS
+#(GNU AND SEP_ARCH) are the only ones applicable right now
+
+include ${SEPINC}/SEP.overide.defaults
+
+#Do the thing we need to do is figure out what platform we are on
+#this sets the variable SEP_ARCH
+include ${SEPINC}/SEP.machine.type
+
+#Read in default program defs
+include ${SEPINC}/Prog.defs.top
+
+#Read in library names
+include ${SEPINC}/SEP.lib.defs
+
+#Read in default distribution defs
+include $(SEPINC)/SEP.distr.defs
+
+#Read in site specific overrides (later this could be generated)
+include ${SEPINC}/SEP.site.defs
+
+#Now that we know about the site we should set some other variables
+include ${SEPINC}/SEP.ifdef

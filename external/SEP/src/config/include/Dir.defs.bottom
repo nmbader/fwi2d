@@ -1,0 +1,14 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for painless compilation
+# This file contains all the conditional definitions 
+#
+
+${SEPINC}/Dir.defs.bottom : ;
+
+define MakeSubDirs
+@for dir in $(SUBDIRS); \
+do (cd $$dir; echo "making $@ in $$dir"; $(MAKE)  $@)   done
+endef
+
+

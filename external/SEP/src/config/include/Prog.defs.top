@@ -1,0 +1,22 @@
+# Prog.def.top
+#
+# This is the top level for comiling definitions
+
+ifndef RATF90
+RATF90 = yes
+endif
+
+ifndef MAKE_DEPEND
+MAKE_DEPEND = yes
+endif
+
+#First general unix commands and general directories
+#Very machine dependant
+include ${SEPINC}/SEP.generic.defs
+
+#Not needed for SEPlib should be gotten rid of in SEP
+#Defaults on X enviornment (X11, Xmotiff, Xview) 
+#include ${SEPINC}/SEP.X.defs
+
+#Defaults for compiling  object files
+include ${SEPINC}/Prog.defs.compile

@@ -1,0 +1,29 @@
+Probably most SEP researcher have contributed in some way to SEPlib.
+However, some researchers stand out:
+
+  Robert Clayton introduced the original parameter fetching
+    and did much ground breaking work concerning Vplot.
+
+  Jon Claerbout introduced history files.
+
+  Dave Hale wrote the libvplot library.
+
+  Stew Levin got SEPlib pipes to work and ported Vplot to DEC Gigi
+    terminals.
+
+  Joe Dellinger perfected Vplot, the graphics library.
+
+  Steve Cole added dithering of rasterplots to Vplot.
+
+
+  Dave Nichols reworked the SEPlib input and output handling and introduced
+    GNUmakefiles for easy installation.
+
+  Martin Karrenbach had a first SEPlib extension to handle irregular data.
+
+  Biondo Biondi and Bob Clapp (with the help of current SEP students)
+    truly extended SEPlib to handle irregular data.
+
+
+  Recent additions by Sergey Fomel and Paul Sava to travel time/ray 
+   tracing

@@ -1,0 +1,40 @@
+CLIB_DISTR=
+CLIB_LOCAL=
+FCLIB_LOCAL=
+FCLIB_DISTR=
+EXTRA_LIBRARIES=${CLIB_DISTR} ${CLIB_LOCAL} \
+   ${FCLIB_DISTR} ${FCLIB_LOCAL}
+
+
+CPROG_DISTR=
+CPROG_LOCAL=
+FCPROG_DISTR=
+FCPROG_LOCAL=
+EXTRA_PROGRAMS=${CPROG_DISTR} ${CPROG_LOCAL}  \
+  ${FCPROG_DISTR} ${FCPROG_LOCAL}
+
+SCRIPTS_LOCAL=
+SCRIPTS_DISTR=
+bin_SCRIPTS=${SCRIPTS_LOCAL} ${SCRIPTS_DISTR}
+
+CDIR_DISTR=.
+
+RATSEPME = $(SEPRAT)
+
+
+
+%_mpi.f90:	${srcdir}/%_mpi.f90s
+	${RATSEPME} -dofpp ${FCDEFINES} ${MPI_FLAGS} ${srcdir}/$*_mpi.f90s 
+
+%.f90:	${srcdir}/%.f90s
+	${RATSEPME} -dofpp ${FCDEFINES} ${srcdir}/$*.f90s 
+
+%.f90: ${srcdir}/%.r90
+	$(RATSEPME) -c -dof90 $<
+
+${srcdir}/%.f90:  ${srcdir}/%.lop
+	$(RATSEPME) -c -dof90 $<
+
+
+
+AUTOMAKE_OPTIONS=foreign no-dependencies dist-tarZ 1.3

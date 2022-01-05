@@ -1,0 +1,30 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file implements communication of the RESULTS lists
+#
+${SEPINC}/Doc.rules.test: ;
+
+# The following check if $* is in the appropriate RESULTS* variable
+# In a command under a pattern rule, the following return yes if the test
+# is positive, and nothing otherwise.
+IS_ER  = ${sort ${subst $*,yes,${filter $*, ${RESULTSER}}}}
+IS_CR  = ${sort ${subst $*,yes,${filter $*, ${RESULTSCR}}}}
+IS_NR  = ${sort ${subst $*,yes,${filter $*, ${RESULTSNR}}}}
+IS_REP = ${sort ${subst $*,yes,${filter $*, ${RESULTSER} ${RESULTSCR}}}}
+
+# echo NR, CR, ER, or nothing corresponding to the existence of
+# $* in the corresponding result list.
+%.testNR : FORCE
+	@if  ${OTEST} ${IS_NR} ; then	echo NR ; fi
+
+%.testCR : FORCE
+	@if  ${OTEST} ${IS_CR} ; then	echo CR ; fi
+
+%.testER : FORCE
+	@if  ${OTEST} ${IS_ER} ; then	echo ER ; fi
+
+# The following is used by Resstat, and is a debugging aid
+# To check the value of a variable, say NAME, just do "make NAME.varvalue"
+%.varvalue : 
+	@${ECHO} ${$*} ;

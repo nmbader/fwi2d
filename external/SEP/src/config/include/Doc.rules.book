@@ -1,0 +1,171 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file contains rules for printing and displaying documents
+#
+${SEPINC}/Doc.rules.book: ;
+
+.PRECIOUS: paper_act.tex paper.dvi
+
+ifndef BOOK
+  BOOK = TEST
+endif
+
+ifndef TPGOPTS
+  TPGOPTS = -
+endif
+
+toc.tex: $(wildcard *akefile)
+	SEPdocTOC -          > toc.tex
+
+paper.tex: $(wildcard *akefile) 
+	SEPdocTOC -          > toc.tex
+	SEPdocTPG ${TPGOPTS} > tpg.tex   
+	SEPdocBIO -          > bio.tex
+	SEPdocTOC -          > toc.tex
+	SEPdocALL -          > paper.tex
+
+ifdef NO_SISTER_DIRS
+   PAPERTEX = $(foreach paper, $(PAPERS),$(paper)/paper.tex)
+else
+   PAPERTEX = $(foreach paper, $(PAPERS),../$(paper)/paper.tex)
+endif
+
+
+paper_act.tex: paper.tex ${PAPERTEX}
+
+doall install: paper.dvi ${TEXBINDIR}/${BOOK}
+	${MV} paper.dvi ../Dvi/${BOOK}.dvi
+	$(MAKE) clean
+
+${TEXBINDIR}/${BOOK}: FORCE
+	@-${ECHO} '#!/bin/csh'                     >  shell
+	@-${ECHO} "pushd $(PWD)/../Dvi"            >> shell
+	@-${ECHO} "xdvi ${XDVIOPTS} ${BOOK}.dvi &" >> shell
+	@-${ECHO} 'exit 0'                         >> shell
+	${INSTALL} -c shell ${TEXBINDIR}/${BOOK}
+	chmod +x ${TEXBINDIR}/${BOOK}
+
+#build:	FORCE
+#	Tour -v -m build
+
+update:	FORCE
+	Tour -v -m update
+
+sepsh: 	FORCE
+ifdef SEPSHELLDIR
+	Tour -v -x SEPSHELLDIR=${SEPSHELLDIR}/% ${MAKE} HTMLDIR=${HTMLDIR}/% sepshell
+else
+	Tour -v -m HTMLDIR=${HTMLDIR}/% sepshell
+endif
+
+clean:  FORCE
+	$(MAKE) texclean
+	@-${TOUCH} paper.tex tpg.tex bio.tex toc.tex shell 
+	@-${RM}    paper.*   tpg.tex bio.tex toc.tex shell
+
+distclean: FORCE
+	$(MAKE) clean
+	Tour -m clean
+
+paper.%.ltx: paper_act.tex ../%/paper_act.tex paper.dvi
+	Latify ${LATOPTS} include="\\includeonly{../$*/paper_act}" paper_act.tex > paper.$*.ltx
+
+%.readit: paper.%.ltx	
+	$(MAKE) PAPERS=$* paper.$*.read 
+
+%.printit: paper.%.ltx
+	$(MAKE) PAPERS=$* paper.$*.print 
+
+%.www: ../%/paper_act.tex paper.dvi
+	-$(MAKE) paper.$*.ps 
+	-$(MAKE) paper.$*.pdf
+	-gzip    paper.$*.ps                       
+	-${MV}   paper.$*.ps.gz ${HTMLDIR}/$*.ps.gz
+	-${MV}   paper.$*.pdf ${HTMLDIR}/$*.pdf
+	$(MAKE) -k -C ../$* texclean
+	-${TAR} cvzf ${HTMLDIR}/$*.tar.gz ../$*
+	-mkdir       ${HTMLDIR}/$* 
+	$(MAKE) -k -C ../$* HTMLDIR=${HTMLDIR}/$* L2HOPTS=${L2HOPTS} LATOPTS="${LATOPTS} option=article" html
+
+# Old rule (before nick's changes)
+#www: paper_act.tex
+#	$(MAKE) paper.dvi
+#	@-${foreach fl,${PAPERS},  	                                    \
+#	  $(MAKE) paper.${fl}.ps                                         ;  \
+#	  $(MAKE) paper.${fl}.pdf                                        ;  \
+#	  gzip    paper.${fl}.ps                                         ;  \
+#	  ${MV}   paper.${fl}.ps.gz ${HTMLDIR}/${fl}.ps.gz               ;  \
+#	  ${MV}   paper.${fl}.pdf   ${HTMLDIR}/${fl}.pdf                 ;  \
+#	}
+#	$(MAKE) distclean
+#	@-${foreach fl,${PAPERS},  	                                    \
+#	  ${TAR} cvzf ${HTMLDIR}/${fl}.tar.gz ../${fl}                   ;  \
+#	  mkdir       ${HTMLDIR}/${fl}                                   ;  \
+#	}
+#	Tour -v -m HTMLDIR=${HTMLDIR}/% L2HOPTS=${L2HOPTS} LATOPTS=\'${LATOPTS} option=article option=cmfonts\' html
+#	if ${EXIST} intro.tex ; then          				\
+#		$(MAKE) intro.ps intro.html  			       ;\
+#		$(MAKE) intro.pdf				       ;\
+#		gzip   intro.ps                                        ;\
+#		${MV}  intro.ps.gz intro.pdf ${HTMLDIR}                ;\
+#	fi
+#	if ${EXIST} preface.tex ; then          			\
+#		$(MAKE) preface.ps preface.html  		       ;\
+#		$(MAKE) preface.pdf				       ;\
+#		gzip   preface.ps                                      ;\
+#		${MV}  preface.ps.gz preface.pdf ${HTMLDIR}            ;\
+#	fi
+#	$(MAKE) toc.tex toc.html
+
+#Nick's www, 2002. Besides corrections of small things that did not work, it contains the following major changes from the last rule: making a backup in case that things go wrong, moving the filler pages before make html so that we do not get random funny pictures in papers (attention, assumption that the filler directory exists and is called filler!), and then move it back after, change in LATOPTS for making the html, definition of the BIGFILES variable (remember to define it in the Makefile in the Adm directory as the set of files that are too big to be distributed); added copyright notice; did away with Tour, which did not work; 
+
+www: paper_act.tex
+	$(MAKE) paper.dvi
+	mkdir ../backup
+	@-${foreach fl,${PAPERS},  	                                    \
+	  cp -R ../${fl}/ ../backup					 ;  \
+	  $(MAKE) paper.${fl}.ps                                         ;  \
+	  gzip    paper.${fl}.ps                                         ;  \
+	  ${MV}   paper.${fl}.ps.gz ${HTMLDIR}/${fl}.ps.gz               ;  \
+	  $(MAKE) paper.${fl}.pdf                                        ;  \
+	  ${MV}   paper.${fl}.pdf   ${HTMLDIR}/${fl}.pdf                 ;  \
+	}
+	mv ../filler ../filler_moved
+	@-${foreach fl,${PAPERS},  	                                      \
+	  mkdir ${HTMLDIR}/${fl}  	                                   ;  \
+	  cd ../${fl}                              		           ;  \
+	  $(MAKE) HTMLDIR=${HTMLDIR}/${fl} L2HOPTS=${L2HOPTS} LATOPTS="option=report option=article option=cmfonts" html ; \
+	}
+	mv ../filler_moved ../filler
+	@-${foreach fl,${PAPERS},  	                                    \
+	  cd ../${fl}							 ;  \
+	  \rm -rf err sum spell log *_act.tex *.bak *.bak2 *.ltx sepf0 	 ;  \
+	  \rm -rf *.bbl *.blg *.dvi *.log *.pdf *.ps			 ;  \
+	  $(MAKE) clean							 ;  \
+	}
+	@-${foreach fl,${BIGFILES},  	                                    \
+	  echo "This file too big for web distribution"> ../${fl}	 ;  \
+	}
+	@-${foreach fl,${PAPERS},  	                                      \
+	  cp /net/koko/src/our/seplib-6.0/COPYRIGHT ../${fl}/COPYRIGHT.txt ;  \
+	  ${TAR} -C .. -cvzf  ${HTMLDIR}/${fl}.tar.gz ${fl}/               ;  \
+	}
+	if ${EXIST} intro.tex ; then          				\
+		$(MAKE) intro.ps intro.html  			       ;\
+		$(MAKE) intro.pdf				       ;\
+		gzip   intro.ps                                        ;\
+		${MV}  intro.ps.gz intro.pdf ${HTMLDIR}                ;\
+	fi
+	if ${EXIST} preface.tex ; then          			\
+		$(MAKE) preface.ps preface.html  		       ;\
+		$(MAKE) preface.pdf				       ;\
+		gzip   preface.ps                                      ;\
+		${MV}  preface.ps.gz preface.pdf ${HTMLDIR}            ;\
+	fi
+	$(MAKE) toc.tex toc.html
+	\rm -rf ../backup
+
+WWW: paper_act.tex
+	$(MAKE) html
+	Tour -v -m HTMLDIR=${HTMLDIR} buildGif sepshell

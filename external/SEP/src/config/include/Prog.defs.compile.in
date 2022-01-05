@@ -1,0 +1,101 @@
+#
+#Sep.Prog.defs.compile
+#
+# This is where we attempt to set smart
+# defaults for various platforms.
+# 
+# These can be overwritten in either the SEP.site.defs
+# or in individual Makefiles.  The only exception
+# is GNU and SEP_ARCH which must be either be
+# in SEP.override.defaults, located  before the first
+# include statement in the makefile, or set as enviornmental variable
+#
+# For a more complete explenation of all of the possible variables
+# see the SEP.site.config file
+
+#=======================================================================#
+#                        GENERIC DEFAULTS                               #
+#=======================================================================#
+
+
+#Sort of Non-compiler specific defaults
+
+CPP                :=  gcc -g -E
+FPP               :=  /lib/cpp
+FPP                :=  ${SEPBINDIR}/spp
+
+#-----------#
+#C DEFAULTS #
+#-----------#
+
+
+LDFLAGS            :=    -L${SEPLIBDIR}
+
+CC                  :=   @CC@
+CEXT                :=   c
+CLD                 :=   @CLD@ -g  -L${SEPLIBDIR}
+CLEVEL               =  
+OCOPTIMFLAGS         =   -O${COLEVEL}
+OCDEBUGFLAGS         :=   -g
+OCDEFINES            =   -D${SEP_ARCH}
+OCFLAGS             := @SYSCFLAGS@ -I${SEPINCDIR}  -g -O2  -c 
+OCLIBS              :=  -L/usr/X11R6/lib64
+
+
+
+#-------------#
+#F77 DEFAULTS #
+#-------------#
+
+F77C                :=   ifort -O3
+F77_COMPILER_TYPE    = 
+F77LD               :=   ifort -O3  ${LDFLAGS} -L${SEPLIBDIR}
+F77OLEVEL            =   ${OLEVEL}
+F77OPTIMFLAGS        =   -O${F77OLEVEL}
+F77PARFLAGS         :=   
+OF77DEBUGFLAGS       :=   -g
+OF77DEFINES          =      -DSOURCE='"'${FULLSRC}/$(notdir $<)'"' 
+OF77FLAGS           :=     -g -FR  -c 
+OF77LD_FLAGS_BEFORE  =  ${OLD_FLAGS_BEFORE}
+OF77LD_FLAGS_AFTER   =  ${OLD_FLAGS_AFTER}
+OF77LIBDIRS         :=
+OF77LIBS             =    -lm -L/usr/X11R6/lib64
+RATFOR               =   $(SEPBINDIR)/ratfor77
+SAT                  =   ${SEPBINDIR}/sat
+SAW                  =   ${SEPBINDIR}/saw
+SAWF                 =   ${SEPBINDIR}/sawf
+CF77DEFINES          =   -DpgiFortran -DpgiFortran
+ifndef F77EXT
+	F77EXT             =   f
+endif
+
+
+#-------------#
+#F90 DEFAULTS #
+#-------------#
+F90C                :=   @F90C@
+F90_COMPILER_TYPE    =
+F90EXT              :=   f90 
+F90LD               :=   @F90LD@  ${LDFLAGS} -L${SEPLIBDIR}
+F90OLEVEL            =   ${OLEVEL}
+F90OPTIMFLAGS        =   -O${FCOLEVEL}
+F90PARFLAGS         :=  
+F90MODSUFFIX         =    
+OF90DEBUGFLAGS      :=   -g
+OF90DEFINES          =  
+OF90FLAGS           :=  @SYSF90FLAGS@  -I${SEPINCDIR} -c
+OF90LIBDIRS         :=
+OF90LIBS              =    -lm -L/usr/X11R6/lib64
+RATFOR90             =   $(SEPBINDIR)/ratfor90
+SAW90                =   ${SEPBINDIR}/saw90
+SAWF90               =   ${SEPBINDIR}/sawf90
+F90INCFLAG           =   -I
+CFCDEFINES          =   -DpgiFortran -DpgiFortran
+
+
+#LIBRARY DEFINITIONS
+AR                  :=    ar
+ARFLAGS             :=    cr
+LD                  :=    ld
+LIB_LD_OPTIONS      :=    -r 
+RANLIB              :=    ranlib

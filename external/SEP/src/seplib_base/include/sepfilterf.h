@@ -1,0 +1,26 @@
+#include<cfortran.h>
+#define ENERGY(intag,outtag,data,data2,n1,n2,n3,lwind,j1,n1new,norm,ave) CCALLSFSUB12(ENERGY,energy,STRING,STRING,FLOATV,FLOATV,INT,INT,INT,INT,INT,INT,INT,INT,intag,outtag,data,data2,n1,n2,n3,lwind,j1,n1new,norm,ave) 
+/*  $Id: sepfilterf.h,v 1.1.1.1 2004/03/25 06:37:24 cvs Exp $ */
+#define BOXCONV(nb, nx, xx, yy) CCALLSFSUB4(BOXCONV,boxconv,INT,INT,FLOATV,FLOATV,nb, nx, xx, yy)
+#define BOXMO(adj, add, t0,dt, dx, x, nt,slow,  antialias, zz,tt) CCALLSFSUB11(BOXMO,boxmo,INT,INT,FLOAT,FLOAT,FLOAT,FLOAT,INT,FLOATV,FLOAT,FLOATV,FLOATV,adj, add, t0,dt, dx, x, nt,slow,  antialias, zz,t )
+#define BURG(lx, x, la, a)CCALLSFSUB4(BURG,burg,INT,FLOATV,INT,FLOATV,lx, x, la, a)
+#define BURG2(adj,add, lag1,lag2, data,n1,n2,   aa,a1,a2,  residual) CCALLSFSUB11(BURG2,burg2,INT,INT,INT,INT,FLOATVV,INT,INT,FLOATVV,INT,INT,FLOATV,adj,add, lag1,lag2, data,n1,n2,   aa,a1,a2,  residual)
+#define BUTTER( hilo, cutoff, npoly, num, den) CCALLSFSUB5(BUTTER,butter, FLOAT, FLOAT, INT, FLOATV, FLOATV, hilo, cutoff, npoly, num, den)
+#define HALFDIFA( adj, add, n, xx,    yy ) CCALLSFSUB5(HALFDIFA,halfdifa, INT, INT, INT, FLOATV, FLOATV, adj, add, n, xx,    yy )
+#define ICAF1( adj, add, lag, xx,n,  bb,nb,  yy ) CCALLSFSUB8(ICAF1,icaf1, INT, INT, INT, FLOATV, INT, FLOATV, INT, FLOATV, adj, add, lag, xx,n,  bb,nb,  yy  )
+#define ICAF2( adj, add, lag1, lag2, xx,n1, n2,  aa,na1, na2,  yy ) CCALLSFSUB11(ICAF2,icaf2, INT, INT, INT, INT, FLOATVV, INT, INT, FLOATVV, INT,INT, FLOATVV, adj,add, lag1,lag2, xx,n1,n2,  aa,na1,na2,  yy  )
+#define ICAF3( adj, add, lag1, lag2, lag3, xx,n1, n2, n3,  aa,na1, na2, na3, yy ) CCALLSFSUB14(ICAF3,icaf3, INT, INT, INT, INT, INT, FLOATVVV, INT, INT, INT, FLOATVVV, INT,INT, INT, FLOATVVV, adj,add, lag1,lag2, lag3,xx,n1,n2, n3, aa,na1,na2,na3,  yy  )
+#define ICAI1( adj, add, lag, xx,n,  bb,nb,  yy ) CCALLSFSUB8(ICAI1,icai1, INT, INT, INT, FLOATV, INT, FLOATV, INT, FLOATV, adj, add, lag, xx,n,  bb,nb,  yy  )
+#define ICAI2( adj, add, lag1, lag2, xx,n1, n2,  aa,na1, na2,  yy ) CCALLSFSUB11(ICAI2,icai2, INT, INT, INT, INT, FLOATVV, INT, INT, FLOATVV, INT,INT, FLOATVV, adj,add, lag1,lag2, xx,n1,n2,  aa,na1,na2,  yy  )
+#define ICAI3( adj, add, lag1, lag2, lag3, xx,n1, n2, n3,  aa,na1, na2, na3, yy ) CCALLSFSUB14(ICAI3,icai3, INT, INT, INT, INT, INT, FLOATVVV, INT, INT, INT, FLOATVVV, INT,INT, INT, FLOATVVV, adj,add, lag1,lag2, lag3,xx,n1,n2, n3, aa,na1,na2,na3,  yy  )
+#define LEAKY( distance, m1, n12, uu, vv) CCALLSFSUB5(LEAKY,leaky, FLOAT, INT, INT, FLOATVV, FLOATVV, distance, m1, n12, uu, vv)
+#define TCAF1( adj, add, lag, xx,n,  bb,nb,  yy ) CCALLSFSUB8(TCAF1,tcaf1, INT, INT, INT, FLOATV, INT, FLOATV, INT, FLOATV, adj, add, lag, xx,n,  bb,nb,  yy  )
+#define TCAF2( adj, add, lag1, lag2, xx,n1, n2,  aa,na1, na2,  yy ) CCALLSFSUB11(TCAF2,tcaf2, INT, INT, INT, INT, FLOATVV, INT, INT, FLOATVV, INT,INT, FLOATVV, adj,add, lag1,lag2, xx,n1,n2,  aa,na1,na2,  yy  )
+#define TCAF3( adj, add, lag1, lag2, lag3, xx,n1, n2, n3,  aa,na1, na2, na3, yy ) CCALLSFSUB14(TCAF3,tcaf3, INT, INT, INT, INT, INT, FLOATVVV, INT, INT, INT, FLOATVVV, INT,INT, INT, FLOATVVV, adj,add, lag1,lag2, lag3,xx,n1,n2, n3, aa,na1,na2,na3,  yy  )
+#define TCAI1( adj, add, lag, xx,n,  bb,nb,  yy ) CCALLSFSUB8(TCAI1,tcai1, INT, INT, INT, FLOATV, INT, FLOATV, INT, FLOATV, adj, add, lag, xx,n,  bb,nb,  yy  )
+#define TCAI2( adj, add, lag1, lag2, xx,n1, n2,  aa,na1, na2,  yy ) CCALLSFSUB11(TCAI2,tcai2, INT, INT, INT, INT, FLOATVV, INT, INT, FLOATVV, INT,INT, FLOATVV, adj,add, lag1,lag2, xx,n1,n2,  aa,na1,na2,  yy  )
+#define TCAI3( adj, add, lag1, lag2, lag3, xx,n1, n2, n3,  aa,na1, na2, na3, yy ) CCALLSFSUB14(TCAI3,tcai3, INT, INT, INT, INT, INT, FLOATVVV, INT, INT, INT, FLOATVVV, INT,INT, INT, FLOATVVV, adj,add, lag1,lag2, lag3,xx,n1,n2, n3, aa,na1,na2,na3,  yy  )
+#define TRIANGLE(  nr, m1, n12, uu, vv) CCALLSFSUB5(TRIANGLE, triangle, int, int, int, FLOATVV, FLOATVV,  nr, m1, n12, uu, vv)
+#define TRIANGLE2( rect1, rect2, n1, n2, uu, vv) CCALLSFSUB7(TRIANGLE2, triangle2,INT, INT, INT, INT, FLOATVV, FLOATVV, rect1, rect2, n1, n2, uu, vv)
+
+

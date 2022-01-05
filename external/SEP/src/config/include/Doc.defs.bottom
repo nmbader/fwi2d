@@ -1,0 +1,63 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file contains conditional variable definitions
+#
+${SEPINC}/Doc.defs.bottom : ;
+
+# sets tube flags so that SEP's seminar projection screen is optimally used
+ifeq "${SEMINAR}" "yes"
+ifndef OVIEWFLAGS
+  OVIEWFLAGS = want_text=no buttons=no labels=no -geometry 640x460+0+0 pixmaps=y
+endif
+endif
+
+# Next line is commented in when making the report paper copy (all ps files
+# are made greyscale). For making the CD-ROM the line is commented 
+# out and all PS figures are remade according to the author's specifications.
+# HARDCOPY = yes
+
+# can overwrite any author defined pstexpen option to make color figures
+ifeq "${HARDCOPY}" "yes"
+  HCPSTEXFLAGS = color=n fat=1 fatmult=1.5 invras=n
+endif
+
+# pstexpen options defaulting to greyscale if not defined otherwise
+ifndef COLOR
+  COLOR = n
+  ifeq "${COLORCOPY}" "yes"
+    COLOR = y
+  endif
+endif
+
+ifndef FAT
+  FAT = 1
+  ifeq "${COLORCOPY}" "yes"
+    FAT =
+  endif
+endif
+
+ifndef FATMULT
+  FATMULT = 1.5
+  ifeq "${COLORCOPY}" "yes"
+    FATMULT =
+  endif
+endif
+
+ifndef INVRAS
+  INVRAS = n
+  ifeq "${COLORCOPY}" "yes"
+    INVRAS =
+  endif
+endif
+
+
+## This conflicts with the standard Make target FORCE. 
+#ifndef FORCE
+#  FORCE = n
+#  ifeq "${COLORCOPY}" "yes"
+#    FORCE =
+#  endif
+#endif
+
+

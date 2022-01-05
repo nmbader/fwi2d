@@ -1,0 +1,13 @@
+#  
+# SEP.overide.defaults
+#
+
+# For setting or overriding variables
+# that are quickly used in ifdef and ifeq statements 
+# (which depend on Makefile order)
+
+# SEP_ARCH = SOLARIS
+# GNU =
+ COMPILE_LEVEL = local
+	RATF90 = no
+ Add_Mtype := no

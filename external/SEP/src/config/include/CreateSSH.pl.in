@@ -1,0 +1,25 @@
+#!/usr/local/bin/perl
+$usage = "Usage: $0 target > sepshfile 
+Creates a sepshell file. 
+Needs to run from the makefile directory.\n";
+
+die "$usage\n" if ($#ARGV < 0);
+
+$target = shift;
+$pwd = ($ENV{"SEPSHELLDIR"} || $ENV{"PWD"}); 
+chomp ($pwd = `pwd`) unless ($pwd);
+
+print "\#" . '-' x 79;
+print "
+\# You should be able to execute \"make $target\" if you view this page at 
+\# the <A HREF=http://sepwww.stanford.edu/>Stanford Exploration Project</A>,     
+\# or (as an SEP sponsor) get the SEP environment from the Web or on a CD-ROM.
+\# Remember to open the page with \"file:\/\" rather than \"http:\/\/\"...
+";
+print "\#" . '-' x 79 . "\n";
+
+print join (" ", $pwd,$target);    
+print "\n";
+
+exit (0);
+

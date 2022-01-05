@@ -1,0 +1,308 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file contains rules for building, burning, and inspecting result files
+#
+${SEPINC}/Doc.rules.fig: ; 
+
+### BUILD ###
+
+# make sure result files are never removed as intermediates
+non_int = ${addprefix ${RESDIR}/, ${RESULTSALL}}
+
+ifndef PDF_BUILD
+.PRECIOUS : ${foreach sf, ${RES_SUFFIXES},${addsuffix ${sf},${non_int}}}
+endif
+
+# different build targets of various ease of reproducibility: take your pick
+# "make buildER" makes all easily reproducible results (listed in RESULTSER)
+buildER   : ${addsuffix .build, ${RESULTSER}}
+buildCR   : ${addsuffix .build, ${RESULTSCR}}
+buildNR   : ${addsuffix .build, ${RESULTSNR}}
+buildall  : ${addsuffix .build, ${RESULTSREP}}
+#buildPDF  : ${addsuffix .buildPDF, ${RESULTSREP}} ${addsuffix .buildPDFN, ${RESULTSNR}}
+buildPDF  : ${addsuffix .buildPDF, ${RESULTSREP}} ${addsuffix .buildPDFN, ${RESULTSNR}}
+build     : buildER 
+
+# I could also organize the rebuilding by burning and building by individual 
+# images. Maybe that would be more realistic to push-button-reality. 
+rebuild : FORCE
+	${MAKE} clean               
+	${MAKE} burn 
+	${MAKE} build
+	${MAKE} clean 
+	@echo "Here starts second build ..."
+	${MAKE} build 
+	@echo "Here ends second build ..."
+	${MAKE} clean 
+
+rebuildpaper : FORCE
+	${MAKE} clean               
+	Resstat -
+	${MAKE} burn 
+	Resstat -    
+	${MAKE} build
+	Resstat -    
+	${MAKE} clean 
+	@echo "Here starts second build ..."
+	Resstat -     
+	${MAKE} build 
+	@echo "Here ends second build ..."
+	${MAKE} clean 
+
+# SEP convention: the user guarantees that all result files are created
+# when creating the target ${RESDIR}/%.ps (often the result file is a 
+# postscript figure: therefore the naming convention) or when creating
+# the target ${RESDIR}/%.txt which is a text file (as for example when
+# doing the dot product test).  
+##%.build : ${RESDIR}/%.ps
+##	@	# gmake seems to need a non-empty command-body
+
+%.build :  FORCE
+	@\
+	if ${EXIST} ${RESDIR}/$*.ps.save ; then \
+	  if ${NOTEXIST} ${RESDIR}/$*.ps; then \
+	    ${MV} ${RESDIR}/$*.ps.save ${RESDIR}/$*.ps ;    \
+	    ${LN} ${RESDIR}/$*.ps ${RESDIR}/$*.ps.save ;    \
+	  fi ; \
+	elif ${CANDO_R_TXT}      ; then	\
+	  ${MAKE} ${RESDIR}/$*.txt;	\
+	elif ${CANDO_R_PSML}     ; then \
+	  ${MAKE} $*.ps.ml;             \
+	  ${MV} $*.ps.ml ${RESDIR}/$*.ps; \
+	elif ${CANDO_R_PSMA}     ; then \
+	  ${MAKE} $*.ps.ma;             \
+	  ${MV} $*.ps.ma ${RESDIR}/$*.ps; \
+	  ${ECHO} "To reproduce this figure you need to have Mathematica" \
+				> ${RESDIR}/$*.warning;			  \
+	  ${ECHO} "(Try Koko in the current SEP environment)"	          \
+				>> ${RESDIR}/$*.warning;		  \
+	elif   ${CANDO_R_PDF}     ; then	\
+	  ${MAKE} ${RESDIR}/$*.pdf;	\
+	else				\
+	  if ${NOTEXIST} ${RESDIR}/$*.pdf; then \
+	    echo "make $@: can't make ${RESDIR}/$*% (% = .pdf, .txt)" ; \
+	  else \
+	    echo "make $@: nothing to be done for ${RESDIR}/$*" ; \
+	  fi ; \
+	fi
+
+#%.buildPDF:  %.build
+#	${MAKE} PDF_BUILD=1 ${RESDIR}/$*.pdf
+
+%.buildPDFN:  
+	${PS2PDF} ${RESDIR}/$*.ps
+	${ECHO} '#!/bin/sh' > ${RESDIR}/$*.sh
+	${ECHO} "cd ${PWD}; ${MAKE} SEMINAR=yes $*.view" >> ${RESDIR}/$*.sh
+	chmod a+x ${RESDIR}/$*.sh
+
+%.buildPDF:  %.build
+	${MAKE}   ${RESDIR}/$*.ps
+	${PS2PDF} ${RESDIR}/$*.ps
+	${ECHO} '#!/bin/sh' > ${RESDIR}/$*.sh
+	${ECHO} "cd ${PWD}; ${MAKE} SEMINAR=yes $*.view" >> ${RESDIR}/$*.sh
+	chmod a+x ${RESDIR}/$*.sh
+
+# AT SEP it is often convenient for an author to supply a rule for a vplot 
+# figure only. This rule creates by default a postscript file ${RESDIR}/%.ps
+# from such a vplot file.
+V2PS = ${PSTEX} $< $@ ${OPSTEXFLAGS} ${UPSTEXFLAGS} ${HCPSTEXFLAGS}
+
+${RESDIR}/%.ps : ${RESDIR}/%.v
+	${V2PS}
+
+#${RESDIR}/%.pdf :  ${RESDIR}/%.ps
+#	${PS2PDF} ${RESDIR}/$*.ps
+#	${ECHO} '#!/bin/sh' > ${RESDIR}/$*.sh
+#	${ECHO} "cd ${PWD}; ${MAKE} SEMINAR=yes $*.view" >> ${RESDIR}/$*.sh
+#	chmod a+x ${RESDIR}/$*.sh
+
+# Matlab rule
+# The .ml script should create a junk_ml.ps file (EPS)
+MATLAB = /usr/local/bin/matlab
+
+%.ps.ml: %.ml 
+	@if ${EXIST} ${MATLAB} ; then   				\
+	   ${ECHO} "To reproduce this figure you need to have Matlab"	\
+				> ${RESDIR}/$*.warning;			\
+	   ${ECHO} "Running ${MATLAB} ...";				\
+	   ${MATLAB} <$<;						\
+	   ${MV} junk_ml.ps $@ ;					\
+	else 								\
+	   ${ECHO} "No ${MATLAB} on this machine!";			\
+	fi
+
+# Mathematica rule
+# The .ma script should create a junk_ma.ps file (EPS) and end with Quit
+#MATHEMATICA = /usr/bin/math
+MATHEMATICA = /usr/local/bin/math
+
+%.ps.ma: %.ma 
+	@if ${EXIST} ${MATHEMATICA} ; then   				\
+	   ${CAT} $*.ma > junk_ma.$*;					\
+	   ${ECHO} 'Quit;' >> junk_ma.$*;				\
+	   ${ECHO} "Running ${MATHEMATICA} -batchoutput ...";		\
+	   DISPLAY=' ' nohup ${MATHEMATICA} -batchoutput < junk_ma.$* 	\
+					>& /dev/null	> /dev/null ; 	\
+	   ${ECHO} "Done.";						\
+	   ${MV} junk_ma.ps $@;						\
+	   ${RM} junk_ma.$*;						\
+	else 								\
+	   ${ECHO} "No ${MATHEMATICA} on this machine!";		\
+	fi
+
+# For administrative purposess it is sometimes helpful to recreate the
+# postscript figures only (e.g. change from color ps to black & white ps)
+rebuildps : ${addsuffix .rebuildps, ${RESULTSREP}}
+
+%.rebuildps : FORCE
+	@\
+	if ${EXIST} ${RESDIR}/$*.v  ; then		\
+	   ${RM}    ${RESDIR}/$*.ps ; ${V2PS} ; fi
+
+### BURN ###
+
+# different burn targets of various ease of reproducibility
+# "make burnER" burns all easily reproducible results (listed in RESULTSER)
+burnER  : ${addsuffix .burn, ${RESULTSER}}
+burnCR  : ${addsuffix .burn, ${RESULTSCR}}
+burnall : ${addsuffix .burn, ${RESULTSREP}}
+burn    : burnER
+
+# SEP convention: all result files are identified by being in ${RESDIR}
+# and having a result suffix as specified in ${RES_SUFFIXES}. Any existing
+# result file corresponding to a the stem in %.burn is removed.
+%.burn : FORCE
+	@-\
+	if ${OTEST} ${filter $*,${RESULTSREP}} ; then	\
+	  ${foreach sfx, ${RES_SUFFIXES} ,		\
+	    if ${EXIST} ${RESDIR}/$*${sfx} ; then	\
+	         ${RM}  ${RESDIR}/$*${sfx} ;  fi;	\
+	  }						\
+	  if   ${EXIST} ${HTMLDIR}/Gif/$*.gif  ; then	\
+	         ${RM}  ${HTMLDIR}/Gif/$*.gif  ;  fi;	\
+	fi
+
+### VIEW (FORMERLY TUBE) ###
+
+# 2 commands to display a result file. Before displaying 
+# view (tube) up-dates the result file, otube only checks existence 
+view   tube : ${addsuffix  .view, ${RESULTSALL}}
+oview otube : ${addsuffix .oview, ${RESULTSALL}}
+
+viewps   tube : ${addsuffix  .viewps, ${RESULTSALL}}
+
+# displays the format of the result file which is most enjoyable for 
+# screen display
+%.view %.tube : 
+	@\
+	if   ${CANDO_V3}     ; then	\
+	  ${MAKE} $*.view3   ;		\
+	elif ${CANDO_V}      ; then	\
+	  ${MAKE} $*.view1   ;		\
+	elif ${CANDO_GIF}    ; then	\
+	  ${MAKE} $*.viewgif ;		\
+	elif ${CANDO_PS}     ; then	\
+	  ${MAKE} $*.viewps  ;		\
+	elif ${CANDO_PDF}     ; then	\
+	  ${MAKE} $*.viewpdf  ;		\
+	elif ${CANDO_PSML}   ; then	\
+	  ${MAKE} $*.viewpsml;		\
+	elif ${CANDO_PSMA}   ; then	\
+	  ${MAKE} $*.viewpsma;		\
+	elif ${CANDO_TXT}    ; then	\
+	  ${MAKE} $*.viewtxt ;		\
+	else				\
+          echo "make $@: can't make ${RESDIR}/$*% (% = ${RES_SUFFIXES})" ;\
+	fi
+
+## Currently we do not display X11movies 
+#
+#%.tube %.view: FORCE
+#	if ${CANDO_A}    ; then \
+#	  ${MAKE} $*.movie ;	\
+#	elif ${CANDO_V3} ; then	\
+#
+# SHOW_MOVIE = ${MOVIE}     ${RESDIR}/$*.A
+
+SHOW_VIEW3 = ${VIEW}  ${RESDIR}/$*.v3
+SHOW_VIEW1 = ${VIEW}  ${RESDIR}/$*.v
+SHOW_GIF   = ${XVIEW} ${RESDIR}/$*.gif
+SHOW_PS    = ${GVIEW} ${RESDIR}/$*.ps
+SHOW_PDF   = xpdf     ${RESDIR}/$.pdf
+SHOW_TXT   = ${CAT}   ${RESDIR}/$*.txt
+
+# stupid = ${suffix ${firstword ${addprefix ${RESDIR}/$*, ${RES_SUFFIXES}}}}
+# %.my: 
+#	@echo "${stupid}"
+
+%.oview %.otube: FORCE
+	@\
+	if   ${OTEST} ${FIRST_EXIST} = .v3  ; then	\
+	       ${SHOW_VIEW3} ;				\
+	elif ${OTEST} ${FIRST_EXIST} = .v   ; then	\
+	       ${SHOW_VIEW1} ;				\
+	elif ${OTEST} ${FIRST_EXIST} = .gif ; then	\
+	       ${SHOW_GIF} ;				\
+	elif ${OTEST} ${FIRST_EXIST} = .ps  ; then	\
+	       ${SHOW_PS} ;				\
+	elif ${OTEST} ${FIRST_EXIST} = .txt  ; then	\
+	       ${SHOW_TXT} ;				\
+	else						\
+	  echo "make $@: can't find ${RESDIR}/$*% (% = ${RES_SUFFIXES})" ;\
+	fi
+
+%.movie   : ${RESDIR}/%.A   FORCE
+	${SHOW_MOVIE}
+
+%.view3 %.tube3   : ${RESDIR}/%.v3  FORCE
+	${SHOW_VIEW3}
+
+%.view1 %.tube1   : ${RESDIR}/%.v
+	${SHOW_VIEW1}
+
+%.viewgif %.tubegif : ${RESDIR}/%.gif FORCE
+	${SHOW_GIF}
+
+%.viewps %.tubeps  : ${RESDIR}/%.ps   FORCE
+	${SHOW_PS}
+
+%.viewpsml %.tubepsml  : %.ml   FORCE
+	@${MAKE} $*.build
+	${SHOW_PS}
+
+%.viewpsma %.tubepsma  : %.ma   FORCE
+	@${MAKE} $*.build
+	${SHOW_PS}
+
+%.viewtxt %.tubetxt: ${RESDIR}/%.txt  FORCE
+	${SHOW_TXT}
+
+### UPDATE ###
+# This is very experimental and a bit of a cheat. Matt.
+#
+update   : ${addsuffix .update, ${RESULTSALL}}
+
+%.update : FORCE
+	@-\
+	if ${EXIST} ${RESDIR}/$*.ps.save ; then \
+	  if ${NOTEXIST} ${RESDIR}/$*.ps; then    \
+	    ${MV} ${RESDIR}/$*.ps.save ${RESDIR}/$*.ps ;    \
+	    ${LN} ${RESDIR}/$*.ps ${RESDIR}/$*.ps.save ;    \
+	  fi ; \
+	fi ; \
+	${foreach sfx, ${RES_SUFFIXES} ,	\
+	  if ${EXIST} ${RESDIR}/$*${sfx} ; then	\
+	     echo "update ${RESDIR}/$*${sfx}";  \
+	     ${TOUCH} ${RESDIR}/$*${sfx} ;  fi;	\
+	}                                       \
+
+### EDIT ###
+
+# Also experimental.  This one is mainly for the homeworks
+# James 10/97
+
+%.edit : FORCE
+	@-${MAKE} edit
+
+

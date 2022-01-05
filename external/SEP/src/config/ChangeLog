@@ -1,0 +1,516 @@
+
+
+
+  Changes in the release sep91.1
+  ------------------------------
+
+  1- libraries
+
+          the library libsep.a has been split into a library libsep.a 
+  ( should be renamed libcube.a , but for backward compatibility we 
+  kept libsep.a )  which contains only the functions which handle 
+  header and data cubes and a second library libmath.a which contains all 
+  math functions ( complex function and ffts ). libmath.a also contains 
+  some functions from libpete.a .
+
+          The libraries libpete.a and libpaul.a have been removed from 
+  this release , a small part of their contents ( ftlib1.f utelib.r ) 
+  has been moved to libmath.a and libutil.a .
+
+          The libray libFPSF continues to be a part of this release , 
+  since a lot of programs are using it . Now it is portable .
+
+
+  2- programs
+
+  The release sep91.1 contains only a selection of programs 
+  ( statisticaly the most used ones ) from the original sep distribution .
+
+
+  3- self documentation
+
+          Self documentation has been written in a man style .
+
+          An environment variable SEP_DOC_PATH ( MANPATH style ) has been 
+  introduced to make the self documentation independent from the fullpath 
+  of the sources . the self documentation path is defined at the compile 
+  time by a relative path ( see SRC_DIR in the makefiles ). Sep programs 
+  look for the name of the root directory of the self documentation path 
+  in all directories in the SEP_DOC_PATH variable .
+
+
+  4- data format
+
+          The xdr data format has been implemented in both libsep.a 
+  library and most of sep programs .  In what follows a description of 
+  our approch :
+
+  1- add to the each data file the data format description :
+    this information is kept in the header files as the value of a new 
+    protected keyword data_format :
+
+          data_format=xdr_float or native_float
+                     =xdr_long     native_long
+                     =xdr_short    native_short
+                     =xdr_char     native_char
+    ( format is not recommended , since format is already used by some 
+      sep programs )
+
+    
+    to keep the backward compatibility the default values should be :
+          esize=0         data_format=native_char
+          esize=4,8       data_format=native_float
+
+  
+  2- modify sreed  to decode xdr data format if necessary according the 
+     data_format parameter .
+
+  3- modify srite to encode xdr data format . This should be the default 
+  in order to make encoding automatic and therefore xdr the default data
+  format .
+
+  4- modify the sep programs that use reed and rite ( or worse read and 
+     write ) . I made some statistics about the use of reed and rite , it 
+     seems that very few programs use these functions .
+
+    
+                        - running sep programs across the network
+
+  if the xdr data format is the default for all output data files , 
+  running programs across the network will be straightforward .
+
+                        - performance
+
+  -why encode and decode data when pipes are used . It is possible to 
+   avoid this overhead by making sreed and srite use native format if the 
+   data file is a pipe , in which case pipes across network won't work 
+   ( there is no way to know if the pipe is across the network or not ) . 
+   I propose to let the user decide  :
+   
+   on the same machine
+          Prog1 < input.h |  Prog2 > output.h
+
+  xdr data  format is used for ios in the pipe . It may cost a little .  
+  ( I made a small benchmark on a sparc station , it is negligible 
+  compared to ios ) ( I wonder if it is a real test , native data 
+  format on a sparc station is already ieee ( xdr ) ) . Anyway the  ,
+  performance of xdr is probably machine dependent . 
+
+          Prog1  data_format=native_float < input.h | Prog2 > output.h
+
+  the user forces the programs to use native data format 
+  for ios in the pipe .
+
+  across the network
+          Prog1 < input.h | rsh host Prog2 > output.h
+          ( since default is the xdr data format , it will work )
+   
+  the user can still decide to choose the native data format if the 
+  two machines have the same data representation :
+
+          Prog2 data_format=native_float < input.h | 
+                          rsh host Prog2 > output.h
+
+
+  implementation
+  --------------
+
+  In order to introduce the xdr data format in libsep we modified the
+  following functions :
+          tagstream : to init xdr stream
+          sreed     : to decode xdr format
+          srite     : to encode xdr format
+          input     : to get data_format parameter from input header
+          output    : to set data_format in output header
+
+  In programs ( see list below ) we replaced reed rite by sreed and srite.
+
+
+  list of  programs ( converted to the xdr format or not )
+  --------------------------------------------------------
+  ./our/cube/canon:       all progams
+
+  ./our/cube/seis:        all programs excluding Transp since it
+                          doesn't need to know about data format
+
+  ./our/cube/util:        Cabs, 
+                          Clip, 
+                          Conj, 
+                          Spike  : have been converted to xdr format .
+
+                          Add, 
+                          Dd, 
+                          Disfil : should be completely modified .
+
+                          Arcy   : converts data from ibm to native format
+
+                          Swab   : is already a data format conversion 
+                                   program
+
+                          Cat,
+                          In,
+                          Ls,
+                          Merge,
+                          Mv,
+                          Reverse,
+                          Rm,
+                          Pad,
+                          Cmplx,
+                          Real,
+                          Imag,
+                          Rtoc,
+                          Window   : don't need to know about data format 
+                                     . The programs Pad Cmplx Real Imag 
+                                     Rtoc may not work on machine with 
+                                     words of 8 bytes length ( this will 
+                                     be the case of many sep programs 
+                                     since most of then use 4 as the size 
+                                     of floats ) .
+  ./our/segy/programs:    no program has been converted .
+
+  5- graphics
+
+          A new version of movie using a Motif interactive interface  
+  has been added to movie programs ( unlike xvmovie it doesn't differ 
+  from Smovie (or Movie),it just offers a more user friendly 
+  interface).
+
+  A new pen using Motif has been added to the list of pens.
+
+  These two programs are only prototypes and should be improved .
+
+  Changes in the release sep92.1
+  ------------------------------
+
+  All fortran linkage to C routines is now handled by cfortran.h
+  Most C linkage to fortran routines is now handled by cfortran.h
+
+  Added support for HP700 class machines.
+  Renames all makefiles to GNUmakefile to prevent standard make
+  picking them up and getting confused.
+  Rearranged may of the directories into more "sensible" places.
+  Changed the configuration files to be more flexible.
+  Added a csh version of install for machines that don't have bsd 
+  style install (removed the "installsep" program).
+  Xtpen has been much improved, it can be used as an animated frame 
+  flipping program.
+  Added more pen filters to the default distribution.
+  Sundry bug fixing has taken place over the past year.
+  Made many programs write their output format correctly.
+
+  Added an experimental feature to header synchronization, if
+  you specify isinstream=y and isoutstream=y then no header sync
+  will take place and the header will be read a character at a time.
+  This feature enables you to treat SEP header+data streams as a regular
+  unix file (e.g. write them to disk, tape, pass through filters etc.)
+
+
+  Changes in the release sep91.2
+  ------------------------------
+
+  Renamed libmath and libutil to libsepmath and libseputil
+  Added socket based syncronisation to seplib so that it works
+  across the network
+  Added possibility of environment variables as leading component
+  of a file name. See the new routine expandnm.c
+  Changed build environment to be more flexible. You don't need to
+  set any environment variables if all the source is kept together.
+  Added some other vplot filters and utilities to the release.
+  See the separate file worklog91.1-91.2 for more details of the changes.
+  
+
+
+
+  Changes in the release sep93.1
+  ------------------------------
+
+  Added support for Cray class machine. (Tested on a Cray-YMP).
+  Added support for X11movie.
+  Fixed bug in sseek to correctly seek for relative positions;
+  consequently fixed Taplot.
+
+
+
+
+
+  Changes in the release sep93.2
+  ------------------------------
+  Added support for SGI machines (from Stew Levin)
+  Xtpen now has resources that can be used to set default
+  behavior.
+  Sundry bug fixes.
+  Started absorbing man pages into self doc so that self doc
+  becomes the only documentation (with scripts to make man pages).
+  Added CM5 as a separate machine type because some programs
+  compile differently on the CM5.
+
+
+
+
+
+
+  Changes in the release sep94.1
+  ------------------------------
+
+  I/O on stdin/stdout and auxillary input/output now uses the same code.
+  I/O can be to a file, a pipe or a network socket. The syntax is as
+  follows:
+  
+  out2=filename in2=filename2             auxin and auxout to files
+  out2="| Wiggle | Tube"                  auxout to a command
+  in2="Wavelet flo=5 fhi=10 |"            auxin from a command
+  out2=":2001"                            auxout to a socket (it waits)
+  in2="spur:2001"                         auxin from a waiting socket.
+  stdin="spur:2001"                       stdin from a waiting socket.
+
+  I/O can now be to the same file as the header:
+  "Prog >out.H out=stdout" now creates a single file that can be
+  used as input to any seplib program (if linked with this version
+  of the seplib libraries). 
+
+  All documentation is now in the source files. A script to 
+  automatically generate man pages is supplied.
+
+  A new routine to cache a piped file is provided "make_unpipe()".
+  Byte uses this routine so you can now pipe to Byte.
+
+  New routines sreed_raw(), srite_raw(), sseek(), ssize() are added. 
+  All seplib programs should use:         
+          sreed/srite/srite_raw/sreed_raw/sseek/ssize
+  This is a side effect of the more modular I/O. The retun values
+  from auxin/auxout should only be checked to see if there is an error
+  and not used directly.
+
+  Old programs that use reed/rite/lseek/fread etc. should be changed.
+
+  All distributed programs now modified to obey these new rules.
+
+  Shared libraries supported on SUN-OS, this required the splitting
+  of seplib into a "C" library and a "Fortran "library, libsepf.a.
+  Fortran programs should line with "-lsepf -lsep".
+  C programs only need "-lsep".
+
+  New routine auxinout() opens a tag for input and output.
+  auxin() now opens for input only and auxout() for output only.
+
+  Moved all segy and tape related I/O to a new directory ./converters.
+  Added support for AVS and ProMAX converters in this directory.
+
+  Full support for CRAY vector machines.
+
+  Sundry bug fixes.
+
+  Totally new I/O architecture for seplib (./cube/libcube)
+  Multiple I/O types are supported and can be added in a modular
+  fashion. See ./cube/libcube/README_IO for how to add a new I/O type.
+
+  Current fully supported types are:
+          FILE_IO      :  using buffered I/O from C
+          FD_IO        :  using raw I/O from C
+          TMC_SDA_IO   :  I/O to a scalable disk array on CM5
+
+  Experimental types are:
+          MULTIFD_IO   :  I/O to multiple files (with one logical name)
+
+
+
+
+
+
+                           Release 4.02 
+Redhat package manager (rpm) support 
+New install mechanism that should make tracking down errors easier 
+Several bug fixes in both the install mechanism and the software 
+Release 4.01 
+    New Programs 
+        Grid_fold 
+    Fixes 
+        rand.r - thanks Ray Abma 
+        Cubeplot - thanks Steve Cole 
+        Kirchmod 
+        Ft3d 
+        Dd 
+        ratfor90 
+        Inclusion of correct cfortran.h 
+    Additional support 
+        Rehat 5.0 
+        16 and 24 Bit true clor- thanks Dave Nichols 
+Introduction of approximately 20 new programs and 80 new
+subroutines, including: 
+    Inversion library 
+    Approximately 10 new SEP3d Processing Software 
+    Modeling and travel time codes 
+    Converters to SEP3d 
+New directory structure 
+No compilation rules 
+Initial support for Sep3d piping 
+Library C source code standardized for ANSI/non-ANSI compilers 
+Source code cleaned up, reducing number of potentially hazardous
+warnings 
+                           Release 3.01 
+Fixed bug in util90 that stopped automatic installation 
+Numerous typos in the self-documentation were corrected 
+New version of Zero, written in sh rather than csh, for speed 
+New version of Promax to SEP90, and a Readme file explaining
+installation 
+Added kirchoff modeling codes (some of which are specific to the
+CM4) 
+                           Release 3.0 
+
+Rickmovie 
+Rick Ottolini has provied a new version of X11movie that is truly
+amazing. Much improved controls and display options are available. 
+
+New and improved platform support
+SEP has acquired two new platforms in the past year an SGI Power
+Challenge and a number of PCs running Linux. Thanks to Martin
+Karrenbach, Paul Hargrove, and Stew Levin SEP as added support for:
+
+    SGI64 - for the SGI Power Challenge running IRIX 6.1 and
+    above 
+
+    SGI32 - for the SGI Power Challenge 6.1+, 32 bit version that
+    allows libraries and object files compiled on 32 bit SGI
+    machines to be linked with SEPLIB 
+
+    LINUX - for LINUX 1.5.3 and above, tested exclusively on 586
+    PCs 
+
+In addition, thanks to Mickael Kern the DecAlpha (ALPHA)
+platform has been further debugged. 
+
+For further information of the level of support of various platforms
+see the Platform section. 
+
+64 Bit file systems 
+In an attempt to look more to the future, SEP has started to add
+support for 2GB+ file systems. The current release supports 2GB+ on
+the SGI power challenge (SGI64) and will soon support it on other
+platforms. 
+
+Chevron compression software
+Chevron has allowed SEP to distribute its decompression library
+which can compress to ratios of 50-100 with minimal data loss. 
+The current distribution provides the decompression library for
+SUN4, SGI, SGI32, and HP700 platforms. 
+
+SEP3d 
+
+
+
+-----------------------
+Release 5.0
+-----------------------
+
+
+1. Install mechanism changed to autoconf, automake, libtool
+
+2. Documentation in html, manual pages using pod
+
+3. New libraries
+
+   superset - sep3d data handling
+   sepsu    - run su programs using sep3d data
+   geef90   - Operators and solvers in Fortran90
+
+4. New Programs
+
+   Hwt3d    - Raytracing and traveltimes using Huygen's wavefront tracing
+	 Math     - Generic math using seplib files
+	 Cat3d    - Concatenate sep3d datasets, create virtual datasets
+   Grid_fold - Display the fold given a set of gridding parameters
+   Gauss- Create a model with gaussian blobs
+   ExtractPod, pod2text - New documentation programs
+   
+
+
+5.  Library changes
+
+    sep - fixed support for datasets  > 2GB
+    new sepwindow
+	  vpraster bug fixed
+    support for multi-file datasets
+    sep3d - allows for limited piping
+
+
+6.  Modified programs
+
+    pspen - support for changing background color on slides
+    pstexpen - support for space arround bounding boxes
+    Cp3d,Mv3d,Rm3d - bug fixes
+	  Window3d-Rewritten, much faster
+    Headermath - Support for removing keys, rotation
+    In3d - Support multi-file datasets
+    Attr3dhead, Dis3dhead, Disfill, Dd - small bug fixes
+		Interp- merge with Interp2, support linear, nearest neighbor,
+      and sinc interpolation
+    Ft3d- Fixed
+    Kirmod3d - Change of backbone library
+    Su2sep, Sep2su - Use sepsu library
+
+
+		Rewritten in C:  Create3d, Synch3d,  Window_key, Tcamp, Spectra, Smooth,
+     Spike, Wavelet
+
+7.  SEP makerules included
+
+
+--------------------------------------------------------
+Version 5.1
+
+A PARTIAL list of fixes/additions
+
+Fixed bug in multiple dataset (>number of datasets)
+Fixed bug in Nmo3d   (interp out of bounds)
+Fixed bug in Window3d (no n2)
+Fixed bug in In3d (string size to small)
+Added limit to the number of files
+Install include files (f90)
+Dave fixed support for graphics device
+James added LMO
+Fixed bug in Segy2sep 
+Fixed bug in valpackage
+Added check for maximum size in Cat
+Fixed Vel from par/from param problem
+Fixed Kirchmod problem
+Added Overlay
+Replace Rickmove with Ricksep with man new additions
+Add Rickvel
+Fixed Gazdag
+Fixed Velan
+New version of Transp
+Added auxtmp
+Fixed Cfft
+Fixed Ft3d
+Fixed Cubeplot bug
+Fixed vplot2gif (requires gifscile http://www.lcdf.org/~eddietwo/gifsicle/)
+Fixed bug in multi_fd which misconverted filesize arguments 
+Fixed popup problem , added popup options, added depth option for xtpen
+	make sure to mention problem in docs (neeed depth=8 for 24 bit os)
+Added scalebar option to Cubeplot
+Cleaned up gee support
+Added boxit option to Box
+Chaged selfdoc to support DIRs again
+Fixed three bugs in Interp (axis 3 referencing problem, problem when not interpolating axis 1, referencing error for all uninterpolated axes)
+Window bug on rounding on error check
+Pad inner pad worked
+Added rfft
+Fixed Rm3d added -q option Rm3d and Rm
+Fixed Grey (Tpow) bug
+Reinstated color=v color=V
+Typdefed libvplot
+Added Transf
+Fixed Pad
+Fixed Hwt2d  sG condition
+Fized Wiggle
+Fixed Dd for ein=1, esize=4
+Fixed Cat3d
+Added support for Nagware
+Fixed Window_key 
+Fixed Grey bug
+Ability to specify depth on command line
+Fixed superset writing xdr_float instead native_byte when esize=1
+-------------------------------------------------------------------
+Version 5.1.1
+
+A PARTIAL list of fixes/additions

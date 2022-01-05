@@ -1,0 +1,232 @@
+#!@PERL@
+#eval "exec perl -S $0 $*"
+#			if $running_under_some_shell;
+#
+# author: Matthias Schwab, 14Dec96
+# changes: Sergey Fomel,   20Jan97
+
+$usage = "Usage: $0 filename.[tex,ltx] \n";
+$selfdoc = "Invokes latex on the given tex file.
+    -v --verbose      prints out status while processing 
+    -n --dryrun       prints commands but does not execute them
+    -s --supress      supress tex messages
+";
+$SIG{'INT'} = 'handler';      # catch interrupt signals
+
+$| = 1; # flush output
+
+&getArgs;
+&mySystem("latex $texfile");
+&checkBibtex;
+&checkIndex;
+&checkRerun;
+exit (0);
+
+#-----------------------------------------------------------------------------
+
+# get invocation arguments
+sub getArgs {
+    if( $#ARGV < 0 ||$#ARGV > 2 ) { die "$usage$selfdoc"; }
+    die $usage unless ($texfile = pop (@ARGV));
+    while ($arg = shift (@ARGV)) {
+	if ($arg eq "-v" or $arg eq "--verbose") {$verbose = 1; next;}
+	if ($arg eq "-n" or $arg eq "--dryrun")  {$dryrun  = 1; next;}
+	if ($arg eq "-s" or $arg eq "--supress") {$supress = 1; next;}
+	die "Unrecognized switch: $arg\n";
+    }
+    if ($verbose) {
+	print "$0: verbose mode\n";
+	print "$0: dryrun  mode\n" if ($dryrun);
+	print "$0: supress mode\n" if ($supress);
+    }
+    $stem = $texfile ;
+    $texfile = $stem . ".tex" unless ($stem =~ s/\.(tex|ltx)$//); # suffix
+    $dvifile = $stem . ".dvi";
+    $auxfile = $stem . ".aux";
+    $logfile = $stem . ".log";
+    $idxfile = $stem . ".idx";
+}
+
+
+# Run a command 
+# if $supress, redirect stdout to null
+# if $dryrun, do nothing
+# syswait+handler are provided for interrupting latex
+sub mySystem{
+    my $command  = shift;
+    my $redirect = "";
+    $redirect = " > /dev/null"         if ($supress);
+    print "$0: $command$redirect\n";
+    &syswait ("$command$redirect") unless ($dryrun);
+}
+
+sub handler {
+    print "\n$0: aborting...\n";
+    print "Press Enter a few times to empty LaTeX buffer!\n";
+    kill ('INT', $child_pid) if ($child_pid);    
+    unlink ($dvifile) if (-e $dvifile);
+    exit(-1);
+}
+
+sub syswait {
+    local($_) = @_;
+    if ($child_pid = fork) {
+	my $status = waitpid($child_pid, 0);
+	$child_pid = 0;
+	return($?);
+    } else {
+	exec($_);
+	print;
+	print ":  $!\n";
+	exit($!);
+    }
+}
+
+# Run bibtex if necessary
+sub checkBibtex{
+    if (&bibOld || &bibNew) {
+	&mySystem ("latex $texfile");
+	&mySystem ("latex $texfile");
+    }
+}
+
+# Run bibtex in the new style
+# using chapterbib package
+sub bibNew {
+    local $new;
+    if (open (topaux, $auxfile)) {
+	print "$0: $auxfile opened to check for bibtex\n" if ($verbose); 
+	while (<topaux>) {
+	    $new++ if (/^\\bibdata/);
+	}
+	close (topaux);
+    }
+    &mySystem ("bibtex $stem") if ($new);
+    $new = &bibInput unless ($new);
+    &printBib ($new, "") if ($verbose);
+    $new;
+}
+
+# Run bibtex in the old (=obsolete) style
+# using bibunits package
+sub bibOld {
+    my $old; 
+    if (open (texfile)) {
+	while (<texfile>) {
+	    if (/^\\begin\{bibunit\}/) {
+		$old = 1;
+		last;
+	    }
+	}
+	close (texfile);
+    }
+    return (0) unless ($old);
+    $old = 0;
+    print "$0: detected old citation macros\n" if ($verbose); 
+    opendir (DIR, '.');
+    my $aux = $stem . '\S+\.aux$';
+    foreach $bbl (grep (/aux$/, readdir (DIR))) {
+	$bbl =~ s/\.aux$//o;
+	&mySystem ("bibtex $bbl");
+	$old++;
+    }
+    closedir (DIR);
+    &printBib ($old,  "bibunit") if ($verbose); 
+    $old;
+}
+
+# Run bibtex on input files
+sub bibInput {
+    my ($input,%includes);
+    undef %includes;
+    if (open (texfile)) {
+	while (<texfile>) {
+	    s/([^\\])?(\%.*)$/$1/;
+	    if (/\\includeonly\{([^\}\s]+)/) {
+		%includes = map {$_, 1} split (/\,/,$1);
+	    }
+	    if (/\\include\{([^\}\s]+)/) {
+		if (defined (%includes)) {
+		    $input += bibInclude ($1) if ($includes{$1});
+		} else {
+		    $input += bibInclude ($1);
+		}
+	    }
+	}
+	close (texfile);
+    }
+    &printBib ($input, "included") if ($verbose);
+    $input;
+}
+
+sub bibInclude {
+    my $infile = shift;
+    my $auxfile = $infile;
+    $auxfile =~ s/\.tex$//;
+    $auxfile .= '.aux';
+    my $include = 0;
+    if (open (AUX, $auxfile)) {
+	print "$0: $auxfile opened to check for bibtex THEN\n" if ($verbose);
+	while (<AUX>) {
+	    if (/\\bibdata/) {
+		&mySystem ("bibtex $infile");
+		$include = 1;
+		last;
+	    }
+	}
+	close (AUX);
+    }
+    $include;
+}
+
+sub printBib {
+    my ($count,$name) = @_;
+    if ($count == 1) {
+	print "$0: processed the $name bibliography\n";
+    } elsif ($count > 1) {
+	print "$0: processed $count $name bibliographies\n";
+    } else {
+	print "$0: didn't find any $name bibliographies\n";
+    }
+}
+
+# Run makeindex if necessary
+sub checkIndex {
+    if (-e $idxfile) {
+	&mySystem ("makeindex $idxfile");
+	&mySystem ("latex     $texfile");
+    }
+}
+
+# Rerun latex if necessary
+# (3 times maximum)
+sub checkRerun {
+    my ($run,$rerun);
+    while (open (logfile) && ($run++ < 3)) {
+	$rerun = 0;
+	print "$0: $logfile opened to check for Rerun\n" if ($verbose); 
+	while (<logfile>) {
+	    if (/\bRerun/) {
+		unless (/^\(natbib\)/) {
+		    &mySystem ("latex $texfile");
+		    $rerun = 1;
+		    last;
+		}
+	    }
+	}
+	close (logfile);
+	last unless ($rerun);
+    }
+}
+	
+
+
+
+
+
+
+
+
+
+
+

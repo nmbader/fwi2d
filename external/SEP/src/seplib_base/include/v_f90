@@ -1,0 +1,111 @@
+#!/usr/bin/perl
+
+
+$list="";
+	$i=1;
+$compile=0;
+while($i< $#ARGV){
+	if($ARGV[$i] =~ /^-c/){ $compile=1;} # WE ARE COMPILING
+  elsif($ARGV[$i]=~/(.+)\.f90$/){$file=$1;}
+	else{ $list.="$ARGV[$i] "; $i++;}
+ $i++;
+}
+
+
+if($compile==0){
+	$stat=system("vf90 $list");
+	if($stat/256 !=0) { die "Trouble linking \n";}
+}
+else{
+	open(CODE,"$file.f90") or die "trouble opening $file.f90 \n";
+
+	#first find the module name
+	$found=0;
+	while(<CODE> ){
+		$line=$_;
+		if($line=~/^\s*module\s+(\S*)\s*$/i){  $mod[$found]=$1;$found++;}
+	}
+	close(CODE);
+	if ($found ==0){ 
+		$stat=system("vf90 $list -c $file.f90");
+		if($stat/256 !=0) { die "Trouble compiling, no modules found \n";}
+	
+	}
+	else{
+
+	#do the first stage of compiling
+	$stat=system("vf90 $list -vo -c $file.f90");
+	if($stat/256 !=0) { die "Trouble first stage of compiling \n";}
+	
+	&re_do;
+	
+	$stat=system("vf90 $list -vn -c V$file.f");
+	if($stat/256 !=0) { die "Trouble with second stage of compiling \n";}
+
+	$stat=system("mv V$file.o $file.o");
+	if($stat/256 !=0) { die "Trouble moving object file \n";}
+
+	$stat=system("rm V$file.f");
+	if($stat/256 !=0) { die "Trouble removing temp f77 files \n";}
+}
+}
+
+
+sub re_do{
+
+foreach $module (@mod){
+
+$buffer="";
+open(INC,"V$module.inc") or die "trouble opening V$module.inc  for read\n";
+$i=0;
+while(<INC>){
+	$line=$_;
+	$i++;
+	if($i==1){ $first="$line\n";}
+	elsif ($line =~/^\s*external/){ $external.="$line\n";}
+	elsif($line =~/\=/){}
+	else {$buffer.="$line";}
+}
+close(INC);
+open(INC, ">V$module.inc") or die "trouble opening V$module.inc for write\n";
+print INC $first;
+print INC $external;
+print INC $buffer;
+close(INC);
+}
+
+}
+
+	
+	
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

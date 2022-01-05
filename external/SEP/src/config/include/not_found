@@ -1,0 +1,12 @@
+#!/usr/bin/env perl
+#<
+#Author: Robert Clapp, ESMB 463, 7230253
+#
+#Date Created:Thu Sep  21 22:02:12 PDT 2000
+#
+
+print STDERR "$ARGV[0] not found by configure \n"
+print STDERR  "In order to use this feature you must either:  \n";
+print STDERR  "A: Make sure the appropriate software is in your path \n";
+print STDERR  "B: Modify the appropriate file in seplib/config/ \n";
+die;

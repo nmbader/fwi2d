@@ -1,0 +1,144 @@
+#!@PERL@
+#<
+#Author: Robert Clapp, ESMB 463, 7230253
+#
+#Date Created:Mon Jun  7 21:59:32 PDT 1999
+#
+
+$relative="@RELATIVE@";
+$fullsep="@FULLSEP@";
+$sep_doc=$0;
+$sep_doc=~s/ratsep/sep_doc_it -fortran/gm;
+
+if($0=~/^(.+)\/include\/ratsep$/){ $builddir=$1;
+ if($fullsep eq "no"){ $RATFOR90="ratfor90"; }
+	elsif($relative eq "NONE"){ $RATFOR90="$builddir/../ratfor90/ratfor90"; }
+	else{$RATFOR90="$builddir/../../ratfor90/$relative/ratfor90";}
+}
+else{ $RATFOR90="ratfor90"; }
+
+
+$cppargs=""; 
+$redo=0;
+if($redo==1){
+	$fargs="$builddir/include/$f ";
+}
+	
+
+
+$do_f90=0;
+$do_fpp=0;
+$main=0;
+$sep="-sep";
+foreach $arg (@ARGV){
+  if($arg =~ /^-DSOURCE=(.+)$/){$fpp_s="-DSOURCE='$1'"; $rat90.=" $arg ";}
+  elsif($arg =~ /^-D/){ $cppargs.=" $arg ";}
+  elsif($arg =~ /-dofpp$/){$do_fpp=1;}
+  elsif($arg =~ /-dof90$/){$do_f90=1;}
+  elsif($arg =~ /-sepmain$/){$main=1;$sep="-sepmain";}
+  elsif($arg =~ /ratsep$/){}
+  elsif($arg =~ /\.r90$/){}
+  elsif($arg =~ /\.rs90$/){}
+  elsif($arg =~ /\.lop$/){}
+  elsif($arg =~ /\.f90$/){}
+  elsif($arg =~ /\.f90$/){}
+  else { $fargs.="$arg ";}
+  $file=$arg;
+}
+if($main==1) { $sep_doc_it="$sep_doc_it ";}
+
+	
+if($0=~/^(.+)include\/ratsep$/){
+$base=$1;
+}
+elsif($0=~/(.+\/bin\/)ratsep$/){ $base=$1;
+}
+else {
+        print STDERR "Unrecognized calling pattern $0  \n";
+        exit 1;
+}
+$SAW="$base"."tools/autowriters/saw/saw90 $base/tools/autowriters/saw";
+$FPP="$base"."tools/spp/spp";
+
+
+
+if($file=~/^(.+)\.(\S+)$/){$ext=$2;$rest=$1;
+ if($rest=~/^(.+\/)(.+)$/){$dir=$1; $b=$2;}
+  else{ $b=$rest; $dir="./";}
+  $output="$b".".o";$base="$dir"."$b";
+  $baseloc=$base;
+  $fargs.=" -o $output";
+ if($do_f90==1){
+	  if($ext eq "f90"){
+	  	@commands=( 
+        "echo $base.f90  already in correct form "
+	  		);
+	  }
+	  elsif($ext eq "f90"){
+	  	@commands=( 
+         "cp $file $base.F90sep"
+	  		);
+	  }
+	  elsif($ext eq "r90"){
+	  	@commands=( 
+	  		"$RATFOR90 <$file $rat90  >$base.f90s"
+	  		);
+	  }
+	  elsif($ext eq "clop"){
+	  	@commands=( 
+	  		"$RATFOR90 <$file $rat90 $sep -dcomplex  | $FPP   $cppargs >$base.f90s"
+	  		);
+	  }
+	  elsif($ext eq "rs90" ){
+	  	@commands=( 
+	  		"$RATFOR90 <$file $rat90 $sep | $sep_doc     >$base.f90s"
+	  		);
+	  }
+	  elsif($ext eq "lop"){
+	  	@commands=( 
+	  		"$RATFOR90 <$file $rat90 $sep   | $FPP   $cppargs     >$base.f90s"
+	  		);
+	  }
+	  elsif($ext eq "F90sep"){
+	  	@commands=( 
+	  		"$sep_doc <$file > $base.f90s $fpp_s"
+	  		);
+	  }
+	  elsif($ext eq "fs90"){
+	  	@commands=( 
+	  		"$SAW $file  $rat90>$base.f90s"
+	  		);
+	  }
+	  else{
+	  	print STDERR "Unrecognized extension $ext \n";
+	  	exit 1;
+	  }
+ } 
+ elsif($do_fpp==1){
+	  if($ext eq "f90s"){
+	  	@commands=( 
+	  		"$FPP <$file $cppargs  >$baseloc.f90 $fpp_s"
+	  		);
+	  }
+	  elsif($ext eq "F90sep"){
+	  	@commands=( 
+	  		"$FPP <$file $cppargs  >$baseloc.f90 $fpp_s"
+	  		);
+	  }
+ }
+ else{
+  print STDERR "only work in do_fpp and do_f90 modes \n";
+   exit 1;
+ }
+}
+else{
+	print STDERR "Unrecognized file type $file \n";
+	exit 1;
+}
+
+for($i=0; $i < @commands; $i++){
+	print STDERR "$i: $commands[$i]\n";
+	$exit=system($commands[$i]);
+	if($exit/256 !=0){ exit $exit/256;}
+}
+exit 0;

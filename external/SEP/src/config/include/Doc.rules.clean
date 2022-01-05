@@ -1,0 +1,100 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file contains rules for cleaning intermediate files
+#
+${SEPINC}/Doc.rules.clean: ; 
+.PHONY : jclean klean.usual klean.tex klean.fort texclean klean.3d sepclean bobclean
+
+# SEP's GNU make rules do not supply a general clean rule, since such
+# a rule easily removes the wrong files. The rules in this file are 
+# based on some simple naming (especially suffix!) conventions. An author
+# uses these rules by making a jclean a dependency to his target clean.
+jclean : klean.usual klean.tex klean.fort klean.fort90;
+
+bclean: sepclean
+	@-${TOUCH} log sum err .aa.swp paper.tex.bak log2
+	@-${RM} .??*.sw? *.tex.bak sum log err log?
+
+sepclean:	jclean
+	@-${TOUCH} junk.H@ junk.H junk.H@@ junk.H@@@ junk.H@@@@ junk.H@@@@@
+	@-${RM} *.H@ *.H *.H@@ *.H@@@ *.H@@@@ *.H@@@@@
+
+# To keep the clean rules silent (i.e. to suppress warnings from gmake
+# arising from rm returning a non-zero value), we touch some files into
+# existence.
+# Note that e.g. a ps file in the local directory is considered an 
+# intermediate file and is removed. However a ps file in ${RESDIR} is 
+# considered a result file and is not removed.
+KLEANUSUAL := \\\#*\\\# ?*~ core a.out mon.out paper.log \
+              *.o *.x *.H *.H@ *.A *.A@ *.M *.ps *.v *.v3 *.V *.trace 
+klean.usual :
+	@-${TOUCH} ${KLEANUSUAL} junk.quiet
+	@-${RM}    ${KLEANUSUAL} junk*
+
+KLEANTEX   :=  *.PDF *.pdf *.ps *.dvi *.aux *.bbl *.blg *.log *.toc *.ind *.idx  *.lof *.ilg TEX[0-9]*
+LATEX_FILES  = $(patsubst %.ltx,%,$(wildcard *.ltx)) junkltx
+ACTIVE_FILES = $(patsubst %_act.tex,%,$(wildcard *_act.tex)) junk_act
+klean.tex texclean:
+	@-${TOUCH} ${KLEANTEX}  junk.tex
+	@-${RM}    ${KLEANTEX}  junk.*
+	@\
+	for name in $(LATEX_FILES)   ; do 			\
+	  if ${EXIST} $${name}.tex   ; then 			\
+	     ${TOUCH} $${name}.ltx ;				\
+	     ${RM}    $${name}.ltx ;				\
+	  fi ;							\
+	done
+	@\
+	for name in $(ACTIVE_FILES)   ; do 			\
+	  if ${EXIST} $${name}.tex   ; then 			\
+	     ${TOUCH} $${name}_act.tex ;			\
+	     ${RM}    $${name}_act.tex ;			\
+	  fi ;							\
+	  if ${EXIST} $${name}       ; then 			\
+	     ${TOUCH} $${name}_act.tex ;			\
+	     ${RM}    $${name}_act.tex ;			\
+	  fi ;							\
+	done	
+
+klean.3d : 
+	@-${TOUCH} junk.H@@ junk.H@@@ junk.H@@@@ junk.H@@@@@
+	@-${RM} *.H@@ *.H@@@ *.H@@@@ *.H@@@@@
+
+FORT_FILES = $(patsubst %.f,%,$(wildcard *.f)) junk.quiet
+klean.fort:
+	@\
+	for name in ${FORT_FILES} ; do				\
+	  if  ${EXIST} $${name}.r				\
+	   || ${EXIST} $${name}.rs				\
+	   || ${EXIST} $${name}.rt				\
+	   || ${EXIST} $${name}.rst				\
+	   || ${EXIST} $${name}.fs ; then			\
+	      ${TOUCH} $${name}.f ;				\
+	      ${RM}    $${name}.f ;				\
+	  fi ;							\
+	done
+
+klean.fort90:
+	@-${TOUCH} junk.mod junk.kmo .make.dependencies.junk junk.stb jurnk.rii
+	@-${RM}    *.mod *.kmo .make.dependencies.* *.stb *.rii
+	@-\
+	  if  ${OTEST} -d ${SRCDIR}/rii_files ; then		\
+	      ${RM}    -r ${SRCDIR}/rii_files ;			\
+	  fi
+
+HTML_FILES = $(patsubst ${HTMLDIR}/%_html,%,$(wildcard ${HTMLDIR}/*_html)) junk.quiet
+jdistclean: burn clean 
+	@-\
+	for name in ${HTML_FILES} ; do				\
+	  if  ${OTEST} -d ${HTMLDIR}/$${name}_html ; then	\
+	      ${TOUCH}    ${HTMLDIR}/$${name}_html ;		\
+	      ${RM}    -r ${HTMLDIR}/$${name}_html ;		\
+	  fi ;							\
+	done
+	@-\
+	  if  ${OTEST} -d ${HTMLDIR}/Gif ; then		        \
+	      ${TOUCH}    ${HTMLDIR}/Gif ;	 		\
+	      ${RM}    -r ${HTMLDIR}/Gif ;			\
+	  fi
+

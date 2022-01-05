@@ -1,0 +1,14 @@
+#
+# Prog.rules.bottom
+#
+# This file contains  all of our general rules for compiling programs
+#
+include ${SEPINC}/Prog.rules.general
+include ${SEPINC}/Prog.rules.C
+include ${SEPINC}/Prog.rules.C++
+include ${SEPINC}/Prog.rules.F77
+include ${SEPINC}/Prog.rules.F90
+include ${SEPINC}/Prog.rules.shell
+include ${SEPINC}/Prog.rules.java
+include ${SEPINC}/Prog.rules.lib
+include ${SEPINC}/Prog.rules.depend

@@ -1,0 +1,36 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for painless compilation
+# This file contains the rules to create library files
+#
+${SEPINC}/Prg.rules.lib: ;
+
+# finds in SRCDIR all files whose suffix indicates that they are programs 
+# creates a variable for the corresponding object file (suffix .o)
+C_OBJS   = $(patsubst %.c,%.o,$(notdir $(wildcard ${SRCDIR}/*.c)))
+C++_OBJS = $(patsubst %.C,%.o,$(notdir $(wildcard ${SRCDIR}/*.C)))                        $(patsubst %.cc,%.o,$(notdir $(wildcard ${SRCDIR}/*.cc)))
+F77_OBJS = $(patsubst %.f,%.o,$(notdir $(wildcard ${SRCDIR}/*.f)))
+F90_OBJS = $(patsubst %.f90,%.o,$(notdir $(wildcard ${SRCDIR}/*.f90)))
+R90_OBJS = $(patsubst %.r90,%.o,$(notdir $(wildcard ${SRCDIR}/*.r90)))
+R_OBJS   = $(patsubst %.r,%.o,$(notdir $(wildcard ${SRCDIR}/*.r)))
+T_OBJS   = $(patsubst %.rt,%.o,$(notdir $(wildcard ${SRCDIR}/*.rt)))
+
+ALL_OBJS = ${C_OBJS} ${C++_OBJS} ${F77_OBJS} ${F90_OBJS} ${R_OBJS} ${T_OBJS} ${R90_OBJS}
+
+stupid: 
+	echo ${ALL_OBJS}
+
+.PRECIOUS: ${ALL_OBJS}
+
+# creates a library of all possible object files (suffix .o)
+${LIBDIR}/%.a : ${ALL_OBJS}
+		${ARCHIVE} ${LIBDIR}/$*.a $?
+		${RANLIB}  ${LIBDIR}/$*.a 
+
+
+
+
+
+
+
+

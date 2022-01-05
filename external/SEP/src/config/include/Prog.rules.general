@@ -1,0 +1,40 @@
+#;
+# Prog.rules.general
+#
+# General, compiler independent rules
+#
+# This sort of allows some short hand tricks
+# and provides a general mechanism for installing binaries
+
+define compile.init
+   @if [ ! -d $(OBJDIR) ]; then \
+      ${MKDIR} $(OBJDIR); \
+    fi;
+endef
+
+ifndef INSTALL_AOUT
+define INSTALL_AOUT
+  ${INSTALL} a.out $@
+  ${RM} a.out
+endef
+endif
+
+
+
+#A smooth way to handle platforms
+#without a f90 compiler
+
+ifeq (${HAVE_F90}, no)
+adsdas
+define F90_COMPILE
+	${compile.init}
+	@echo  "#include <stdlib.h>" >blah2.c
+ ${CC}  ${CSINGLEFLAGS} blah2.c -o $@
+endef
+
+define F90_LN
+	echo "#!/bin/sh " > $@
+	echo "echo need a F90 compiler " >>$@
+endef
+endif
+

@@ -1,0 +1,4 @@
+SCRIPT_PATH = /usr/local/share/TEX/bin/
+CONFIG      = /net/sepwww/sepwww/pub/webify.config
+DUMMY       = /net/sepwww/sepwww/pub/trash
+BASE_PATH   = /net/sepwww/sepwww/pub

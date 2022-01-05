@@ -1,0 +1,31 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+
+${SEPINC}/SEP.idoc.rules: ;
+
+# For dummy targets #
+.PHONY : FORCE
+FORCE: ; 
+
+### definitions for paper.tex ###
+#
+# could be in SEP.paper.rules
+#
+
+dvi :             paper.dvi FORCE
+
+paper.dvi : build paper.tex textypefiles FORCE
+	@-${TOUCH} junk.aux junk.bbl
+	@-${RM} *.aux *.bbl 
+	${TEXPR}  -v -bib -d paper.tex
+	${MAKE} cleantextypefiles
+
+print:  paper.dvi FORCE
+	${TEXPR}  paper.dvi
+
+view:   paper.dvi FORCE
+	${TEXPR}  -v paper.dvi
+
+ghost : paper.dvi FORCE
+	xtex -useGhostscript true paper.dvi
+
+

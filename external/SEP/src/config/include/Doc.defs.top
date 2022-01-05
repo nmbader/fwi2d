@@ -1,0 +1,137 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file contains default variable definitions
+#
+#${SEPINC}/Doc.defs.top: ;
+
+# cause secondary files to be treated similarly to intermediates
+ifndef NO_SECONDARY
+.SECONDARY:
+endif
+
+### COMMON VARIABLE EXPRESSIONS ###
+
+
+# texpr was old SEP's script to convert tex files and to print or plot them
+# OTEXPRFLAGS = -s 
+# TEXPR = texpr ${OTEXPRFLAGS}
+
+# commands to display on the screen
+OVIEWFLAGS  = pixmaps=y
+VIEW        = ${SEPBINDIR}/tube ${OVIEWFLAGS} ${UVIEWFLAGS}
+GVIEW       = ${SEPLIBDIR}/not_found.x ghostview          ${UGFLAGS}
+CAT	    = /usr/bin/cat 
+XVIEW       = ${SEPLIBDIR}/not_found.x xv          	${UXFLAGS}
+OMOVIEFLAGS = -e ${SEPBINDIR}/Rickmovie
+MOVIE       = xterm ${OMOVIEFLAGS} ${UMOVIEFLAGS}
+
+# pstexpen converts a vplot file to a ps file
+OPSTEXFLAGS = color=${COLOR} fat=${FAT} fatmult=${FATMULT} invras=${INVRAS} force=${FORCE} 
+PSTEX      = ${SEPBINDIR}/pstexpen
+
+# is used to check for the existence of files
+OTEST    = /usr/bin/test
+ifeq "${SEP_ARCH}" "LINUX"
+	OTEST = /usr/bin/test
+endif 
+EXIST    = ${OTEST}   -f
+NOTEXIST = ${OTEST} ! -f
+
+# is used to check if rules to make certain targets exist
+# note: we send the textual output (stdout and stderr) to /dev/null
+#
+# for whatever reason, -q sometimes breaks, so we use -n instead
+PRE_CANDO = ${OTEST} 1 -ge ` ${MAKE} -s -n
+SUF_CANDO = > /dev/null 2>&1 ; echo "$$?" `
+
+CANDO_A     = ${PRE_CANDO} $*.A             ${SUF_CANDO}
+CANDO_V3    = ${PRE_CANDO} $*.view3         ${SUF_CANDO}
+CANDO_V     = ${PRE_CANDO} $*.view1         ${SUF_CANDO}
+CANDO_GIF   = ${PRE_CANDO} $*.viewgif       ${SUF_CANDO}
+CANDO_PS    = ${PRE_CANDO} $*.viewps        ${SUF_CANDO}
+CANDO_PDF   = ${PRE_CANDO} $*.viewpdf       ${SUF_CANDO}
+CANDO_TXT   = ${PRE_CANDO} $*.viewtxt       ${SUF_CANDO}
+CANDO_ACT   = ${PRE_CANDO} $*.action        ${SUF_CANDO}
+CANDO_DFACT = ${PRE_CANDO} $*.defaction     ${SUF_CANDO}
+
+CANDO_R_PS  = ${PRE_CANDO} ${RESDIR}/$*.ps  ${SUF_CANDO}
+CANDO_R_PDF  = ${PRE_CANDO} ${RESDIR}/$*.pdf  ${SUF_CANDO}
+
+CANDO_R_TXT = ${PRE_CANDO} ${RESDIR}/$*.txt ${SUF_CANDO}
+CANDO_R_GIF = ${PRE_CANDO} ${RESDIR}/$*.gif ${SUF_CANDO}
+
+CANDO_PSML    = ${PRE_CANDO} $*.viewpsml        ${SUF_CANDO}
+CANDO_PSMA    = ${PRE_CANDO} $*.viewpsma        ${SUF_CANDO}
+
+CANDO_R_PSML  = ${PRE_CANDO} $*.ps.ml  ${SUF_CANDO}
+CANDO_R_PSMA  = ${PRE_CANDO} $*.ps.ma  ${SUF_CANDO}
+
+### RESULT LISTS ###
+
+# directory where the results are stored
+RESDIR = ./../Fig
+
+# combines the author's result listings
+#
+# The following should not be used in target/dependency lines which come
+# before the variables which they depend on are valid.
+# However, there is no such problem with command lines.
+RESULTSALL = ${RESULTSNR} ${RESULTSCR} ${RESULTSER} 
+RESULTSREP =              ${RESULTSCR} ${RESULTSER} 
+
+# a result stem can have different files which store versions of the result
+# in different format (e.g. ps and giff)
+# Following _oredered_ list contains the suffixes of SEP's result files
+# the order determines the standard precedence
+#RES_SUFFIXES = .A .v3 .v .gif .ps 
+RES_SUFFIXES =     .v3 .v .gif .ps .txt .pdf 
+
+# This returns the suffix of the first existing file ${RESDIR}/$*.suf
+# where suf is from RES_SUFFIXES
+FIRST_EXIST = ${suffix ${firstword ${wildcard ${addprefix ${RESDIR}/$*, ${RES_SUFFIXES}}}}}
+
+# For latex2html translation:
+L2HOPTS = 
+LATEX2HTMLDIR = /usr/local/share/TEX/latex2html
+LATEX2HTML = ${LATEX2HTMLDIR}/latex2html
+
+# Install later in SEPlib
+V2G = /sergey/bin/all/v2g
+
+BROWSER = @BROWSER@ 
+GHOSTVIEW = ${SEPLIBDIR}/not_found.x ghostview
+
+NETPBMDIR = '/usr/local/GNU/pbmplus';
+ifeq "${ARCH}" "LINUX"
+	NETPBMDIR = '/usr/bin'
+endif
+
+PAPERSIZE = ledger
+PS2GIF = env PAPERSIZE=${PAPERSIZE} ${LATEX2HTMLDIR}/pstoimg -gif -transparent -interlaced
+#PS2GIF = env \
+#	PNMCROP=${NETPBMDIR}/pnmcrop PPMTOGIF=${NETPBMDIR}/ppmtogif \
+#	PNMFLIP=${NETPBMDIR}/pnmflip PPMQUANT=${NETPBMDIR}/ppmquant \
+#	${LATEX2HTMLDIR}/pstogif -papersize ${PAPERSIZE}
+TRANSCOLOR = '\#ffffff' 
+# giftrans replaced by giftoppm | ppmtogif
+#GIFTRANS = giftrans -t ${TRANSCOLOR}
+PPM2GIF = /usr/bin/ppmtogif -trans ${TRANSCOLOR}
+GIF2PPM = /usr/bin/giftopnm
+
+# just in case
+TEXBINDIR = /usr/local/share/TEX/bin
+
+ECHO = /usr/bin/echo
+TAR=/usr/bin/tar
+
+LATEX2DVI   = $SEPBINDIR}/latex2dvi -v
+LATEX2PDF   = $SEPBINDIR}/latex2pdf -v 
+LATIFY   = ${SEPBINDIR}/Latify 
+CREATESSH =${SEPBINDIR}/CreateSSH
+PS2PDF      =/usr/bin/epstopdf
+ACROREAD    =${SEPLIBDIR}/not_found.x acroread
+DVIPS       =/usr/bin/dvips
+XTEX        =${SEPLIBDIR}/not_found.x xtex
+XDVI        =/usr/bin/xdvi
+

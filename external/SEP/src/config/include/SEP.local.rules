@@ -1,0 +1,10 @@
+
+ifdef SEPLOCAL
+	INSTALL_LOCAL=$(addprefix ${BINDIR}/, $(addsufix .x, ${SEPLOCAL}))
+	INSTALL_SEP=$(addprefix ${SEPBINDIR}/, ${SEPLOCAL})
+install_sep:	${INSTALL_SEP}
+${SEPBINDIR}/%:		${BINDIR}/%.x
+	${INSTALL} ${BINDIR}/$*.x ${SEPBINDIR}/$*
+endif
+
+

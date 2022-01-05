@@ -1,0 +1,5 @@
+project(SEPLIB-lib-corelibs)
+cmake_minimum_required(VERSION 2.8)
+add_subdirectory(sep)
+#add_subdirectory(sep3d)
+#add_subdirectory(superset)

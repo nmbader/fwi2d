@@ -1,0 +1,22 @@
+#
+# Prog.rules.lib
+#
+# FILE CONTAINING THE RULES TO MAKE LIBRARIES
+#
+
+ifndef OBJECTS
+OBJECTS   := $(strip $(patsubst %,$(OBJDIR)/%.o,$(basename $(SOURCES))))
+endif
+
+ifdef LIBNAME
+$(LIBNAME): $(OBJECTS)
+	cd ${OBJDIR};if [ ! -d $(dir ${LIBNAME}) ]; then \
+      ${MKDIR} $(dir $(LIBNAME)); \
+    fi; 
+ifeq ($(DEBUG),yes)
+	cd $(OBJDIR); $(AR) $(ARFLAGS) $@ $(notdir $(OBJECTS)); ${RANLIB} $@
+else
+	for i in $?; do $(LD) ${LIB_LD_OPTIONS} $$i; ${MV} a.out $$i; done; cd $(OBJDIR); ${TOUCH} $@; ${MV} $@ $@.bak; $(AR) $(ARFLAGS) $@ $(notdir $(OBJECTS)); $(RANLIB) $@
+
+endif
+endif

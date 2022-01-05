@@ -1,0 +1,92 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file contains rules for printing and displaying documents
+#
+${SEPINC}/Doc.rules.html: ;
+
+wwwmatt: 
+	${MAKE} HTMLDIR=${RESDIR} paper.html; 
+	${MAKE} paper.ps; gzip paper.ps; mv paper.ps.gz ${RESDIR} 
+
+
+ifndef HTMLDIR
+  HTMLDIR = ..
+endif
+
+html: paper.html
+
+
+%.html: FORCE
+	$(MAKE) ${HTMLDIR}/$*_html
+
+${HTMLDIR}/%_html: %_act.tex
+	${ECHO} "\\inputdir{$(PWD)}"  >  index_act.tex
+	${ECHO} "\\batchmode"          >> index_act.tex
+	cat $*_act.tex                >> index_act.tex
+	${LATIFY} ${LATOPTS} option=minimal option=cmfonts index_act.tex > index.ltx 
+# the dvi file is made to get cross-references right
+	@$(MAKE) index.dvi 
+# latex2html needs to run twice if the first run fails
+	@if ${LATEX2HTML} ${L2HOPTS} -dir ${HTMLDIR}/$*_html index.ltx ; then ${ECHO} "" ;\
+	else ${LATEX2HTML} ${L2HOPTS} -dir ${HTMLDIR}/$*_html index.ltx ; fi
+	@-${CREATESSH} $*.gs      >${HTMLDIR}/$*_html/.all_print.sepsh
+# filling the Gif directory
+	@if ${OTEST} ! -d ${HTMLDIR}/Gif; then mkdir ${HTMLDIR}/Gif ; fi
+	$(MAKE) buildGif sepshell 
+	@-${RM} index_act.tex index.ltx
+
+# bug: confuses makemake rules
+${HTMLDIR}/Gif/%.gif :  %.build # ${RESDIR}/%.ps
+	@-if ${EXIST}   ${RESDIR}/$*.gif ;                      \
+	then /bin/cp    ${RESDIR}/$*.gif ${HTMLDIR}/Gif/$*.gif ; \
+	else /bin/cp    ${RESDIR}/$*.ps   junk.ps ;		\
+	${PS2GIF} -out junk.gif          junk.ps ;		\
+	${MV} junk.gif ${HTMLDIR}/Gif/$*.gif ;                  \
+	if ${EXIST}  junk.ps; then ${RM} junk.ps ; fi ;		\
+	fi
+	@-${ECHO} "Made ${RESDIR}/$*.gif"
+
+%.buildGif: FORCE
+	@-if ${EXIST} ${RESDIR}/$*.v3; then \
+	if ${OTEST} ! -d ${HTMLDIR}/Gif/$*; then mkdir ${HTMLDIR}/Gif/$*; fi; \
+	${V2G} ${RESDIR}/$*.v3 ${HTMLDIR}/Gif/$*/; \
+	fi
+	${MAKE} ${HTMLDIR}/Gif/$*.gif
+
+buildGif: ${addsuffix .buildGif, ${RESULTSALL}}
+
+sepshell: FORCE
+	@-${CREATESSH} clean          >${HTMLDIR}/Gif/.all_clean.clean
+	@-${CREATESSH} print          >${HTMLDIR}/Gif/.all_print.sepsh
+	@-${foreach fl,${RESULTSALL},  	                                  \
+	  ${CREATESSH} ${fl}.view     >${HTMLDIR}/Gif/${fl}_view.sepsh    ;  \
+	}
+	@-${foreach fl,${RESULTSREP},  	                                  \
+	  ${CREATESSH} ${fl}.burn     >${HTMLDIR}/Gif/${fl}_burn.clean    ;  \
+	  ${CREATESSH} ${fl}.buildGif >${HTMLDIR}/Gif/${fl}_build.sepsh   ;  \
+	  ${CREATESSH} ${fl}.edit     >${HTMLDIR}/Gif/${fl}_edit.clean    ;  \
+	  ${CREATESSH} restore        >${HTMLDIR}/Gif/${fl}_restore.clean ;  \
+	}
+	@-${foreach sys,${SYSCALLS},  	                                  \
+	  ${CREATESSH} ${sys}     >${HTMLDIR}/Gif/${sys}.sepsh            ;  \
+	}
+
+browse: paper.browse
+
+%.browse: FORCE
+	$(MAKE)    ${HTMLDIR}/$*_html
+	${BROWSER} ${HTMLDIR}/$*_html/index.html & 
+
+#idvi: FORCE
+#	${MAKE} paper.idvi
+
+#%.idvi: %.tex 
+#	@-${ECHO} "this works right now only for pure latex files" 
+#	latex $*.tex
+#	latex $*.tex
+#	mkdir $*.idvi
+#	cd    $*.idvi; idvi.local ../$*.dvi -title "$* : a document"
+
+
+

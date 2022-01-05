@@ -1,0 +1,91 @@
+${SEPINC}/SEP.obj.rules: ;
+
+# C object rules:
+
+%.o: ${SRCDIR}/%.c
+	${CC} ${COPTS}    -c -DSOURCE='"'${FULLSRC}/$<'"' ${SRCDIR}/$<
+
+%.o: ${SRCDIR}/%.cc 
+	${C++} ${C++OPTS} -c -DSOURCE='"'${FULLSRC}/$<'"' ${SRCDIR}/$<
+
+%.o: ${SRCDIR}/%.C 
+	${C++} ${C++OPTS} -c -DSOURCE='"'${FULLSRC}/$<'"' ${SRCDIR}/$<
+
+# F77 object rules:
+
+F77_COMP = ${F77} ${F77OPTS} -c $*.f
+
+%.o: %.f ${SRCDIR}/%.rs	 
+	jdskadjfk
+	${F77_COMP}
+
+%.o: %.f ${SRCDIR}/%.rt
+	${F77_COMP}
+
+%.o: %.f ${SRCDIR}/%.rst
+	${F77_COMP}
+
+%.o: %.f ${SRCDIR}/%.r
+	${F77_COMP}
+
+%.o: %.f ${SRCDIR}/%.fs
+	${F77_COMP}
+
+%.o: %.f ${SRCDIR}/%.ft
+	${F77_COMP}
+
+%.o: ${SRCDIR}/%.f
+	${FPP} $< $(addprefix -I,${SRCDIR}) ${FIXNULL} > $*fix.f
+	${F77} ${F77OPTS} -c $*fix.f
+	${MV} $*fix.o $*.o
+	${RM} $*fix.f 
+
+%.f: ${SRCDIR}/%.r
+	${RATFOR} -C $< | ${FPP} \
+	      -DSOURCE='"'${FULLSRC}/$<'"' \
+	      -Dsource='"'${FULLSRC}/$<'"' \
+	      ${MACH} $(addprefix -I,${SRCDIR}) ${FIXNULL} > $@
+
+PREPRO = ${FPP} -Dsource='"'${FULLSRC}/$<'"' \
+	 ${MACH} $(addprefix -I,${SRCDIR}) ${FIXNULL}
+
+%.f: ${SRCDIR}/%.rst
+	${SAW} $< > $*.rt 
+	${SAT} $*.rt | ${RATFOR} -C | ${PREPRO} > $@
+	${RM} $*.rt 
+
+%.f: ${SRCDIR}/%.rs
+	${SAW} $< | ${RATFOR} | ${PREPRO} > $@
+
+%.f: ${SRCDIR}/%.rt
+	${SAT} $< | ${RATFOR} | ${PREPRO} > $@
+
+%.f: ${SRCDIR}/%.fs
+	${SAWF} $< | ${PREPRO} > $@
+
+%.f: ${SRCDIR}/%.ft
+	${SAT} $< | ${PREPRO} > $@
+
+# CM Fortran rules
+
+CMF_COMP = ${CMFC} ${CMFOPTS} -c $*.fcm
+
+%.fcm: ${SRCDIR}/%.rcm
+	${RATFOR} -C $< | ${FPP} \
+	      -DSOURCE='"'${FULLSRC}/$<'"' \
+	      -Dsource='"'${FULLSRC}/$<'"' \
+	      ${MACH} $(addprefix -I,${SRCDIR}) ${FIXNULL} > $@
+
+%.fcm: ${SRCDIR}/%.fscm
+	${CMSAW} $< | ${RATFOR} | ${PREPRO} > $@
+
+%.o:   ${SRCDIR}/%.fcm
+	${CMF_COMP}
+
+%.o: %.fcm ${SRCDIR}/%.rcm
+	${CMF_COMP}
+
+%.o: %.fcm ${SRCDIR}/%.fscm
+	${CMF_COMP}
+
+

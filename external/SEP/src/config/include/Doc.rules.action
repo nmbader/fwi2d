@@ -1,0 +1,75 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file contains conditional variable definitions
+#
+${SEPINC}/Doc.rules.action: ; 
+
+# This rule is used when a pushbutton in a figure caption of an electronic
+# document is pressed. It decides about bringing up an xtpanel window 
+# The default (NOMENU undefined) brings up a default xtpanel window
+#   This rule decides about xtpanel format: 
+#   e.g. REPROFLAGS decides about a  warning     button
+#   or   CANDO_ACT  decides about an interaction button 
+# The alternative defaults to the %.idoc rule
+# 
+# BTW, all executable *.xtpanel files live in /usr/local/lib/X11/xtpanel 
+#          source is in interact/chooser
+#
+ifndef NOMENU
+CAN_INTERACT = ${shell if ${CANDO_ACT} ; then echo 'yes' ; fi}
+INTERFLAGS   = ${subst yes, -DINTERACT , ${CAN_INTERACT}}
+WARNFLAGS    = ${subst yes, -DFIGWARN  , ${IS_CR}}
+REPROFLAGS   = ${subst yes, -DNOREBUILD, ${IS_NR}}
+XTP_ACT = xtpanel -cpp -var figdir ${RESDIR} -var mechanism gmake -var name $*
+%.menu : FORCE
+	@echo ER:  ${IS_ER}
+	@echo CR:  ${IS_CR}
+	@echo REP: ${IS_REP}
+	@echo NR:  ${IS_NR}
+	${XTP_ACT} ${INTERFLAGS} ${WARNFLAGS} ${REPROFLAGS}	\
+	-file builder.xtpanel > /dev/null ;
+else 
+%.menu : %.idoc FORCE
+endif
+
+# Finds out if the author supplied an xtpanel script and which one
+ifeq "${HAS_XTPANEL}" "no"
+  HAS_PAR = no
+  HAS_CPP = no
+  HAS_EDT = no
+else
+  HAS_PAR = ${EXIST}    $*.panel    || ${EXIST} $*.p.orig
+  HAS_CPP = ${EXIST}    $*.panel.pp
+  HAS_EDT = ${NOTEXIST} $*.panel    && ${EXIST} $*.p.orig
+endif
+
+# executes the idoc rule for all results listed in makefile
+idoc : $(addsuffix .idoc,${RESULTSALL}) FORCE ;
+
+# The default interaction rule. If there is an rule %.action
+# then make it, otherwise look for interesting figures or
+# xtpanel scripts.
+%.idoc : FORCE
+	@-\
+	if ${CANDO_ACT}       		; then		\
+	  $(MAKE) $*.action     	;		\
+	elif ${CANDO_A}         	; then		\
+	  $(MAKE) $*.movie      	;		\
+	elif ${CANDO_V3}        	; then		\
+	  $(MAKE) $*.view3      	;		\
+	elif ${HAS_EDT}         	; then		\
+	  xtpanel -var name $* -file chooser.xtpanel ;	\
+	elif ${HAS_PAR}         	; then		\
+	  xtpanel -file $*.panel	;		\
+	elif ${HAS_CPP}         	; then		\
+	  xtpanel -cpp -file %.panel.pp ;		\
+	elif ${EXIST} ${RESDIR}/$*.v  	; then		\
+	  $(MAKE) $*.oview            	;		\
+        else						\
+          echo "make $@: cannot make target $*.defaction " ; \
+	fi 
+
+
+
+

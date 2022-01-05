@@ -1,0 +1,60 @@
+# 
+# SEP.libs.defs
+#
+
+
+
+SEPLIB:=-lsep
+SEPLIBF:=-lsep
+SEPLIBF90:=-lsep
+SEPLIB2DF90:=-lsep
+SEPLIB3D:=-lsep3d
+SEPLIB3DF:=-lsep3d
+SEPLIB3DF90:=-lsep3d
+SUPERSET:=-lsuperset
+SUPERSETF:=-lsuperset
+SUPERSETF90:=-lsuperset
+VPLOT:=-lvplot
+VPLOTF:=-lvplot
+VPLOTF90:=-lvplot
+GLPLOT:=-lglplot
+GEEF90:=-lgeef90
+GEELIB:=-lgeef90
+SEPMATH:=-lsepmath
+SEPMATHF:=-lsepmath
+SEPMATHF90:=-lsepmath
+SEPAUX:=-lsepaux
+SEPAUXF:=-lsepaux
+SEPAUXF90:=-lsepaux
+SEPFFT:=-lsepfft
+SEPFFTF:=-lsepfft
+SEPFFTF90:=lsepfft
+SEPCONVERT:=-lsepconvert
+SEPCONVERTF:=-lsepconvert
+SEPCONVERTF90:=-lsepconvert
+SEPVECTOR:=-lsepvector
+SEPVECTORF:=-lsepvector
+SEPVECTORF90:=-lsepvector
+SEPFILTER:=-lsepfilter
+SEPTRAVEL:=-lseptravel
+SEPTRAVELF:=-lseptravel
+SEPTRAVELF90:=-lseptravel
+SEPVELANF:=-lsepvelan
+SEPVELANF90:=-lsepelan
+SEPIMAGEF:=-lsepvelan
+SEPFILTERF:=-lsepfilter
+SUSEPLIB:=-lsupsep
+BEILIB90 := -lbei90 ${GEELIB}
+BEILIB=-lbei
+
+#WHEN ADDED TO SEPlib need to be defined in configure.in
+TDFLIB := -ltdf
+BEILIB := -lbei
+PVILIB := -lpvi
+GEMLIBF := -lgem
+TDFLIBF := -ltdf
+BEILIBF := -lbei
+PVILIBF := -lpvi
+
+
+

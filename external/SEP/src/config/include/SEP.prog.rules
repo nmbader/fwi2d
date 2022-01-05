@@ -1,0 +1,74 @@
+# Deletes all implicite rules but the ones listed.
+# The suffixes .c .o .out .f .r .cc .C .p are explicitely used.
+
+${SEPINC}/SEP.prog.rules: ;
+
+# C Link
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.c 
+	${CLD} ${CLDOPTS} $(filter %.o,$^) ${UCLIBDIR} \
+               ${VPLOTLIB} ${SEPLIB} ${SYSLIB}       
+	${INSTALL} a.out ${BINDIR}/$@ 
+
+# C++ Link
+define C++_LN 
+${C++LD} ${C++LDOPTS} $(filter %.o,$^) ${UC++LIBDIR} \
+         ${VPLOTLIB} ${SEPLIB} ${SYSLIB}
+${INSTALL} a.out ${BINDIR}/$@
+endef
+
+${BINDIR}/%.x %.x : %.o %.C 
+	${C++_LN}
+
+${BINDIR}/%.x %.x : %.o %.cc
+	${C++_LN}
+
+
+# FORTRAN Link
+
+define F77_LN
+${F77} ${F77LDOPTS} $(filter %.o,$^) ${UF77LIBS} \
+       ${VPLOTLIB} ${SEPLIBF} ${SEPLIB} ${FLIB2} ${SYSLIB}
+${INSTALL} a.out $@
+${RM} a.out
+endef
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.f 
+	${F77_LN}
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.r 
+	${F77_LN}
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.rs
+	${F77_LN}
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.fs
+	${F77_LN}
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.rt
+	${F77_LN}
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.rst
+	${F77_LN}
+
+# CM Fortran stuff 
+
+define CMF_LN
+${CMFC} ${CMLDOPTS} $(filter %.o,$^) ${CMLIB} \
+        ${VPLOTLIB} ${SEPLIBF} ${SEPLIBCM5} ${SYSLIB}
+${INSTALL} a.out $@
+${RM} a.out
+endef
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.fcm
+	${CMF_LN}
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.rcm
+	${CMF_LN}
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.rscm
+	${CMF_LN}
+
+${BINDIR}/%.x %.x : %.o ${SRCDIR}/%.fscm
+	${CMF_LN}
+
+

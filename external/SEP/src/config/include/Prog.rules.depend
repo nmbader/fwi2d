@@ -1,0 +1,14 @@
+#;
+# Prog.rules.depend
+#
+# General, compiler stuff that needs to come after specific rules
+#
+
+ifndef OBJDIR
+%.o:	${OBJDIR}/%.o
+else
+ifeq (${OBJDIR},.)
+%.o:	${OBJDIR}/%.o
+endif
+endif
+

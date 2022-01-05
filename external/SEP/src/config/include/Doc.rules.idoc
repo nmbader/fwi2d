@@ -1,0 +1,143 @@
+# copyright Stanford Exploration Project.  See GNU public license.
+#
+# This file is part of SEP's set of GNU make rules for electronic documents
+# This file contains rules for printing and displaying documents
+#
+${SEPINC}/Doc.rules.idoc: ;
+
+# For dummy targets #
+.PHONY : FORCE
+FORCE: 
+
+### TeX documents ###
+
+ps:     paper.ps    
+gs:     paper.gs    
+dvi:	paper.dvi   
+print:	paper.print 
+read:	paper.read  
+xtex:   paper.xtex  
+ghost:	paper.ghost 
+pdf:    paper.pdf   
+PDF:    paper.PDF
+aread:  paper.aread 
+
+LATOPTS = 
+XDVIOPTS = -s 7 -nopostscript -install
+PRINTOPTS =
+READOPTS  = -v
+GHOSTOPTS = -useGhostscript true
+
+# latex2dvi is SEP's script to convert tex files to dvi format
+LATEX2DVI   = latex2dvi -v
+
+# latex2pdf is SEP's script to convert tex files to pdf format
+LATEX2PDF   = latex2pdf -v
+
+# supplement .tex file with proper suffixes and prefixes
+# Note: actify has a side effect on included files
+%_act.tex: %.tex
+	${SEPBINDIR}/Actify $*.tex
+
+%.ltx: %_act.tex
+	${LATIFY} ${LATOPTS} $*_act.tex > $*.ltx 
+
+# create a device independent version
+%.dvi : %.ltx 
+	@${MAKE} build
+	@-${TOUCH} junk.aux junk.bbl
+	@-${RM} *.aux *.bbl
+	${LATEX2DVI} $*.ltx
+
+# create a pdf version
+%.PDF : %.ltx 
+	@${MAKE} buildPDF
+	@-${TOUCH} junk.aux junk.bbl
+	@-${RM} *.aux *.bbl
+	${LATEX2PDF} $*.ltx
+
+%.ps : %.dvi 
+	${DVIPS} -f $*.dvi > $*.ps
+
+%.print:  %.dvi 
+	${DVIPS} -P${PRINTER} $*.dvi
+Doc.rules.idoc:	${PS2PDF} $*.ps
+
+# PDF and pdf rules
+#%.pdf: %.ps 
+#	ps2pdf $*.ps $*.pdf
+%.pdf: %.ps 
+	export GS_OPTIONS="-dDownsampleColorImages=false \
+-dDownsampleGrayImages=false \
+-dDownsampleMonoImages=false \
+-dColorImageFilter=/FlateEncode \
+-dGrayImageFilter=/FlateEncode \
+-dMonoImageFilter=/CCITTFaxEncode \
+-dAutoFilterColorImages=false \
+-dAutoFilterGrayImages=false \
+-dAutoFilterMonoImages=false"
+	${PS2PDF} $*.ps 
+
+%.aread: %.pdf 
+	${ACROREAD} $*.pdf
+
+%.ghost : %.dvi 
+	${XTEX}     ${GHOSTOPTS} $*.dvi
+
+%.read:   %.dvi 
+	${XDVI} ${XDVIOPTS} $*.dvi
+
+%.jslide: %_act.tex
+	${LATIFY} ${LATOPTS} style=jslide $*_act.tex > $*.jslide.ltx 
+	$(MAKE) $*.jslide.dvi
+
+%.jslideRead: %.jslide 
+	${XDVI} ${XDVIOPTS} $*.jslide.dvi
+
+%.jslidePs:   %.jslide 
+	${DVIPS} -f $*.jslide.dvi > $*.jslide.ps
+
+%.slide: %_act.tex
+	${LATIFY} ${LATOPTS} class=seminar $*_act.tex > $*.slide.ltx 
+	$(MAKE) $*.slide.dvi
+
+#ignore
+TEXMATCH : 
+	texmatch paper.tex 
+
+# For sepshell:
+%.gs: %.ps
+	${GHOSTVIEW} $*.ps
+
+
+ifndef EDITOR 
+  EDITOR = xterm -e vi
+endif
+ifeq "${EDITOR}" "vi"
+  EDITOR = xterm -e vi
+endif
+#use EDITOR = emacs as an alternative
+CI = ci -l -q
+CO = co -l -f -q
+RCS = rcs -M -l -q
+
+edit:
+	if ${OTEST} -d RCS ; then           \
+	     	${RCS}              RCS/* ; \
+		${CI} -m'makerules' RCS/* ; \
+	fi
+	${EDITOR} ?akefile
+
+paper:
+	if ${OTEST} -d RCS ; then           \
+	     	${RCS}              RCS/* ; \
+		${CI} -m'makerules' RCS/* ; \
+	fi
+	${EDITOR} paper.tex
+
+restore:
+	@-if ${OTEST} -d RCS ; then         \
+		${CO}               RCS/* ; \
+	fi
+
+

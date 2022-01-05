@@ -1,0 +1,72 @@
+#
+# SEP.local.defs
+#
+
+ifndef SEP
+SEP = /bob/test
+endif
+
+ifndef SEPBINDIR 
+SEPBINDIR = ${SEP}/bin
+endif
+ifndef SEPINCDIR 
+SEPINCDIR = ${SEP}/include
+endif
+ifndef SEPLIBDIR 
+SEPLIBDIR = ${SEP}/lib
+endif
+
+#ADD SGI PAR LIBS
+ifeq (${SEP_ARCH}, SGI64) 
+OF90LIBS     := -lmp ${OF90LIBS}  
+OF77LIBS     := -lmp ${OF90LIBS}  
+OCFLAGS       = -common -c
+OCLIBS       := -lmp ${OCLIBS}  
+endif
+ifeq (${SEP_ARCH}, SGI32) 
+OF90LIBS     := -lmp ${OF90LIBS}  
+OF77LIBS     := -lmp ${OF77LIBS}  
+OCFLAGS       = -common -c
+OCLIBS       := -lmp ${OCLIBS}  
+endif
+ifeq (${SEP_ARCH}, SGI) 
+OF90LIBS     := -lmp ${OF90LIBS}  
+OF77LIBS     := -lmp ${OF77LIBS}  
+OCFLAGS       = -common -c
+OCLIBS       := -lmp ${OCLIBS}  
+endif
+
+#C DEFINES
+OCFLAGS     :=  -I${SEPINCDIR} ${OCFLAGS}
+OCLIBDIRS   :=  ${SEPLIBDIR} ${OCLIBDIRS}
+OCLIBS      := -lsep3d -lsep ${OCLIBS}
+
+#C++ DEFINES
+OC++FLAGS   :=  -I${SEPINCDIR} ${OC++FLAGS}
+OC++LIBDIRS :=  ${SEPLIBDIR} ${OC++LIBDIRS}
+OC++LIBS    :=  -lsep3d -lsep ${OC++LIBS}
+
+#F77 DEFINES
+OF77LIBDIRS  := ${SEPLIBDIR} ${OF77LIBDIRS}
+OF77LIBS     := ${SEPLIB3DF90} ${OF77LIBS}
+
+#F90 DEFINES
+OF90DEFINES  := -I. -I${SEPINCDIR} ${OF90DEFINES}
+OF90LIBDIRS  := ${SEPLIBDIR} ${OF90LIBDIRS} 
+OF90LIBS     := -lsep3d -lsep  ${OF90LIBS}
+
+
+
+#BACKWARD COMPATIBILITY
+UCLIBDIRS = ${UCLIBDIR}
+UC++LIBDIRS = ${UC++LIBDIR}
+UF77LIBDIRS = ${UF77LIBDIR}
+UF90LIBDIRS = ${UF90LIBDIR}
+MTYPE = ${SEP_ARCH}
+
+
+
+MTYPE = ${SEP_ARCH}
+OF90FLAGS := ${F90INCFLAG}${SEPINCDIR} ${F90INCFLAG}. ${OF90FLAGS}
+
+

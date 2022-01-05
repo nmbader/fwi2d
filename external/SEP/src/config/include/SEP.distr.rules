@@ -1,0 +1,88 @@
+#
+# SEP.distr.rules
+#
+# File containing SEP.distr specific rules
+#
+
+
+
+#First a generic distr clean rule
+
+clean:
+	@touch log yada.log yada.${F90MODSUFFIX} yada.x
+	@$(RM) -rf $(OBJDIR) $(OBJDIR)_SHARED  log *.log *.${F90MODSUFFIX} *.x ${OBJDIR}.Sep
+ifdef SUBDIRS
+	${MakeSubDirs}
+endif
+
+
+ifeq ($(COMPILE_LEVEL),all)
+ALL_FILES = $(wildcard $(notdir $(addsuffix .*, ${ALL} $(basename ${OBJECTS}) )) ${EXTRA_DISTR_FILES} a ${EXTRA_LOCAL_FILES} ${EXTRA_OLD_FILES} README Makefile)
+endif
+ifeq ($(COMPILE_LEVEL),local)
+ALL_FILES = $(wildcard  $(notdir $(addsuffix .*, ${ALL} $(basename ${OBJECTS}) )) ${EXTRA_DISTR_FILES} ${EXTRA_LOCAL_FILES}  README Makefile)
+endif
+ifeq ($(COMPILE_LEVEL),distr)
+ALL_FILES = $(wildcard $(notdir $(addsuffix .*, ${ALL} $(basename ${OBJECTS}) )) ${EXTRA_DISTR_FILES} README Makefile)
+endif
+
+#Generic copy rule
+copy: 
+ifdef COPY_TO
+	@mkdir -p ${COPY_TO}
+	-@${CP} -rf ${ALL_FILES}  ${COPY_TO}
+ifdef SUBDIRS
+	${MakeSubDirs}
+endif
+else
+	@echo COPY_TO undefined
+endif
+
+install_check: $(addsuffix .check, ${ALL})
+
+%.check: 
+	@if [ ! -f $(SEPBINDIR)/$* ]; then \
+	if [ ! -f $* ]; then \
+		echo $* "from" `pwd` "does not exist"; \
+    fi;\
+    fi;
+
+#A way to initialize installing man pages
+
+ifndef man.init
+define man.init
+	@if [ ! -d $(SEPMANDIR) ]; then \
+		${MKDIR} $(SEPMANDIR); \
+    fi;
+	@if [ ! -d $(MANSUBDIR) ]; then \
+	${MKDIR} $(MANSUBDIR); \
+	fi;
+endef
+endif
+
+define compile.init.Sep
+   @if [ ! -d $(OBJDIR).Sep ]; then \
+      ${MKDIR} $(OBJDIR).Sep; \
+    fi;
+endef
+
+${OBJDIR}.Sep/%.o:	${SRCDIR}/%.${CEXT}
+	${compile.init.Sep}
+	${C_COMPILE}	
+
+
+#A smooth way to handle platforms
+#without a f90 compiler
+
+ifeq (${HAVE_F90}, no)
+define F90_COMPILE
+	touch $@
+endef
+
+define F90_LN
+	echo "#!/bin/sh " > $@	
+	echo "echo need a F90 compiler " >>$@
+endef
+endif
+
+

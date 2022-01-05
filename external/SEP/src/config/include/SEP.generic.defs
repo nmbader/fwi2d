@@ -1,0 +1,44 @@
+#
+#SEP.generic.defs
+#
+# Contains some generic definitions for unix commands
+# directory locations, and type of compiling
+
+
+# As a default we are compiling in single processor mode
+SINGLE =yes
+DEBUG = no
+
+#THIS FILE CONTAINS DEFINITIONS FOR SOME STANDARD UNIX 
+#COMMANDS LIKE MV, CP, ETC and FOR SOME OF THE BASE DIRECTORIES
+
+
+#FIRST WILL SET A GOOD GUESS FOR ALL OF THE COMMANDS
+CSH          =  csh
+CP           =  cp
+INSTALL      =  install -m 775
+LN           =  ln -s
+MAKE         =  gmake
+MKDIR        =  mkdir
+MV           =  mv
+PERL         =  perl
+RM           =  rm
+SH           =  sh
+TOUCH        =  touch
+
+
+#NEXT SOME DIRECTORIES
+
+#First  SEP location
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+
+
+#Next general compile directories
+BINDIR = .
+SRCDIR =.
+OBJDIR = .
+LIBDIR = .
+
+FULLSRC = $(strip $(shell ${SEPBINDIR}/fullpath ${SRCDIR}))

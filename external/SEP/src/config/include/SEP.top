@@ -1,0 +1,41 @@
+# 
+# SEP.top
+#
+# Top file for SEP local 
+#${SEPINC}/SEP.top : ;
+
+MAKEFLAGS += --no-print-directory
+.SUFFIXES:                          # delete all implicit rules
+.SUFFIXES: .out .a .F .e .y .ye .yr .l .s .S .info .tex .texinfo \
+
+default :
+
+
+
+
+ifndef SEP_ARCH
+SEP_ARCH=linux
+endif
+
+
+#Read in default program defs
+include ${SEPINC}/local.defs
+include ${SEPINC}/Prog.defs.top
+
+#Document
+include ${SEPINC}/Doc.defs.top
+include ${SEPINC}/Doc.rules.idoc
+
+#Read in library defs
+include ${SEPINC}/SEP.lib.defs
+
+#Read in default distribution defs
+include $(SEPINC)/SEP.local.defs
+
+
+##Now that we know about the site we should set some other variables
+#include ${SEPINC}/SEP.ifdef
+
+##put in temporarily by sean.  Will do this properly later.
+#include ${SEPINC}/Jag.exp
+

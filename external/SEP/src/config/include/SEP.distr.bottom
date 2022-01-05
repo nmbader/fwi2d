@@ -1,0 +1,10 @@
+#
+# SEP.distr.bottom
+#
+# Belongs after local defines (most likely at the bottom) of Makefile
+#
+
+
+include ${SEPINC}/SEP.distr.rules
+
+include ${SEPINC}/Prog.rules.bottom
