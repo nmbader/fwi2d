@@ -3,6 +3,7 @@
 #define ZERO 1e-16
 #define M_INF -1e+16
 
+#include <time.h>
 #include "operator.hpp"
 #include "we_op.hpp"
 
@@ -545,6 +546,9 @@ public:
         int nt = _d->getHyper()->getAxis(1).n;
         data_t dt = _d->getHyper()->getAxis(1).d;
 
+        time_t t = time(NULL);
+        if (_L->_par.verbose>0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t));
+
         for (int s=0; s<ns; s++)
         {
             if (_L->_par.verbose>1) fprintf(stderr,"Start processing shot %d\n",s);
@@ -573,7 +577,7 @@ public:
             }
 
             // build the we operator for a single shot
-            nl_we_op * L = _L;
+            nl_we_op * L;
             if (par.nmodels==2) L=new nl_we_op_a(*_p->getHyper(),src,par);
             else if (par.nmodels==3 && !par.acoustic_elastic) L=new nl_we_op_e(*_p->getHyper(),src,par);
             else if (par.nmodels==3 && par.acoustic_elastic) L=new nl_we_op_ae(*_p->getHyper(),src,par);
@@ -738,6 +742,8 @@ public:
             rs->scale(1.0/_dnorm);
 
             L->jacobianT(true,_pg,_p,rs);
+
+            delete L;
 
             if (_L->_par.verbose>1) fprintf(stderr,"Finish processing shot %d\n",s);
 

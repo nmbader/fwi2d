@@ -240,6 +240,7 @@ void analyzeNLInversion(param &par)
     else if (par.verbose>0) fprintf(stderr,"No regularization will be used\n");
     if (par.scale_source_times>0 && par.verbose>0) fprintf(stderr,"The source time function will be rescaled for the first %d trials as part of Variable Projection method\n",par.scale_source_times);
     if (par.normalize && par.verbose>0) fprintf(stderr,"The modeled and observed data will be normalized trace by trace\n");
+    if (par.integrate && par.verbose>0) fprintf(stderr,"The modeled and observed data will be integrated in time trace by trace\n");
     if (par.envelop==1 && par.verbose>0) fprintf(stderr,"The envelop of modeled and observed data will be computed trace by trace\n");
     else if (par.envelop==2 && par.verbose>0) fprintf(stderr,"The envelop squared of modeled and observed data will be computed trace by trace\n");
     if (par.verbose>0) fprintf(stderr,"If \"ioutput\" is provided, the model, gradient, and residual will be saved every %d iterations\n",par.isave);

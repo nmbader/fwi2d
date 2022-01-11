@@ -2240,27 +2240,21 @@ void nl_we_op_ae::propagate(bool adj, const data_t * model, const data_t * allsr
         }
         
         taperz(curra[0], nx, nza, 0, nx, par.taper_top, 0, par.taper_strength);
-        taperz(curra[0], nx, nza, 0, nx, nza-par.taper_bottom, nza, par.taper_strength);
         taperx(curra[0], nx, nza, 0, nza, par.taper_left, 0, par.taper_strength);
         taperx(curra[0], nx, nza, 0, nza, nx-par.taper_right, nx, par.taper_strength);
         taperz(nexta[0], nx, nza, 0, nx, par.taper_top, 0, par.taper_strength);
-        taperz(nexta[0], nx, nza, 0, nx, nza-par.taper_bottom, nza, par.taper_strength);
         taperx(nexta[0], nx, nza, 0, nza, par.taper_left, 0, par.taper_strength);
         taperx(nexta[0], nx, nza, 0, nza, nx-par.taper_right, nx, par.taper_strength);
 
-        taperz(curr[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
         taperz(curr[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
         taperx(curr[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
         taperx(curr[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
-        taperz(curr[1], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
         taperz(curr[1], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
         taperx(curr[1], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
         taperx(curr[1], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
-        taperz(next[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
         taperz(next[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
         taperx(next[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
         taperx(next[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
-        taperz(next[1], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
         taperz(next[1], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
         taperx(next[1], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
         taperx(next[1], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
