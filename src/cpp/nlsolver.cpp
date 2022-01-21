@@ -738,7 +738,12 @@ void nlsolver::testParaboloid(const bool verbose){
     fprintf(stderr,"Number of iterations niter=%d\n",_func.size()-1);
 }
 
-void nlsd::run(optimization * prob, const bool verbose, std::string output, int isave){
+void nlsd::run(optimization * prob, const bool verbose, std::string output, int isave, int format, std::string datapath){
+
+int rank=0;
+#ifdef ENABLE_MPI
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+#endif
     
     reset();
 
@@ -777,9 +782,11 @@ void nlsd::run(optimization * prob, const bool verbose, std::string output, int 
     data_t rate = 1;
     data_t gnorm = 999;
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = 0; functional = %f; normalized functional = 1\n",f);
 fprintf(stderr,"#########################################################################\n");
+}
 
     //start the SD loop
     bool success = true;
@@ -790,9 +797,9 @@ fprintf(stderr,"################################################################
             prob->grad();
             _geval++;
             gnorm=g->norm();
-            if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+            if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+                write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
         }
 
@@ -809,10 +816,11 @@ fprintf(stderr,"################################################################
         f = prob->getFunc();
         _func.push_back(f);
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = %d; functional = %f; normalized functional = %f\n",k+1,f,f / _func[0]);
 fprintf(stderr,"#########################################################################\n");
-
+}
         //compute the rate of convergence
         if(k>0){
             rate = (_func[k]-_func[k+1])/_func[k];
@@ -821,27 +829,34 @@ fprintf(stderr,"################################################################
         //iterate
         k++;
 
-        if (output!="none" && k % isave==0){
-            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+        if (output!="none" && k % isave==0 && rank==0){
+            write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+            write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+            write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
         }
     }
-    if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+    if (output!="none" && k % isave!=0 && rank==0){
+        write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+        write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+        write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
     }
 
+if (verbose){
     fprintf(stderr,"\n==============================\n");
     fprintf(stderr,"Total number of NLSD iterations: %d\n",k);
     fprintf(stderr,"Total number of function evaluations: %d\n",_feval);
     fprintf(stderr,"Total number of gradient evaluations: %d\n",_geval);
     fprintf(stderr,"==============================\n\n");
 }
+}
 
-void nlcg::run(optimization * prob, const bool verbose, std::string output, int isave){
-    
+void nlcg::run(optimization * prob, const bool verbose, std::string output, int isave, int format, std::string datapath){
+
+int rank=0;
+#ifdef ENABLE_MPI
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+#endif
+
     reset();
 
     prob->initGrad();
@@ -887,10 +902,11 @@ void nlcg::run(optimization * prob, const bool verbose, std::string output, int 
     data_t gnorm = 999;
     data_t gnorm0 = -1;
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = 0; functional = %f; normalized functional = 1\n",f);
 fprintf(stderr,"#########################################################################\n");
-
+}
     //start the CG loop
     bool success=true;
     while (k<_niter && rate>_threshold && gnorm>ZERO && f>ZERO && success){
@@ -900,9 +916,9 @@ fprintf(stderr,"################################################################
             prob->grad();
             _geval++;
             gnorm=g->norm();
-            if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+            if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+                write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
         }
 
@@ -936,10 +952,11 @@ fprintf(stderr,"################################################################
         f = prob->getFunc();
         _func.push_back(f);
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = %d; functional = %f; normalized functional = %f\n",k+1,f,f / _func[0]);
 fprintf(stderr,"#########################################################################\n");
-
+}
         //compute the rate of convergence
         if(k>0){
             rate = (_func[k]-_func[k+1])/_func[k];
@@ -948,27 +965,34 @@ fprintf(stderr,"################################################################
         //iterate
         k++;
 
-        if (output!="none" && k % isave==0){
-            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+        if (output!="none" && k % isave==0 && rank==0){
+            write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+            write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+            write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
         }
     }
-    if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+    if (output!="none" && k % isave!=0 && rank==0){
+        write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+        write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+        write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
     }
 
+if (verbose){
     fprintf(stderr,"\n==============================\n");
     fprintf(stderr,"Total number of NLCG iterations: %d\n",k);
     fprintf(stderr,"Total number of function evaluations: %d\n",_feval);
     fprintf(stderr,"Total number of gradient evaluations: %d\n",_geval);
     fprintf(stderr,"==============================\n\n");
 }
+}
 
-void bfgs::run(optimization * prob, const bool verbose, std::string output, int isave){
-    
+void bfgs::run(optimization * prob, const bool verbose, std::string output, int isave, int format, std::string datapath){
+
+int rank=0;
+#ifdef ENABLE_MPI
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+#endif
+
     reset();
 
     prob->initGrad();
@@ -1021,10 +1045,11 @@ void bfgs::run(optimization * prob, const bool verbose, std::string output, int 
     data_t rate = 1;
     data_t gnorm = 999;
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = 0; functional = %f; normalized functional = 1\n",f);
 fprintf(stderr,"#########################################################################\n");
-
+}
     //start the BFGS loop
     bool success = true;
     while (k<_niter && rate>_threshold && gnorm>ZERO && f>ZERO && success){
@@ -1034,9 +1059,9 @@ fprintf(stderr,"################################################################
             prob->grad();
             _geval++;
             gnorm=g->norm();
-            if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+            if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+                write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
         }
 
@@ -1073,10 +1098,11 @@ fprintf(stderr,"################################################################
         f = prob->getFunc();
         _func.push_back(f);
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = %d; functional = %f; normalized functional = %f\n",k+1,f,f / _func[0]);
 fprintf(stderr,"#########################################################################\n");
-
+}
         //compute the rate of convergence
         if(k>0){
             rate = (_func[k]-_func[k+1])/_func[k];
@@ -1085,23 +1111,25 @@ fprintf(stderr,"################################################################
         //iterate
         k++;
 
-        if (output!="none" && k % isave==0){
-            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+        if (output!="none" && k % isave==0 && rank==0){
+            write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+            write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+            write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
         }
     }
-    if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+    if (output!="none" && k % isave!=0 && rank==0){
+        write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+        write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+        write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
     }
 
+if (verbose){
     fprintf(stderr,"\n==============================\n");
     fprintf(stderr,"Total number of BFGS iterations: %d\n",k);
     fprintf(stderr,"Total number of function evaluations: %d\n",_feval);
     fprintf(stderr,"Total number of gradient evaluations: %d\n",_geval);
     fprintf(stderr,"==============================\n\n");
+}
 }
 
 bool bfgs::testSPD(matrix * M){
@@ -1173,8 +1201,13 @@ void bfgs::updateH(matrix * H ,std::shared_ptr<vecReg<data_t> > s, std::shared_p
     //testSPD(H);
 }
 
-void lbfgs::run(optimization * prob, const bool verbose, std::string output, int isave){
-    
+void lbfgs::run(optimization * prob, const bool verbose, std::string output, int isave, int format, std::string datapath){
+
+int rank=0;
+#ifdef ENABLE_MPI
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+#endif
+
     reset();
 
     prob->initGrad();
@@ -1226,10 +1259,11 @@ void lbfgs::run(optimization * prob, const bool verbose, std::string output, int
     data_t rate = 1;
     data_t gnorm = 999;
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = 0; functional = %f; normalized functional = 1\n",f);
 fprintf(stderr,"#########################################################################\n");
-
+}
     //start the l-BFGS loop
     bool success = true;
     while (k<_niter && rate>_threshold && gnorm>ZERO && f>ZERO && success){
@@ -1239,9 +1273,9 @@ fprintf(stderr,"################################################################
             prob->grad();
             _geval++;
             gnorm=g->norm();
-            if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+            if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+                write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
         }
 
@@ -1271,10 +1305,11 @@ fprintf(stderr,"################################################################
         f = prob->getFunc();
         _func.push_back(f);
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = %d; functional = %f; normalized functional = %f\n",k+1,f,f / _func[0]);
 fprintf(stderr,"#########################################################################\n");
-
+}
         //compute the rate of convergence
         if(k>0){
             rate = (_func[k]-_func[k+1])/_func[k];
@@ -1283,23 +1318,25 @@ fprintf(stderr,"################################################################
         //iterate
         k++;
 
-        if (output!="none" && k % isave==0){
-            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+        if (output!="none" && k % isave==0 && rank==0){
+            write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+            write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+            write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
         }
     }
-    if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+    if (output!="none" && k % isave!=0 && rank==0){
+        write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+        write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+        write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
     }
 
+if (verbose){
     fprintf(stderr,"\n==============================\n");
     fprintf(stderr,"Total number of l-BFGS iterations: %d\n",k);
     fprintf(stderr,"Total number of function evaluations: %d\n",_feval);
     fprintf(stderr,"Total number of gradient evaluations: %d\n",_geval);
     fprintf(stderr,"==============================\n\n");
+}
 }
 
 void lbfgs::updateSY(std::vector<std::shared_ptr<vecReg<data_t> > > &s,
@@ -1371,8 +1408,13 @@ void lbfgs::computeHg(std::shared_ptr<vecReg<data_t> > &p, std::shared_ptr<vecRe
     }
 }
 
-void newton::run(optimization * prob, const bool verbose, std::string output, int isave){
-    
+void newton::run(optimization * prob, const bool verbose, std::string output, int isave, int format, std::string datapath){
+
+int rank=0;
+#ifdef ENABLE_MPI
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+#endif
+
     reset();
 
     prob->initGrad();
@@ -1416,10 +1458,11 @@ void newton::run(optimization * prob, const bool verbose, std::string output, in
     data_t rate = 1;
     data_t gnorm = 999;
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = 0; functional = %f; normalized functional = 1\n",f);
 fprintf(stderr,"#########################################################################\n");
-
+}
     //start the Newton loop
     bool success = true;
     while (k<_niter && rate>_threshold && gnorm>ZERO && f>ZERO && success){
@@ -1429,9 +1472,9 @@ fprintf(stderr,"################################################################
             prob->grad();
             _geval++;
             gnorm=g->norm();
-            if (output!="none" && k==0 && isave!=0){
-                sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-                sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+            if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+                write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
         }
 
@@ -1461,10 +1504,11 @@ fprintf(stderr,"################################################################
         f = prob->getFunc();
         _func.push_back(f);
 
+if (verbose){
 fprintf(stderr,"#########################################################################\n");
 fprintf(stderr,"Iteration = %d; functional = %f; normalized functional = %f\n",k+1,f,f / _func[0]);
 fprintf(stderr,"#########################################################################\n");
-
+}
         //compute the rate of convergence
         if(k>0){
             rate = (_func[k]-_func[k+1])/_func[k];
@@ -1473,23 +1517,25 @@ fprintf(stderr,"################################################################
         //iterate
         k++;
 
-        if (output!="none" && k % isave==0){
-            sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-            sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-            sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+        if (output!="none" && k % isave==0 && rank==0){
+            write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+            write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+            write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
         }
     }
-    if (output!="none" && k % isave!=0){
-        sepWrite(m,output+"model_iter_"+std::to_string(k)+".H");
-        sepWrite(g,output+"gradient_iter_"+std::to_string(k)+".H");
-        sepWrite(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H");
+    if (output!="none" && k % isave!=0 && rank==0){
+        write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
+        write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
+        write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
     }
 
+if (verbose){
     fprintf(stderr,"\n==============================\n");
     fprintf(stderr,"Total number of Newton iterations: %d\n",k);
     fprintf(stderr,"Total number of function evaluations: %d\n",_feval);
     fprintf(stderr,"Total number of gradient evaluations: %d\n",_geval);
     fprintf(stderr,"==============================\n\n");
+}
 }
 
 

@@ -12,6 +12,9 @@
 #include "IO.hpp"
 #include "seplib.h"
 
+#include <iostream>
+#include <fstream>
+
 typedef vecReg<data_t> vec;
 typedef cvecReg<data_t> cvec;
 typedef axis<data_t> ax;
@@ -80,7 +83,7 @@ int main(int argc, char **argv){
     else{
         successCheck(false, __FILE__,__LINE__,"Type is not implemented\n");
     }
-          
+ 
     if (output_file!="none") sepWrite<data_t>(input, output_file);
 
     return 0;

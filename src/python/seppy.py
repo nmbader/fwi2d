@@ -1,3 +1,5 @@
+# Author Joseph Jennings
+
 import numpy as np
 import os as opsys
 import socket

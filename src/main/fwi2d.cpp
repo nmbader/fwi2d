@@ -19,12 +19,22 @@ typedef hypercube<data_t> hyper;
 // Executable to run 2D FWI
 
 int main(int argc, char **argv){
+
+int rank=0, size=0;
+#ifdef ENABLE_MPI
+    MPI_Init(&argc,&argv);
+    MPI_Comm_size(MPI_COMM_WORLD,&size);
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+    fprintf (stderr,"\n====================\nSize of MPI communicator = %d ; current rank = %d\n====================\n",size,rank);
+#endif
     
     initpar(argc,argv);
 
 // Read parameters for wave propagation and inversion
     param par;
     readParameters(argc, argv, par);
+    if (rank>0) par.verbose=0;
+    par.device+=rank;
 
 // Read inputs/outputs files
     std::string source_file="none", model_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none";
@@ -39,19 +49,19 @@ int main(int argc, char **argv){
     successCheck(model_file!="none",__FILE__,__LINE__,"Earth model is not provided\n");
     successCheck(data_file!="none",__FILE__,__LINE__,"Data to be inverted is not provided\n");
 
-    std::shared_ptr<vec> src = sepRead<data_t>(source_file);
-    std::shared_ptr<vec> data = sepRead<data_t>(data_file);
-    std::shared_ptr<vec> model = sepRead<data_t>(model_file);
+    std::shared_ptr<vec> src = read<data_t>(source_file, par.format);
+    std::shared_ptr<vec> data = read<data_t>(data_file, par.format);
+    std::shared_ptr<vec> model = read<data_t>(model_file, par.format);
 
     std::shared_ptr<vec> hrz = nullptr;
     std::shared_ptr<vec> gmask = nullptr;
     std::shared_ptr<vec> w = nullptr;
     std::shared_ptr<vec> invDiagH = nullptr;
     std::shared_ptr<vec> prior = nullptr;
-    if (par.mask_file!="none") gmask = sepRead<data_t>(par.mask_file);
-    if (par.weights_file!="none") w = sepRead<data_t>(par.weights_file);
-    if (par.inverse_diagonal_hessian_file!="none") invDiagH = sepRead<data_t>(par.inverse_diagonal_hessian_file);
-    if (par.prior_file!="none") prior = sepRead<data_t>(par.prior_file);
+    if (par.mask_file!="none") gmask = read<data_t>(par.mask_file, par.format);
+    if (par.weights_file!="none") w = read<data_t>(par.weights_file, par.format);
+    if (par.inverse_diagonal_hessian_file!="none") invDiagH = read<data_t>(par.inverse_diagonal_hessian_file, par.format);
+    if (par.prior_file!="none") prior = read<data_t>(par.prior_file, par.format);
 
 // Analyze the inputs and parameters and modify if necessary
     analyzeGeometry(*model->getHyper(),par, par.verbose>0);
@@ -70,7 +80,7 @@ int main(int argc, char **argv){
 if (par.inversion1d)
 {
     if (par.horizon_file!="none") {
-        hrz = sepRead<data_t>(par.horizon_file);
+        hrz = read<data_t>(par.horizon_file, par.format);
         successCheck(hrz->getN123()==model->getHyper()->getAxis(2).n,__FILE__,__LINE__,"The provided horizon must have the same size as the x-dimension of the model\n");
     }
     else{
@@ -226,7 +236,7 @@ if (par.bsplines)
     else if (par.nlsolver=="bfgs") solver = new bfgs(par.niter, par.max_trial, par.threshold, ls); 
     else solver = new lbfgs(par.niter, par.max_trial, par.threshold, ls, bsinvDiagH,5); 
     
-    solver->run(prob, par.verbose>0, ioutput_file, par.isave);
+    solver->run(prob, par.verbose>0, ioutput_file, par.isave, par.format, par.datapath);
     
     if (D != nullptr) delete D;
     if (op != nullptr)
@@ -235,23 +245,27 @@ if (par.bsplines)
         delete op;
     }
 
-    if (output_file!="none") sepWrite<data_t>(model, output_file);
-    if (obj_func_file!="none") {
+    if (rank==0 && output_file!="none") write<data_t>(model, output_file, par.format, par.datapath);
+    if (rank==0 && obj_func_file!="none") {
         std::shared_ptr<vec > func = std::make_shared<vec > (hyper(solver->_func.size()));
         memcpy(func->getVals(), solver->_func.data(), solver->_func.size()*sizeof(data_t));
-        sepWrite(func,obj_func_file);
+        write(func,obj_func_file, par.format, par.datapath);
         if (D != nullptr){
             std::shared_ptr<vec > dfunc = std::make_shared<vec > (hyper(prob->_dfunc.size()));
             std::shared_ptr<vec > mfunc = std::make_shared<vec > (hyper(prob->_mfunc.size()));
             memcpy(dfunc->getVals(), prob->_dfunc.data(), prob->_dfunc.size()*sizeof(data_t));
             memcpy(mfunc->getVals(), prob->_mfunc.data(), prob->_mfunc.size()*sizeof(data_t));
-            sepWrite(dfunc,obj_func_file+".d");
-            sepWrite(mfunc,obj_func_file+".m");
+            write(dfunc,obj_func_file+".d", par.format, par.datapath);
+            write(mfunc,obj_func_file+".m", par.format, par.datapath);
         }
     }
 
     delete L;
     delete prob;
+
+#ifdef ENABLE_MPI
+    MPI_Finalize();
+#endif
 
 return 0;
 }

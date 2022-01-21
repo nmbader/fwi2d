@@ -826,7 +826,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
 
 void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 {
-    if (_par.verbose>1) fprintf(stderr,"Start forward propagation\n");
+//    if (_par.verbose>1) fprintf(stderr,"Start forward propagation\n");
 
     std::shared_ptr<vecReg<data_t> > model = std::make_shared<vecReg<data_t> >(_domain);
     memcpy(model->getVals(), pmod, _domain.getN123()*sizeof(data_t));
@@ -858,8 +858,9 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     axis<data_t> Xr0 = _range.getAxis(2);
     axis<data_t> Cr0 = _range.getAxis(3);
     axis<data_t> Xr(2*Xr0.n,0,1);
-    if (_par.nmodels==2) Xr.n = Xr0.n;
-    if (_par.acoustic_elastic) Xr.n = 3*Xr0.n;
+    int ncomp=2;
+    if (_par.nmodels==2) {Xr.n = Xr0.n; ncomp=1;}
+    if (_par.acoustic_elastic) {Xr.n = 3*Xr0.n; ncomp=3;}
     Xs.n = domain.getN123()/T.n;
     data_t alpha = _par.dt/T.d; // ratio between sampling rates
     T.n = _par.nt;
@@ -879,10 +880,19 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     //fprintf(stderr,"Resample in time all source traces\n");
     resamp->apply_forward(false,_allsrc->getCVals(),allsrc->getVals());
 
+    int size=1, rank=0, rank0=0;
+#ifdef ENABLE_MPI
+    if (!_par.skip_mpi){
+        MPI_Comm_size(MPI_COMM_WORLD,&size);
+        MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+    }
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank0);
+#endif
+
     // loop over shots
-    for (int s=0; s<_par.ns; s++)
+    for (int s=rank; s<_par.ns; s += size)
     {
-        if (_par.verbose>2) fprintf(stderr,"Start propagating shot %d\n",s);
+        if (_par.verbose>2 || size>1) fprintf(stderr,"Start propagating shot %d by process %d\n",s,rank0);
 
         // cumulative number of receivers
         int nr=0;
@@ -903,17 +913,31 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
             if (_par.nmodels>=3) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
             else full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
         }
+
 #ifdef CUDA
         propagate_gpu(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #else
         propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
 
-        if (_par.verbose>2) fprintf(stderr,"Finish propagating shot %d\n",s);
+        if (_par.verbose>2 || size>1) fprintf(stderr,"Finish propagating shot %d by process %d\n",s, rank0);
 
         delete inj;
         delete ext;
     }
+
+#ifdef ENABLE_MPI
+    if (!_par.skip_mpi){
+        data_t * temp;
+        if (rank==0) temp = new data_t[allrcv->getN123()];
+        if (sizeof(data_t)==8) MPI_Reduce(allrcv->getCVals(), temp, allrcv->getN123(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+        else MPI_Reduce(allrcv->getCVals(), temp, allrcv->getN123(), MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+        if (rank==0) {
+            memcpy(allrcv->getVals(), temp, allrcv->getN123()*sizeof(data_t));
+            delete [] temp;
+        }
+    }
+#endif              
 
     // convert to DAS (strain) data when relevant
     if (_par.gl>0) 
@@ -944,7 +968,7 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 
 void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat)
 {
-    if (_par.verbose>1) fprintf(stderr,"Start adjoint propagation\n");
+//    if (_par.verbose>1) fprintf(stderr,"Start adjoint propagation\n");
 
     std::shared_ptr<vecReg<data_t> > model0 = std::make_shared<vecReg<data_t> >(_domain);
     memcpy(model0->getVals(), pmod0, _domain.getN123()*sizeof(data_t));
@@ -1021,19 +1045,28 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
         else dipole_to_strain(true, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
     }
 
+    int size=1, rank=0, rank0=0;
+#ifdef ENABLE_MPI
+    if (!_par.skip_mpi){
+        MPI_Comm_size(MPI_COMM_WORLD,&size);
+        MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+    }
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank0);
+#endif
+
     // loop over shots
-    for (int s=0; s<_par.ns; s++)
+    for (int s=rank; s<_par.ns; s += size)
     {
-        if (_par.verbose>2) fprintf(stderr,"Start back-propagating shot %d\n",s);
+        if (_par.verbose>2 || size>1) fprintf(stderr,"Start back-propagating shot %d by process %d\n",s,rank0);
 
         // cumulative number of receivers
         int nr=0;
         if (s>0) {for (int i=0; i<s; i++) nr += _par.rxz[i].size();}
 
         // setting up the injection and extraction operators
-        injector * ext = nullptr;
-        // if (_par.mt==true) ext = new ddelta_m3(_domain,{_par.sxz[s]});
-        // else ext = new delta_m3(_domain,{_par.sxz[s]});
+        injector * ext;
+        if (_par.mt==true) ext = new ddelta_m3(_domain,{_par.sxz[s]});
+        else ext = new delta_m3(_domain,{_par.sxz[s]});
 
         injector * inj;
         if (_par.gl<=0) inj = new delta_m3(_domain,_par.rxz[s]);
@@ -1045,17 +1078,28 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
             if (_par.nmodels>=3) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
             else full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
         }
+
 #ifdef CUDA
         propagate_gpu(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz, ox, oz, s);
 #else
         propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
 
-        if (_par.verbose>2) fprintf(stderr,"Finish back-propagating shot %d with gradient computation\n",s);
+        if (_par.verbose>2 || size>1) fprintf(stderr,"Finish back-propagating shot %d with gradient computation by process %d\n",s, rank0);
 
         delete inj;
         delete ext;
     }
+
+#ifdef ENABLE_MPI
+    if (!_par.skip_mpi){
+        data_t * gtemp = new data_t[nm*nx*nz];
+        if (sizeof(data_t)==8) MPI_Allreduce(pmod, gtemp, nm*nx*nz, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        else MPI_Allreduce(pmod, gtemp, nm*nx*nz, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        memcpy(pmod, gtemp, nm*nx*nz*sizeof(data_t));
+        delete [] gtemp;
+    }
+#endif
 
     // apply H quadrature to final gradient
     int nxz=nx*nz;

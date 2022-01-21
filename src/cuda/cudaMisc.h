@@ -9,7 +9,7 @@
 
 inline void _cudaCheckError(cudaError_t code, const char *file, int line)
 {
-#if DEBUG==1
+#ifdef DEBUG
     if (code != cudaSuccess)
     {
         fprintf(stderr,"\n========CUDA API ERROR in file %s, line %d========\n%s\n",file,line,cudaGetErrorString(code));
@@ -19,7 +19,7 @@ inline void _cudaCheckError(cudaError_t code, const char *file, int line)
 }
 inline void _cudaKernelError(const char *file, int line)
 {
-#if DEBUG==1
+#ifdef DEBUG
     cudaError_t err = cudaPeekAtLastError();
     if (err != cudaSuccess)
     {

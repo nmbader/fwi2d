@@ -294,14 +294,15 @@ void printdoc(){
     "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
     "   Input is required only if the wavelet is built from a provided amplitude spectrum.\n"
     "\nParameters:\n"
-    "   type - string - ['ricker']:\n\t\toptions: 'ricker', 'gaussian', 'sinc', 'butterworth', 'exponential', 'bandpass','spectrum'.\n"
+    "   type - string - ['ricker']:\n\t\toptions: 'ricker', 'gaussian', 'sinc', 'butterworth', 'exponential', 'bandpass','spectrum','power'.\n"
     "   wc - 0<=float<=1 - [0.1]:\n\t\tcentral frequency for Ricker wavelet, given in fraction of the Nyquist.\n"
-    "   sigma - float - [10]:\n\t\tstandard deviation (or damping) in nb of samples for Gaussian wavelet (or exponential wavelet)\n"
+    "   sigma - float - [1]:\n\t\tstandard deviation (or damping) in axis units for Gaussian wavelet (or exponential wavelet)\n"
     "   low_cutoff - 0<=float<=1 - [0]:\n\t\tlow cutoff frequency for sinc and Butterworth wavelets, given in fraction of the Nyquist.\n"
     "   high_cutoff - low_cutoff<=float<=1 - [0]:\n\t\thigh cutoff frequency for sinc and Butterworth wavelets, given in fraction of the Nyquist.\n"
     "   half_order - int - [2]:\n\t\thalf of the order used in the default IIR Butterworth.\n"
     "   alpha - 0<=float<=1 - [0.5]:\n\t\tused in the cosine window for the sinc wavelet (1 means no taper).\n"
     "   w1,w2,w3,w4 - 0<=w1<w2<w3<w4<=1 - [0,0.1,0.6,0.9]:\n\t\tfrequencies defining band-pass wavelet, given in fraction of the Nyquist. A cosine taper is applied to the spectrum between w1 and w2, w3 and w4.\n"
+    "   pow - float - [1]:\n\t\tpower used for the power function t^pow t>0.\n"
     "   phase - string - ['default']:\n\t\toptions: 'default', 'zero', 'minimum'.\n"
     "   nt - int - [100]:\n\t\tnumber of samples in the wavelet. If it is even, it will be augmented by 1.\n"
     "   dt - positive float - [0.004]:\n\t\tsampling interval.\n"
@@ -320,7 +321,7 @@ int main(int argc, char **argv){
 	initpar(argc,argv);
 
     std::string input_file="in", output_file="out", type="ricker", phase="default";
-    data_t wc=0.1, dt=0.004, lwc=0, hwc=1, alpha=0.5, sigma=10, eps=1e-07, w1=0, w2=0.1, w3=0.6, w4=0.9;
+    data_t wc=0.1, dt=0.004, lwc=0, hwc=1, alpha=0.5, sigma=1, eps=1e-07, w1=0, w2=0.1, w3=0.6, w4=0.9, pow=1;
     int nt=100, shift=0, ho=2;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
@@ -334,6 +335,7 @@ int main(int argc, char **argv){
     readParam<data_t>(argc, argv, "w2", w2);
     readParam<data_t>(argc, argv, "w3", w3);
     readParam<data_t>(argc, argv, "w4", w4);
+    readParam<data_t>(argc, argv, "pow", pow);
     readParam<data_t>(argc, argv, "alpha", alpha); // used for cosine window for sinc
     readParam<data_t>(argc, argv, "epsilon", eps); // used in Kolgomoroff factorization for minimum phase
     readParam<data_t>(argc, argv, "dt", dt);
@@ -353,7 +355,7 @@ int main(int argc, char **argv){
     if (type=="ricker")
 	    dat = rickerWavelet(wc, half_length);
     else if (type=="gaussian")
-        dat=gaussianWavelet(sigma, half_length);
+        dat=gaussianWavelet(sigma/dt, half_length);
     else if (type=="sinc"){
         std::shared_ptr<vec> lp = sincWavelet(hwc, half_length, alpha);
         std::shared_ptr<vec> hp = sincWavelet(lwc, half_length, alpha);
@@ -388,7 +390,13 @@ int main(int argc, char **argv){
     else if (type=="exponential"){
         dat=std::make_shared<vec> (hyper(length));
         for (int i=0; i<dat->getHyper()->getN123(); i++)
-            dat->getVals()[i] = exp(-sigma*i);
+            dat->getVals()[i] = exp(-i*dt/sigma);
+    }
+    else if (type=="power"){
+        dat=std::make_shared<vec> (hyper(length));
+        dat->getVals()[0]=0;
+        for (int i=1; i<dat->getHyper()->getN123(); i++)
+            dat->getVals()[i] = std::pow(i*dt,pow);
     }
     else if (type=="bandpass"){
         if ((w1<0) || (w1>=w2) || (w2>w3) || (w3>=w4) || (w4>1))

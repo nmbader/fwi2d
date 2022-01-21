@@ -66,8 +66,11 @@ struct param{
 
     // miscallenous
     int version=2; // spatial operators version (1 or 2) for elastic WE
-    std::vector<int> devices={0}; // list of gpu devices to use
+    int device=0; // first gpu device to use
     int verbose=1; // logging level {0,1,2,3}
+    bool skip_mpi=false; // parameter to be used when running inversion with MPI
+    bool format=0; // data format for read/write : SEP (0) or binary (1)
+    std::string datapath="none"; // datapath for binary outputs
 };
 
 template <typename T> T convert_to (const std::string &str)

@@ -86,6 +86,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<std::string>(argc, argv, "weights", par.weights_file);
     readParam<std::string>(argc, argv, "inverse_diagonal_hessian", par.inverse_diagonal_hessian_file);
     readParam<std::string>(argc, argv, "prior", par.prior_file);
+    readParam<std::string>(argc, argv, "datapath", par.datapath);
     readParam<data_t>(argc, argv, "courant", par.courant);
     readParam<data_t>(argc, argv, "dt", par.dt);
     readParam<data_t>(argc, argv, "fmax", par.fmax);
@@ -151,6 +152,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "scale_source_times", par.scale_source_times);
     readParam<int>(argc, argv, "version", par.version);
     readParam<int>(argc, argv, "verbose", par.verbose);
+    readParam<int>(argc, argv, "device", par.device);
     readParam<bool>(argc, argv, "mt", par.mt);
     readParam<bool>(argc, argv, "pml", par.pml);
     readParam<bool>(argc, argv, "acoustic_elastic", par.acoustic_elastic);
@@ -162,9 +164,9 @@ void readParam(int argc, char **argv, param &par){
     readParam<bool>(argc, argv, "normalize", par.normalize);
     readParam<bool>(argc, argv, "integrate", par.integrate);
     readParam<bool>(argc, argv, "ls_version", par.ls_version);
+    readParam<bool>(argc, argv, "format", par.format);
     readParam<int>(argc, argv, "bs_mx", par.bs_mx);
     readParam<int>(argc, argv, "bs_mz", par.bs_mz);
-    readParam<int>(argc, argv, "devices", par.devices);
 }
 
 void readParam(std::string parfile, param &par){

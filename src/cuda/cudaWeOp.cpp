@@ -10,9 +10,10 @@ extern cudaStream_t streams[5]; // CUDA kernel and memory copy streams
 void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const
 {
     int ndevices;
-    int iGpu = par.devices[0];
     cudaCheckError (cudaGetDeviceCount(&ndevices) );
-    successCheck(iGpu<ndevices,__FILE__,__LINE__,"The requested device is not available\n");
+    successCheck(ndevices>0,__FILE__,__LINE__,"There are no devices available\n");
+    int iGpu = par.device;
+    if (iGpu>=ndevices) iGpu = iGpu % ndevices;
     cudaCheckError (cudaSetDevice(iGpu) );
 
     int nxz=nx*nz;
@@ -90,6 +91,7 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
         ns = par.nr; ntr_s=inj->_ntr;
         nr = par.ns; ntr_r=1;
     }
+
     data_t *dev_srcx1, *dev_srcx2, *dev_srcz1, *dev_srcz2;
     data_t *dev_rcvx1, *dev_rcvz1, *dev_rcvx2, *dev_rcvz2;
     data_t **dev_srcx, **dev_srcz;
@@ -204,7 +206,7 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
         }
 
         // copy snapshot of the full wavefield to compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
+        if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[par.nt/par.sub+1-it/par.sub-2], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
         //if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpy(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice) );
 
         // apply spatial SBP operators
@@ -422,12 +424,13 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
 }
 
 
-void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz) const
+void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const
 {
     int ndevices;
-    int iGpu = par.devices[0];
     cudaCheckError (cudaGetDeviceCount(&ndevices) );
-    successCheck(iGpu<ndevices,__FILE__,__LINE__,"The requested device is not available\n");
+    successCheck(ndevices>0,__FILE__,__LINE__,"There are no devices available\n");
+    int iGpu = par.device;
+    if (iGpu>=ndevices) iGpu = iGpu % ndevices;
     cudaCheckError (cudaSetDevice(iGpu) );
     
     int nxz=nx*nz;
@@ -638,8 +641,7 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
         }
 
         // copy snapshot of the full wavefield to compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
-
+        if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[par.nt/par.sub+1-it/par.sub-2], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
 
         // apply spatial SBP operators
         Dxx_var_gpu(false, dev_u_curr, dev_u_next, nx, nz, dx, dev_eps_mu , 1, 1, 2);

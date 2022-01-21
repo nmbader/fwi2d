@@ -242,7 +242,7 @@ public:
     }
 
     // run the solver for a given problem
-    virtual void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10) = 0;
+    virtual void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10, int format = 0, std::string datapath="none") = 0;
 
     // test the solver for a full rank system Lm = d with random vectors
     void testLinear(const bool verbose=true);
@@ -260,7 +260,7 @@ public:
 
     using nlsolver::nlsolver;
     ~nlsd(){}
-    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10);
+    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10, int format = 0, std::string datapath="none");
 };
 
 // Non-linear conjugate gradient solver
@@ -279,7 +279,7 @@ public:
         else if (method == 2) _method = 2;
         else _method = 0;
     }
-    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10);
+    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10, int format = 0, std::string datapath="none");
 };
 
 // BFGS solver
@@ -299,7 +299,7 @@ public:
         else _H=nullptr;
     }
 
-    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10);
+    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10, int format = 0, std::string datapath="none");
     bool testSPD(matrix * H);
     void updateH(matrix * H ,std::shared_ptr<vecReg<data_t> > s, std::shared_ptr<vecReg<data_t> > y);
 };
@@ -322,7 +322,7 @@ public:
         _m = m;
     }
 
-    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10);
+    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10, int format = 0, std::string datapath="none");
     void updateSY(std::vector<std::shared_ptr<vecReg<data_t> > > &s,
                     std::vector<std::shared_ptr<vecReg<data_t> > > &y,
                     std::vector<data_t> &rho,
@@ -341,5 +341,5 @@ public:
     newton(){}
     ~newton(){}
     newton(const int niter, const int max_trial, const data_t threshold=0, lsearch * ls=nullptr):nlsolver(niter,max_trial,threshold,ls){}
-    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10);
+    void run(optimization * prob, const bool verbose=false, std::string output="none", int isave = 10, int format = 0, std::string datapath="none");
 };

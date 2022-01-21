@@ -549,9 +549,15 @@ public:
         time_t t = time(NULL);
         if (_L->_par.verbose>0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t));
 
-        for (int s=0; s<ns; s++)
+        int size=1, rank=0;
+#ifdef ENABLE_MPI
+    MPI_Comm_size(MPI_COMM_WORLD,&size);
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+#endif
+
+        for (int s=rank; s<ns; s+=size)
         {
-            if (_L->_par.verbose>1) fprintf(stderr,"Start processing shot %d\n",s);
+            if (_L->_par.verbose>1) fprintf(stderr,"Start processing shot %d by process %d\n",s, rank);
             
             // cumulative number of receivers
             int nr=0;
@@ -563,6 +569,7 @@ public:
             par.rxz = {_L->_par.rxz[s]};
             par.ns=1;
             par.nr=par.rxz[s].size();
+            par.skip_mpi=true;
             if (par.gl>0) par.rdip = std::vector<data_t>(_L->_par.rdip.begin()+nr, _L->_par.rdip.begin()+nr+par.nr);
 
             if (s>0) par.verbose=0;
@@ -745,9 +752,18 @@ public:
 
             delete L;
 
-            if (_L->_par.verbose>1) fprintf(stderr,"Finish processing shot %d\n",s);
+            if (_L->_par.verbose>1) fprintf(stderr,"Finish processing shot %d by process %d\n",s, rank);
 
         } // end of loop over shots
+
+#ifdef ENABLE_MPI
+        data_t * gtemp = new data_t[_pg->getN123()];
+        if (sizeof(data_t)==8) MPI_Allreduce(_pg->getVals(), gtemp, _pg->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        else MPI_Allreduce(_pg->getVals(), gtemp, _pg->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        memcpy(_pg->getVals(), gtemp, _pg->getN123()*sizeof(data_t));
+        delete [] gtemp;
+#endif
+
 
         if (_P != nullptr) _P->jacobianT(false,_g,_m,_pg);
 

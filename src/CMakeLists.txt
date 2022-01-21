@@ -6,6 +6,7 @@ set(CUDA_INC_DIR cuda)
 #set the directory to source code
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 set(CUDA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cuda)
+set(PYTHON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/python)
 set(MAIN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/main)
 
 set(SRC_FWI2D ${SRC_DIR}/injector.cpp
@@ -46,6 +47,9 @@ set(HEADERS ${INC_DIR}/injector.hpp
                 ${INC_DIR}/we_op.hpp
         )
 
+set(PYTHON ${PYTHON_DIR}/seppy.py
+                ${PYTHON_DIR}/sep2numpy.py)
+
 if (GPU)
         set(HEADERS ${HEADERS} ${CUDA_INC_DIR}/cudaCppWrappers.h
                 ${CUDA_INC_DIR}/cudaMisc.h
@@ -54,12 +58,12 @@ endif()
 
 if(DOUBLE_PRECISION)
         add_custom_command(OUTPUT spatial_operators_ISPC.o
-                        COMMAND ispc ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -DDOUBLE_PRECISION -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf
+                        COMMAND ${ISPC} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -DDOUBLE_PRECISION -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf
                         DEPENDS ${SRC_DIR}/spatial_operators.ispc
                         )
 else()
         add_custom_command(OUTPUT spatial_operators_ISPC.o
-                        COMMAND ispc ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf
+                        COMMAND ${ISPC} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf
                         DEPENDS ${SRC_DIR}/spatial_operators.ispc
                         )
 endif()
@@ -67,6 +71,9 @@ endif()
 #building the project library
 add_library(fwi2d spatial_operators_ISPC.o ${SRC_FWI2D})
 target_link_libraries(fwi2d fftw3f fftw3)
+if (MPI_FOUND)
+        target_link_libraries(fwi2d ${MPI_CXX_LIBRARIES} )
+endif()
 
 #add_library(nlsolvers ${SRC_NLSOLVER})
 
@@ -79,6 +86,9 @@ target_link_libraries(fwi2d fftw3f fftw3)
 #
 add_executable(WE_MODELING.x ${MAIN_DIR}/we_modeling.cpp)
 target_link_libraries(WE_MODELING.x fwi2d sep)
+#if (MPI_FOUND)
+#        target_link_libraries(WE_MODELING.x ${MPI_CXX_LIBRARIES} )
+#endif()
 
 #add_executable(FWI2D_DRAFT.x ${MAIN_DIR}/fwi2d_draft.cpp)
 #target_link_libraries(FWI2D_DRAFT.x fwi2d sep)
@@ -119,8 +129,12 @@ target_link_libraries(RESAMPLE.x fwi2d sep)
 add_executable(FK_FILTER.x ${MAIN_DIR}/fk_filter.cpp)
 target_link_libraries(FK_FILTER.x fwi2d sep)
 
+add_executable(SEP2BIN.x ${MAIN_DIR}/sep2bin.cpp)
+target_link_libraries(SEP2BIN.x fwi2d sep)
+
 #installing libraries and executables
 install(FILES ${HEADERS} DESTINATION include)
+install(FILES ${PYTHON} DESTINATION bin)
 install(TARGETS fwi2d DESTINATION lib)
 install(TARGETS WE_MODELING.x
                 FWI2D.x
@@ -134,6 +148,7 @@ install(TARGETS WE_MODELING.x
                 NOISE.x
                 RESAMPLE.x
                 FK_FILTER.x
+                SEP2BIN.x
                 #FWI2D_DRAFT.x
                 #FWI2D0.x
                 #TEST_FD.x

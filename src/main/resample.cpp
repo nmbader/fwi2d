@@ -54,7 +54,7 @@ void printdoc(){
     "   domain - string - ['time']:\n\t\t'time' or 'frequency'.\n"
     "   type - string - ['sinc']:\n\t\t'sinc' or 'kaiser' or 'linear'. 'linear' and 'kaiser' are valid for time domain only. 'kaiser' uses a sinc filter with a Kaiser window.\n"
     "   factor - int - [2]:\n\t\tfactor by which to interpolate.\n"
-    "   sinc_half_length - int - [5]:\n\t\thalf length in nb of samples of the filter used for sinc and kaiser interpolation.\n"
+    "   sinc_half_length - int - [21]:\n\t\thalf length in nb of samples of the filter used for sinc and kaiser interpolation.\n"
     "   si - non-negative float - [0]:\n\t\tdesired output sampling. If > 0 it overwrites 'factor' and is valid for time domain only.\n"
     "   alpha - 0<=float<=1 or >0 - [0.5]:\n\t\tused in the cosine window for the sinc filter (1 means no taper). It is also used for kaiser window; recommended value 10.\n"
     "\nExample:\n"
