@@ -54,7 +54,7 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
         par.bc_left = std::max(1, par.bc_left);
         par.bc_right = std::max(1, par.bc_right);
     }
-    std::string bc[3] = {"none","free surface","locally absorbing"};
+    std::string bc[5] = {"none","free surface","locally absorbing","rigid-wall","mixed rigid-absorbing"};
     std::string taper_type[3] = {"none","cosine squared","PML"};
     if (verbose){
         fprintf(stderr,"Top boundary condition = %s\t taper size = %d\t taper type = %s\n",bc[par.bc_top].c_str(), par.taper_top, taper_type[(par.taper_top>0)*(1+par.pml)].c_str()); 
@@ -1838,6 +1838,16 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
             const data_t * in[2] = {curr[0],prev[0]};
             asat_absorbing_top(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
         }
+        else if (par.bc_top==3)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_neumann_top(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+        }
+        else if (par.bc_top==4)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_neumann_absorbing_top(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, _transmission->getCVals());
+        }
         if (par.bc_bottom==1)
         {
             const data_t * in[1] = {curr[0]};
@@ -1847,6 +1857,11 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
         {
             const data_t * in[2] = {curr[0],prev[0]};
             asat_absorbing_bottom(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+        }
+        else if (par.bc_bottom==3)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_neumann_bottom(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
         }
         if (par.bc_left==1)
         {
@@ -1858,6 +1873,11 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
             const data_t * in[2] = {curr[0],prev[0]};
             asat_absorbing_left(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
         }
+        else if (par.bc_left==3)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_neumann_left(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
         if (par.bc_right==1)
         {
             const data_t * in[1] = {curr[0]};
@@ -1867,6 +1887,11 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
         {
             const data_t * in[2] = {curr[0],prev[0]};
             asat_absorbing_right(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+        else if (par.bc_right==3)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_neumann_right(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
         }
 
         // update wfld with the 2 steps time recursion
@@ -1878,7 +1903,8 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
 
         // scale boundaries when relevant (for locally absorbing BC only)
         data_t * in[1] = {next[0]};
-        asat_scale_boundaries(in, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
+        if (par.bc_top!=4) asat_scale_boundaries(in, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
+        else asat_scale_boundaries_bis(in, nx, nz, dx, dz, 0, nx, 0, nz, mod, _transmission->getCVals(), par.dt, par.bc_top==4, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
         
         taperz(curr[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
         taperz(curr[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);

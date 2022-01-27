@@ -93,6 +93,9 @@ target_link_libraries(WE_MODELING.x fwi2d sep)
 #add_executable(FWI2D_DRAFT.x ${MAIN_DIR}/fwi2d_draft.cpp)
 #target_link_libraries(FWI2D_DRAFT.x fwi2d sep)
 
+add_executable(LEAKY_TUBE_WAVE.x ${MAIN_DIR}/test_leaky_tw.cpp)
+target_link_libraries(LEAKY_TUBE_WAVE.x fwi2d sep)
+
 add_executable(FWI2D.x ${MAIN_DIR}/fwi2d.cpp)
 target_link_libraries(FWI2D.x fwi2d sep)
 
@@ -149,6 +152,7 @@ install(TARGETS WE_MODELING.x
                 RESAMPLE.x
                 FK_FILTER.x
                 SEP2BIN.x
+                LEAKY_TUBE_WAVE.x
                 #FWI2D_DRAFT.x
                 #FWI2D0.x
                 #TEST_FD.x

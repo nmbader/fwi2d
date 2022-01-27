@@ -465,6 +465,7 @@ protected:
     std::shared_ptr<vecReg<data_t> > _pg; // gradient before applying preconditioner Jacobian
     std::shared_ptr<vecReg<data_t> > _gmask; // gradient mask vector
     std::shared_ptr<vecReg<data_t> > _w; // residual weighting vector
+    std::shared_ptr<vecReg<data_t> > _d_bis; // copy of data vector in case needed for source rescaling
     data_t _dnorm; // data normalization factor
     data_t _f; // objective function
     bool _flag; // flag to re-evaluate or not the objective function
@@ -511,7 +512,16 @@ public:
             integral S(*_d->getHyper());
             S.forward(false, _d, _d);
         }
-        if (_w != nullptr) _d->mult(_w);
+        if (_L->_par.double_difference){ // apply double difference between consecutive traces
+            xdifference xdiff(*_d->getHyper());
+            xdiff.forward(false, _d, _d);
+        }
+        if (_w != nullptr) _d->mult(_w); // apply weighting
+
+        // create a copy of the data when needed
+        if (_L->_par.scale_source_times>0 && (_L->_par.normalize || _L->_par.envelop!=0)) _d_bis = _d->clone();
+        else _d_bis=_d;
+
         if (_L->_par.normalize) { // apply trace normalization
             int nt=_d->getHyper()->getAxis(1).n;
             int ntr=_d->getN123()/nt;
@@ -595,27 +605,14 @@ public:
             L->forward(false,_p,rs);
             data_t * pr = rs->getVals();
 
-            // rescale the synthetics by u'd/u'u (equivalent to Variable Projection with the variable being a single scaler multiplying the source time function)
-            data_t * pd = _d->getVals()+nr*nt;
-            if (par.scale_source_times>0){
-                if (par.scale_source_times>_scale_source_times){
-                    data_t scaler1=0;
-                    data_t scaler2=0;
-                    #pragma omp parallel for reduction(+: scaler1,scaler2)
-                    for (int i=0; i<par.nr*nt; i++) {
-                        scaler1 += pr[i]*pd[i];
-                        scaler2 += pr[i]*pr[i];
-                    }
-                    _scalers[s] = scaler1/scaler2;
-                    if (std::abs(std::log(_scalers[s]))>par.scale_source_log_clip) _scalers[s]=std::exp(((_scalers[s]>=1) - (_scalers[s]<1))*par.scale_source_log_clip);
-                }
-                rs->scale(_scalers[s]);
-                if (_L->_par.verbose>0) fprintf(stderr,"Shot %d rescaled by a factor of %f\n",s,_scalers[s]);
-            }
-
             if (par.integrate){
                 integral S(*rs->getHyper());
                 S.forward(false, rs, rs);
+            }
+
+            if (par.double_difference){
+                xdifference xdiff(*rs->getHyper());
+                xdiff.forward(false, rs, rs);
             }
 
             if (_w != nullptr) {
@@ -635,6 +632,42 @@ public:
                     #pragma omp parallel for
                     for (int i=0; i<par.nr*nt; i++) pr[2*par.nr*nt+i] *= pw[2*_L->_par.nr*nt+i];
                 }
+            }
+
+            // rescale the synthetics by u'd/u'u (equivalent to Variable Projection with the variable being a single scaler multiplying the source time function)
+            data_t * pd = _d->getVals()+nr*nt;
+            data_t * pd_bis = _d_bis->getVals()+nr*nt;
+            if (par.scale_source_times>0){
+                if (par.scale_source_times>_scale_source_times){
+                    data_t scaler1=0;
+                    data_t scaler2=0;
+                    // first component
+                    #pragma omp parallel for reduction(+: scaler1,scaler2)
+                    for (int i=0; i<par.nr*nt; i++) {
+                        scaler1 += pr[i]*pd_bis[i];
+                        scaler2 += pr[i]*pr[i];
+                    }
+                    // second component
+                    if ((par.nmodels>=3 && par.gl==0) || par.acoustic_elastic){
+                        #pragma omp parallel for reduction(+: scaler1,scaler2)
+                        for (int i=0; i<par.nr*nt; i++) {
+                            scaler1 += pr[par.nr*nt+i]*pd_bis[_L->_par.nr*nt+i];
+                            scaler2 += pr[par.nr*nt+i]*pr[par.nr*nt+i];
+                        }
+                    }
+                    // third component
+                    if (par.gl==0 && par.acoustic_elastic){
+                        #pragma omp parallel for reduction(+: scaler1,scaler2)
+                        for (int i=0; i<par.nr*nt; i++) {
+                            scaler1 += pr[2*par.nr*nt+i]*pd_bis[2*_L->_par.nr*nt+i];
+                            scaler2 += pr[2*par.nr*nt+i]*pr[2*par.nr*nt+i];
+                        }
+                    }
+                    _scalers[s] = scaler1/scaler2;
+                    if (std::abs(std::log(_scalers[s]))>par.scale_source_log_clip) _scalers[s]=std::exp(((_scalers[s]>=1) - (_scalers[s]<1))*par.scale_source_log_clip);
+                }
+                rs->scale(_scalers[s]);
+                if (_L->_par.verbose>0) fprintf(stderr,"Shot %d rescaled by a factor of %f\n",s,_scalers[s]);
             }
 
             std::shared_ptr<vecReg<data_t> > norms;
@@ -739,6 +772,11 @@ public:
                     #pragma omp parallel for
                     for (int i=0; i<par.nr*nt; i++) pr[2*par.nr*nt+i] *= pw[2*_L->_par.nr*nt+i];
                 }
+            }
+
+            if (par.double_difference){
+                xdifference xdiff(*rs->getHyper());
+                xdiff.adjoint(false, rs, rs);
             }
 
             if (par.integrate){

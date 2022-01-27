@@ -843,6 +843,10 @@ void asat_absorbing_left(bool add, const data_t** in, data_t* out, int nx, int n
 void asat_absorbing_right(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int izmin, int izmax, const data_t ** par, data_t a);
 void asat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, data_t dt, bool top, bool bottom, bool left, bool right);
 
+// BONUS SAT functions to be used in waveguide locally hydraulically connected to a half space
+void asat_neumann_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, const data_t * a);
+void asat_scale_boundaries_bis(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, const data_t * a, data_t dt, bool top, bool bottom, bool left, bool right);
+
 
 /*
 Perfectly matched layer following Komatitsch and Tromp 2003, eq. (20) and (21)

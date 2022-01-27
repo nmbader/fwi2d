@@ -232,6 +232,7 @@ public:
 // non-linear acoustic wave equation operator: taking an acoustic model and computing data
 class nl_we_op_a : virtual public nl_we_op_e {
 public:
+    std::shared_ptr<vecReg<data_t> > _transmission; // vector containing transmission coefficients (in [0,1]) of the top boundary
     nl_we_op_a(){}
     virtual ~nl_we_op_a(){}
     nl_we_op_a(const hypercube<data_t> &domain, const std::shared_ptr<vecReg<data_t> > allsrc, param &par){

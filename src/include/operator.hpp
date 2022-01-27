@@ -466,6 +466,59 @@ public:
     }
 };
 
+// operator to take the difference of two consecutive traces in the second direction
+// The add option is inactive
+class xdifference : public loper {
+public:
+    xdifference(){}
+    ~xdifference(){}
+    xdifference(const hypercube<data_t> &domain){
+        _domain = domain;
+        _range = domain;
+    }
+    xdifference * clone() const {
+        xdifference * op = new xdifference(_domain);
+        return op;
+    }    
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat){
+        int nt = _domain.getAxis(1).n;
+        int nx = _domain.getAxis(2).n;
+        int ny = _domain.getN123() / (nt*nx);
+        const data_t (*pm) [nx][nt] = (const data_t (*)[nx][nt]) pmod;
+        data_t (*pd) [nx][nt] = (data_t (*)[nx][nt]) pdat;
+        #pragma omp parallel for
+        for (int iy=0; iy<ny; iy++){
+            for (int ix=nx-1; ix>0; ix--){
+                for (int it=0; it<nt; it++){
+                    pd[iy][ix][it] = add*pd[iy][ix][it] + pm[iy][ix][it]-pm[iy][ix-1][it];
+                }
+            }
+            for (int it=0; it<nt; it++) pd[iy][0][it] = 0;
+        }
+    }
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+        int nt = _domain.getAxis(1).n;
+        int nx = _domain.getAxis(2).n;
+        int ny = _domain.getN123() / (nt*nx);
+        data_t (*pm) [nx][nt] = (data_t (*)[nx][nt]) pmod;
+        const data_t (*pd) [nx][nt] = (const data_t (*)[nx][nt]) pdat;
+        #pragma omp parallel for
+        for (int iy=0; iy<ny; iy++){
+            for (int it=0; it<nt; it++) {
+                pm[iy][0][it] = - pd[iy][1][it];
+            }
+            for (int ix=1; ix<nx-1; ix++){
+                for (int it=0; it<nt; it++){
+                    pm[iy][ix][it] = pd[iy][ix][it]-pd[iy][ix+1][it];
+                }
+            }
+            for (int it=0; it<nt; it++) {
+                pm[iy][nx-1][it] = pd[iy][nx-1][it];
+            }
+        }
+    }
+};
+
 // class to tranform from t-x (or z-x) to f-x space and vice versa
 class fxTransform{
 protected:

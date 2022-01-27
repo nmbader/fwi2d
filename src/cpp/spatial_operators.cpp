@@ -761,6 +761,108 @@ void asat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, in
     }
 }
 
+
+void asat_neumann_absorbing_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, data_t dt, int ixmin, int ixmax, const data_t ** par, const data_t * a)
+{
+
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t h0 = 17.0/48;
+    int nc1=4;
+    data_t sum=0;
+
+    // SAT = - H-1 (-f2.S.in - f3.in/(2dt) )_0  f2=reciprocal of density ; f3=a/(rho.v)=a/sqrt(rho.K)  ;  'a' is like a transmission coefficient (0<=a<=1)
+    #pragma omp parallel for private(sum)
+    for (int ix=ixmin; ix<ixmax; ix++){
+        sum=0;
+        for (int iz=0; iz<nc1; iz++){
+            sum += scoef[iz] * in[0][ix*nz+iz];
+        }
+        out[ix*nz] = add*out[ix*nz] - 1.0/(h0*dz) * ( par[1][ix*nz]*sum/dz - in[1][ix*nz]*a[ix]/(2*dt*sqrt(par[0][ix*nz]/par[1][ix*nz])));
+    }
+}
+
+void asat_scale_boundaries_bis(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, const data_t * a, data_t dt, bool top, bool bottom, bool left, bool right){
+
+    // par must at least contain K, 1/rho in this order
+    data_t h0 = 17.0/48;
+    data_t scaler;
+    data_t sc1=0, sc2=0, sc3=0, sc4=0;
+
+    // scale the top boundary without the corners
+    if (top){
+        sc1 = a[0]*sqrt(par[0][0]*par[1][0])*dt / (2  * dz * h0); // top left
+        sc2 = a[nx-1]*sqrt(par[0][(nx-1)*nz]*par[1][(nx-1)*nz])*dt / (2 * dz * h0); // top right
+        if (izmin==0){
+            for (int ix = std::max(1,ixmin); ix < std::min(nx-1,ixmax); ix++){
+                scaler = a[ix]*sqrt(par[0][ix*nz]*par[1][ix*nz])*dt / (2 * dz * h0);
+                in[0][ix*nz] = in[0][ix*nz] / (1+scaler);
+            }
+        }
+    }
+
+    // scale the left boundary
+    if (left){
+        sc1 += sqrt(par[0][0]*par[1][0])*dt / (2 * dx * h0); // top left
+        in[0][0] = in[0][0] / (1+sc1);
+        sc1 = sqrt(par[0][nz-1]*par[1][nz-1])*dt / (2 * dx * h0); // bottom left
+        if (ixmin==0){
+            for (int iz = std::max(1,izmin); iz < std::min(nz-1,izmax); iz++){
+                scaler = sqrt(par[0][iz]*par[1][iz])*dt / (2 * dx * h0);
+                in[0][iz] = in[0][iz] / (1+scaler);
+            }
+        }
+    }
+    else{
+        if (izmin==0 && ixmin==0){
+            in[0][0] = in[0][0] / (1+sc1); // top left
+        }
+        sc1 = 0; // bottom left
+    }
+
+    // scale the bottom boundary
+    if (bottom){
+        sc1 += sqrt(par[0][nz-1]*par[1][nz-1])*dt / (2 * dz * h0); // bottom left
+        in[0][nz-1] = in[0][nz-1] / (1+sc1);
+        sc1 = sqrt(par[0][(nx-1)*nz+nz-1]*par[1][(nx-1)*nz+nz-1])*dt / (2 * dz * h0); // bottom right
+        if (izmax==nz){
+            for (int ix = std::max(1,ixmin); ix < std::min(nx-1,ixmax); ix++){
+                scaler = sqrt(par[0][ix*nz+nz-1]*par[1][ix*nz+nz-1])*dt / (2 * dz * h0);
+                in[0][ix*nz+nz-1] = in[0][ix*nz+nz-1] / (1+scaler);
+            }
+        }
+    }
+    else {
+        if (izmax==nz && ixmin==0){
+            in[0][nz-1] = in[0][nz-1] / (1+sc1); // bottom left
+        }
+        sc1 = 0; // bottom right
+    }
+
+    // scale the right boundary
+    if (right){
+        sc1 += sqrt(par[0][(nx-1)*nz+nz-1]*par[1][(nx-1)*nz+nz-1])*dt / (2 * dx * h0); // bottom right
+        in[0][(nx-1)*nz+nz-1] = in[0][(nx-1)*nz+nz-1] / (1+sc1);
+        if (ixmax==nx){
+            for (int iz = std::max(1,izmin); iz < std::min(nz-1,izmax); iz++){
+                scaler = sqrt(par[0][(nx-1)*nz+iz]*par[1][(nx-1)*nz+iz])*dt / (2 * dx * h0);
+                in[0][(nx-1)*nz+iz] = in[0][(nx-1)*nz+iz] / (1+scaler);
+            }
+        }
+        sc2 += sqrt(par[0][(nx-1)*nz]*par[1][(nx-1)*nz])*dt / (2 * dx *h0); // top right
+        if (izmin==0 && ixmax==nx){
+            in[0][(nx-1)*nz] = in[0][(nx-1)*nz] / (1+sc2);
+        }
+    }
+    else {
+        if (izmax==nz && ixmax==nx){
+            in[0][(nx-1)*nz+nz-1] = in[0][(nx-1)*nz+nz-1] / (1+sc1); // bottom right
+        }
+        if (izmin==0 && ixmax==nx){
+            in[0][(nx-1)*nz] = in[0][(nx-1)*nz] / (1+sc2); // top right
+        }
+    }
+}
+
 // variable coefficients expressions for 2nd derivative SBP operators
 static inline data_t expr1(const data_t ** par, int i){return par[0][i];} // e.g. = lambda
 static inline data_t expr2(const data_t ** par, int i){return par[1][i];} // e.g. = mu
