@@ -8,9 +8,9 @@ void nloper::dotProduct(){
     std::shared_ptr<vecReg<data_t> > d (new vecReg<data_t>(_range));
     std::shared_ptr<vecReg<data_t> > m1;
 
-    m->random(-10,10);
-    d->random(-10,10);
-    dm->random(-10,10);
+    m->random(-1,1,123);
+    d->random(-1,1,123);
+    dm->random(-1,1,123);
 
     std::shared_ptr<vecReg<data_t> > mtilde = m->clone();
     std::shared_ptr<vecReg<data_t> > d1 = d->clone();
@@ -32,7 +32,7 @@ void nloper::dotProduct(){
     fprintf(stderr,"Dot product with eps = %f:\n",eps);
     fprintf(stderr,"sum1 = %f\nsum2 = %f\ndiff (x1000) = %f\n",sum1,sum2,1000*(sum1 - sum2));
 
-    eps = 0.001;
+    eps = 0.01;
 
     m1 = dm->clone();
     m1->scaleAdd(m,eps,1); // m + eps.dm
@@ -47,7 +47,7 @@ void nloper::dotProduct(){
     fprintf(stderr,"Dot product with eps = %f:\n",eps);
     fprintf(stderr,"sum1 = %f\nsum2 = %f\ndiff (x1000) = %f\n",sum1,sum2,1000*(sum1 - sum2));
 
-    eps = 0.00001;
+    eps = 0.0001;
     
     m1 = dm->clone();
     m1->scaleAdd(m,eps,1); // m + eps.dm
@@ -249,6 +249,200 @@ void emodelSoftClip::apply_jacobianT(bool add, data_t * pmod, const data_t * pmo
     delete [] m0;
 }
 
+void polar::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    #pragma omp parallel for
+    for (int i=0; i<_domain.getN123()/2; i++){
+        data_t val = pmod[2*i];
+        pdat[2*i]= sqrt(pmod[2*i]*pmod[2*i] + pmod[2*i+1]*pmod[2*i+1]);
+        pdat[2*i+1]= atan2(pmod[2*i+1], val);
+    }
+}
+
+void polar::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    #pragma omp parallel for
+    for (int i=0; i<_domain.getN123()/2; i++) {
+        data_t r = sqrt(pmod0[2*i]*pmod0[2*i] + pmod0[2*i+1]*pmod0[2*i+1]);
+        data_t x = pmod0[2*i];
+        data_t y = pmod0[2*i+1];
+        data_t val = pdat[2*i];
+        pmod[2*i]= x/r*pdat[2*i] - y/r*pdat[2*i+1];
+        pmod[2*i+1]= y/r*val + x/r*pdat[2*i+1];
+    }
+}
+
+void ipolar::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    #pragma omp parallel for
+    for (int i=0; i<_domain.getN123()/2; i++){
+        data_t val = pmod[2*i];
+        pdat[2*i] = pmod[2*i]*cos(pmod[2*i+1]);
+        pdat[2*i+1] = val*sin(pmod[2*i+1]);
+    }
+}
+void ipolar::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    #pragma omp parallel for
+    for (int i=0; i<_domain.getN123()/2; i++) {
+        data_t r = pmod0[2*i];
+        data_t phi = pmod0[2*i+1];
+        data_t val = pdat[2*i];
+        pmod[2*i] = cos(phi)*pdat[2*i] + sin(phi)*pdat[2*i+1];
+        pmod[2*i+1] = - r*sin(phi)*val + r*cos(phi)*pdat[2*i+1];
+    }
+}
+
+void sdivision::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    if (!add) memset(pdat,0,_domain.getN123()*sizeof(data_t));
+
+    int nf=_domain.getAxis(1).n/2;
+    int ntr=_domain.getAxis(2).n;
+    int ny = _domain.getN123()/(2*nf*ntr);
+    int fmin=round(_fmin*nf);
+    int fmax=round(_fmax*nf);
+
+    const data_t (*pv1) [ntr][2*nf] = (const data_t (*)[ntr][2*nf]) pmod;
+    data_t (*pv2) [ntr][2*nf] = (data_t (*)[ntr][2*nf]) pdat;
+
+    for (int iy=0; iy<ny; iy++){
+        #pragma omp parallel for
+        for (int itr=1; itr<ntr; itr++){
+            for (int f=fmin; f<fmax; f++){
+                pv2[iy][itr][2*f] += (pv1[iy][itr][2*f]+_eps) / (pv1[iy][itr-1][2*f]+_eps);
+                pv2[iy][itr][2*f+1] += pv1[iy][itr][2*f+1] - pv1[iy][itr-1][2*f+1];
+            }
+        }
+    }
+}
+void sdivision::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    if (!add) memset(pmod,0,_domain.getN123()*sizeof(data_t));
+
+    int nf=_domain.getAxis(1).n/2;
+    int ntr=_domain.getAxis(2).n;
+    int ny = _domain.getN123()/(2*nf*ntr);
+    int fmin=round(_fmin*nf);
+    int fmax=round(_fmax*nf);
+
+    data_t (*pv2) [ntr][2*nf] = (data_t (*)[ntr][2*nf]) pmod;
+    const data_t (*pv0) [ntr][2*nf] = (const data_t (*)[ntr][2*nf]) pmod0;
+    const data_t (*pv1) [ntr][2*nf] = (const data_t (*)[ntr][2*nf]) pdat;
+
+    for (int iy=0; iy<ny; iy++){
+        #pragma omp parallel for
+        for (int itr=1; itr<ntr-1; itr++){
+            for (int f=fmin; f<fmax; f++){
+                pv2[iy][itr][2*f] += pv1[iy][itr][2*f]/(pv0[iy][itr-1][2*f]+_eps) - pv1[iy][itr+1][2*f]*(pv0[iy][itr+1][2*f]+_eps)/((pv0[iy][itr][2*f]+_eps)*(pv0[iy][itr][2*f]+_eps));
+                pv2[iy][itr][2*f+1] += pv1[iy][itr][2*f+1] - pv1[iy][itr+1][2*f+1];
+            }
+        }
+        for (int f=fmin; f<fmax; f++){
+            pv2[iy][0][2*f] += -pv1[iy][1][2*f]*(pv0[iy][1][2*f]+_eps)/((pv0[iy][0][2*f]+_eps)*(pv0[iy][0][2*f]+_eps));
+            pv2[iy][0][2*f+1] += -pv1[iy][1][2*f+1];
+            pv2[iy][ntr-1][2*f] += pv1[iy][ntr-1][2*f]/(pv0[iy][ntr-2][2*f]+_eps);
+            pv2[iy][ntr-1][2*f+1] += pv1[iy][ntr-1][2*f+1];
+        }
+    }
+}
+
+void tr2trDecon::apply_forward(bool add, const data_t * pmod, data_t * pdat) {
+
+    // This operator can be written as: d = F^-1.P^-1(S.D(P(F.m))))
+    // F is FT transform (real to real vectors)
+    // P is polar coordinates transform (non-linear)
+    // D is spectral division in a given frequency band between traces with added white noise: r_i,r_i+1,r_i+2,phi_i,phi_i+1,phi_i+2 --> 0,(r_i+1+e)/(r_i+e),(r_i+2+e)/(r_i+1+e),0,phi_i+1-phi_i,phi_i+2-phi_i+1
+    // S is a triangular smoothing applied to r
+    // F^-1 is inverse FT transform (real to real vectors)
+
+    // F.m
+    fxTransformR fx(_domain);
+    std::shared_ptr<vecReg<data_t> > vec1 = std::make_shared<vecReg<data_t> >(*fx.getRange());
+    vec1->zero();
+    data_t * pvec1=vec1->getVals();
+    fx.apply_forward(false,pmod,pvec1);
+
+    // P(F.m)
+    polar P(*vec1->getHyper());
+    P.apply_forward(false,pvec1,pvec1);
+
+    // D(P(F.m))
+    sdivision D(*vec1->getHyper(),_fmin,_fmax,_eps);
+    std::shared_ptr<vecReg<data_t> > vec2 = std::make_shared<vecReg<data_t> >(*D.getRange());
+    vec2->zero();
+    data_t * pvec2=vec2->getVals();
+    D.apply_forward(false, pvec1, pvec2);
+
+    // S.D(P(F.m))
+    ssmth S(*vec2->getHyper(),_hl);
+    S.apply_forward(false, pvec2, pvec1);
+
+    // P^-1(S.D(P(F.m)))
+    ipolar iP(*vec1->getHyper());
+    iP.apply_forward(false,pvec1,pvec1);
+
+    // F^-1.P^-1(S.D(P(F.m)))
+    ifxTransformR ifx(_range);
+    ifx.apply_forward(add,pvec1,pdat);
+}
+
+void tr2trDecon::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    // d = F^-1.P^-1(S.D(P(F.m))))
+    // The adjoint of the above operator is: m = F'.(dP/dF)'.(dD/dP)'.S'.(dP^-1/dS)'.F'^-1.d
+    // dP/dF is evaluated at F_0=(F.m_0)
+    // dD/dP is evaluated at P_0=P(F.m_0)
+    // dP^-1/dS is evaluated at S_0=S.D((P(F.m_0))
+
+    // F'^-1.d
+    ifxTransformR ifx(_range);
+    std::shared_ptr<vecReg<data_t> > vec1 = std::make_shared<vecReg<data_t> >(*ifx.getDomain());
+    vec1->zero();
+    data_t * pvec1=vec1->getVals();
+    ifx.apply_adjoint(false,pvec1,pdat);
+
+    // S_0
+    std::shared_ptr<vecReg<data_t> > vec0 = std::make_shared<vecReg<data_t> >(_range);
+    vec0->zero();
+    apply_forward(false, pmod0, vec0->getVals());
+    fxTransformR fx(_domain);
+    std::shared_ptr<vecReg<data_t> > vec2 = std::make_shared<vecReg<data_t> >(*fx.getRange());
+    vec2->zero();
+    data_t * pvec2=vec2->getVals();
+    fx.apply_forward(false,vec0->getVals(),pvec2);
+    polar P(*vec2->getHyper());
+    P.apply_forward(false,pvec2,pvec2);
+
+    // (dP^-1/dS)'.F'^-1.d
+    ipolar iP(*vec1->getHyper());
+    iP.apply_jacobianT(false,pvec1,pvec2,pvec1);
+
+    // S'.(dP^-1/dS)'.F'^-1.d
+    ssmth S(*vec1->getHyper(),_hl);
+    S.apply_adjoint(false, pvec2, pvec1);
+
+    // P_0
+    fx.apply_forward(false,pmod0,pvec1);
+    P.apply_forward(false,pvec1,pvec1);
+
+    // (dD/dP)'.S'.(dP^-1/dS)'.F'^-1.d
+    sdivision D(*vec2->getHyper(),_fmin,_fmax,_eps);
+    std::shared_ptr<vecReg<data_t> > vec3 = std::make_shared<vecReg<data_t> >(*D.getDomain());
+    vec3->zero();
+    data_t * pvec3=vec3->getVals();
+    D.apply_jacobianT(false,pvec3,pvec1,pvec2);
+
+    // F_0
+    iP.apply_forward(false,pvec1,pvec1);
+
+    // (dP/dF)'.(dD/dP)'.S'.(dP^-1/dS)'.F'^-1.d
+    P.apply_jacobianT(false,pvec3,pvec1,pvec3);
+
+    // F'.(dP/dF)'.(dD/dP)'.S'.(dP^-1/dS)'.F'^-1.d
+    fx.apply_adjoint(add, pmod, pvec3);
+}
+
 inline data_t sinc(data_t x){
     if (x==0.0) return 1.0;
     else return sin(x)/x;
@@ -347,15 +541,13 @@ void sinc_resampler::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     }
 }
 
-void fxTransform::forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<cvecReg<data_t> > dat)
+void fxTransform::apply_forward(bool add, const data_t * pmod, std::complex<data_t> * pdat)
 {
-    successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
-
     int nt = _domain.getAxis(1).n;
     int ntr = _domain.getN123()/nt;
     int nf = _range.getAxis(1).n;
-    const data_t (*m) [nt] = (const data_t (*) [nt]) mod->getCVals();
-    std::complex<data_t> (*d) [nf] = (std::complex<data_t> (*) [nf]) dat->getVals();
+    const data_t (*m) [nt] = (const data_t (*) [nt]) pmod;
+    std::complex<data_t> (*d) [nf] = (std::complex<data_t> (*) [nf]) pdat;
 
     // double precision
     if ((int)sizeof(data_t)==8){
@@ -412,15 +604,14 @@ void fxTransform::forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, 
     }
 }
 
-void fxTransform::inverse(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat)
+void fxTransform::apply_inverse(bool add, data_t * pmod, const std::complex<data_t> * pdat)
 {
-    successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
 
     int nt = _domain.getAxis(1).n;
     int ntr = _domain.getN123()/nt;
     int nf = _range.getAxis(1).n;
-    data_t (*m) [nt] = (data_t (*) [nt]) mod->getCVals();
-    const std::complex<data_t> (*d) [nf] = (const std::complex<data_t> (*) [nf]) dat->getVals();
+    data_t (*m) [nt] = (data_t (*) [nt]) pmod;
+    const std::complex<data_t> (*d) [nf] = (const std::complex<data_t> (*) [nf]) pdat;
 
     // double precision
     if ((int)sizeof(data_t)==8){
@@ -665,6 +856,10 @@ void fxTransform::testAdjoint(){
     //time_t timer; unsigned int seed=time(&timer);
     m->random();
     d->random();
+    
+    int nf = _range.getAxis(1).n;
+    int nx = _range.getN123()/nf;
+    for (int i=0; i<nx; i++) d->getVals()[i*nf].imag(0);
 
     std::shared_ptr<vecReg<data_t> > mtild = m->clone();
     std::shared_ptr<cvecReg<data_t> > dtild = d->clone();
@@ -672,7 +867,7 @@ void fxTransform::testAdjoint(){
     this->forward(false, m, dtild);
     this->adjoint(false, mtild, d);
 
-    data_t sum1 = (dtild->dot(d)).real();
+    data_t sum1 = dtild->real()->dot(d->real()) + dtild->imag()->dot(d->imag());
     data_t sum2 = m->dot(mtild);
 
     fprintf(stderr,"Dot product with add=false:\n");
@@ -681,7 +876,7 @@ void fxTransform::testAdjoint(){
     this->forward(true, m, dtild);
     this->adjoint(true, mtild, d);
 
-    sum1 = (dtild->dot(d)).real();
+    sum1 = dtild->real()->dot(d->real()) + dtild->imag()->dot(d->imag());
     sum2 = m->dot(mtild);
 
     fprintf(stderr,"Dot product with add=true:\n");
@@ -701,7 +896,9 @@ void fxTransform::testCAdjoint(){
     std::shared_ptr<cvecReg<data_t> > dtild = d->clone();
 
     this->cforward(false, m, dtild);
+    dtild->scale(1.0/sqrt(_domain.getAxis(1).n));
     this->cadjoint(false, mtild, d);
+    mtild->scale(sqrt(_domain.getAxis(1).n));
 
     std::complex<data_t> sum1 = dtild->dot(d);
     std::complex<data_t> sum2 = m->dot(mtild);
@@ -709,8 +906,12 @@ void fxTransform::testCAdjoint(){
     fprintf(stderr,"Dot product with add=false:\n");
     fprintf(stderr,"sum1 = %f + i%f\nsum2 = %f + i%f\n",sum1.real(), sum1.imag(), sum2.real(), sum2.imag());
 
+    m->scale(1.0/sqrt(_domain.getAxis(1).n));
     this->cforward(true, m, dtild);
+    m->scale(sqrt(_domain.getAxis(1).n));
+    d->scale(sqrt(_domain.getAxis(1).n));
     this->cadjoint(true, mtild, d);
+    d->scale(1.0/sqrt(_domain.getAxis(1).n));
 
     sum1 = dtild->dot(d);
     sum2 = m->dot(mtild);
@@ -1053,6 +1254,267 @@ void fkTransform::cinverse(bool add, std::shared_ptr<cvecReg<data_t> > mod, cons
     }
 }
 
+void fxTransformR::apply_forward(bool add, const data_t * pmod, data_t * pdat)
+{   
+    int nt = _domain.getAxis(1).n;
+    int ntr = _domain.getN123()/nt;
+    int nf = _range.getAxis(1).n/2;
+    const data_t (*m) [nt] = (const data_t (*) [nt]) pmod;
+    data_t (*d) [2*nf] = (data_t (*) [2*nf]) pdat;
+
+    // double precision
+    if ((int)sizeof(data_t)==8){
+
+        double * in = new double[nt];
+        fftw_complex * out = (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nf);
+        fftw_plan p = fftw_plan_dft_r2c_1d(nt, in, out, FFTW_ESTIMATE);
+        
+        for (int itr=0; itr<ntr; itr++){
+
+            // transfer input
+            memcpy(in, m[itr], sizeof(data_t)*nt);
+
+            // forward transform
+            fftw_execute(p);
+
+            // copy to output
+            for (int f=0; f<nf; f++) {
+                d[itr][2*f] = add*d[itr][2*f] + out[f][0]/sqrt(nt); // real part
+                d[itr][2*f+1] = add*d[itr][2*f+1] + out[f][1]/sqrt(nt); // imaginary part
+            }
+        }
+        delete [] in;
+        fftw_destroy_plan(p);
+        fftw_free(out);
+        fftw_cleanup();
+    }
+    else
+    {
+        float * in = new float[nt];
+        fftwf_complex * out = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex)*nf);
+        fftwf_plan p = fftwf_plan_dft_r2c_1d(nt, in, out, FFTW_ESTIMATE);
+        
+        for (int itr=0; itr<ntr; itr++){
+
+            // transfer input
+            memcpy(in, m[itr], sizeof(data_t)*nt);
+
+            // forward transform
+            fftwf_execute(p);
+
+            // copy to output
+            for (int f=0; f<nf; f++) {
+                d[itr][2*f] = add*d[itr][2*f] + out[f][0]/sqrt(nt); // real part
+                d[itr][2*f+1] = add*d[itr][2*f+1] + out[f][1]/sqrt(nt); // imaginary part
+            }
+        }
+        delete [] in;
+        fftwf_destroy_plan(p);
+        fftwf_free(out);
+        fftwf_cleanup();
+    }
+}
+
+void fxTransformR::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
+{
+    int nt = _domain.getAxis(1).n;
+    int ntr = _domain.getN123()/nt;
+    int nf = _range.getAxis(1).n/2;
+    data_t (*m) [nt] = (data_t (*) [nt]) pmod;
+    const data_t (*d) [2*nf] = (const data_t (*) [2*nf]) pdat;
+
+    if (!add) memset(pmod, 0, sizeof(data_t)*_domain.getN123());
+
+    // double precision
+    if ((int)sizeof(data_t)==8){
+
+        double * in = new double[nt];
+        memset(in, 0, nt*sizeof(double));
+        fftw_complex * out = (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nf);
+        fftw_plan p = fftw_plan_dft_r2c_1d(nt, in, out, FFTW_ESTIMATE);
+        
+        for (int itr=0; itr<ntr; itr++){
+
+            // transfer real input
+            for (int f=0; f<nf; f++) in[f] = d[itr][2*f];
+
+            // forward transform
+            fftw_execute(p);
+
+            // copy to output
+            for (int f=0; f<nf; f++) m[itr][f] +=  out[f][0]/sqrt(nt);
+            for (int f=nf; f<nt; f++) m[itr][f] += out[2*nf-f-1][0]/sqrt(nt);
+
+            // transfer imaginary input
+            for (int f=0; f<nf; f++) in[f] = d[itr][2*f+1];
+
+            // forward transform
+            fftw_execute(p);
+
+            // copy to output
+            for (int f=0; f<nf; f++) m[itr][f] +=  out[f][1]/sqrt(nt);
+            for (int f=nf; f<nt; f++) m[itr][f] -= out[2*nf-f-1][1]/sqrt(nt);
+        }
+        delete [] in;
+        fftw_destroy_plan(p);
+        fftw_free(out);
+        fftw_cleanup();
+    }
+    else
+    {
+        float * in = new float[nt];
+        memset(in, 0, nt*sizeof(float));
+        fftwf_complex * out = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex)*nf);
+        fftwf_plan p = fftwf_plan_dft_r2c_1d(nt, in, out, FFTW_ESTIMATE);
+        
+        for (int itr=0; itr<ntr; itr++){
+
+            // transfer real input
+            for (int f=0; f<nf; f++) in[f] = d[itr][2*f];
+
+            // forward transform
+            fftwf_execute(p);
+
+            // copy to output
+            for (int f=0; f<nf; f++) m[itr][f] += out[f][0]/sqrt(nt);
+            for (int f=nf; f<nt; f++) m[itr][f] += out[2*nf-f-1][0]/sqrt(nt);
+
+            // transfer imaginary input
+            for (int f=0; f<nf; f++) in[f] = d[itr][2*f+1];
+
+            // forward transform
+            fftwf_execute(p);
+
+            // copy to output
+            for (int f=0; f<nf; f++) m[itr][f] += out[f][1]/sqrt(nt);
+            for (int f=nf; f<nt; f++) m[itr][f] -= out[2*nf-f-1][1]/sqrt(nt);
+        }
+        delete [] in;
+        fftwf_destroy_plan(p);
+        fftwf_free(out);
+        fftwf_cleanup();
+    }
+}
+
+void ifxTransformR::apply_forward(bool add, const data_t * pmod, data_t * pdat)
+{
+    int nt = _range.getAxis(1).n;
+    int ntr = _range.getN123()/nt;
+    int nf = _domain.getAxis(1).n/2;
+    data_t (*m) [nt] = (data_t (*) [nt]) pdat;
+    const data_t (*d) [2*nf] = (const data_t (*) [2*nf]) pmod;
+
+    // double precision
+    if ((int)sizeof(data_t)==8){
+
+        double * out = new double[nt];
+        fftw_complex * in = (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nf);
+        fftw_plan p = fftw_plan_dft_c2r_1d(nt, in, out, FFTW_ESTIMATE);
+        
+        for (int itr=0; itr<ntr; itr++){
+
+            // transfer input
+            memcpy(in, d[itr], sizeof(fftw_complex)*nf);
+
+            // inverse transform
+            fftw_execute(p);
+
+            // copy to output
+            for (int it=0; it<nt; it++) m[itr][it]= add*m[itr][it] + out[it]/sqrt(nt);
+        }
+        delete [] out;
+        fftw_destroy_plan(p);
+        fftw_free(in);
+        fftw_cleanup();
+    }
+    else
+    {
+        float * out = new float[nt];
+        fftwf_complex * in = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex)*nf);
+        fftwf_plan p = fftwf_plan_dft_c2r_1d(nt, in, out, FFTW_ESTIMATE);
+        
+        for (int itr=0; itr<ntr; itr++){
+
+            // transfer input
+            memcpy(in, d[itr], sizeof(fftwf_complex)*nf);
+
+            // inverse transform
+            fftwf_execute(p);
+
+            // copy to output
+            for (int it=0; it<nt; it++) m[itr][it]= add*m[itr][it] + out[it]/sqrt(nt);
+        }
+
+        delete [] out;
+        fftwf_destroy_plan(p);
+        fftwf_free(in);
+        fftwf_cleanup();
+    }
+}
+
+void ifxTransformR::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
+{   
+    int nt = _range.getAxis(1).n;
+    int ntr = _range.getN123()/nt;
+    int nf = _domain.getAxis(1).n/2;
+    const data_t (*m) [nt] = (const data_t (*) [nt]) pdat;
+    data_t (*d) [2*nf] = (data_t (*) [2*nf]) pmod;
+
+    // double precision
+    if ((int)sizeof(data_t)==8){
+
+        double * in = new double[nt];
+        fftw_complex * out = (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nf);
+        fftw_plan p = fftw_plan_dft_r2c_1d(nt, in, out, FFTW_ESTIMATE);
+        
+        for (int itr=0; itr<ntr; itr++){
+
+            // transfer input
+            memcpy(in, m[itr], sizeof(data_t)*nt);
+
+            // forward transform
+            fftw_execute(p);
+
+            // copy to output
+            for (int f=0; f<nf; f++) {
+                d[itr][2*f] = add*d[itr][2*f] + 2*out[f][0]/sqrt(nt); // real part
+                d[itr][2*f+1] = add*d[itr][2*f+1] + 2*out[f][1]/sqrt(nt) ; // imaginary part
+            }
+            d[itr][0] -= out[0][0]/sqrt(nt);
+        }
+        delete [] in;
+        fftw_destroy_plan(p);
+        fftw_free(out);
+        fftw_cleanup();
+    }
+    else
+    {
+        float * in = new float[nt];
+        fftwf_complex * out = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex)*nf);
+        fftwf_plan p = fftwf_plan_dft_r2c_1d(nt, in, out, FFTW_ESTIMATE);
+        
+        for (int itr=0; itr<ntr; itr++){
+
+            // transfer input
+            memcpy(in, m[itr], sizeof(data_t)*nt);
+
+            // forward transform
+            fftwf_execute(p);
+
+            // copy to output
+            for (int f=0; f<nf; f++) {
+                d[itr][2*f] = add*d[itr][2*f] + 2*out[f][0]/sqrt(nt); // real part
+                d[itr][2*f+1] = add*d[itr][2*f+1] + 2*out[f][1]/sqrt(nt) ; // imaginary part
+            }
+            d[itr][0] -= out[0][0]/sqrt(nt);
+        }
+        delete [] in;
+        fftwf_destroy_plan(p);
+        fftwf_free(out);
+        fftwf_cleanup();
+    }
+}
+
 void gradient2d::apply_forward(bool add, const data_t * pmod, data_t * pdat){
 
     if (!add) memset(pdat,0,_range.getN123()*sizeof(data_t));
@@ -1245,4 +1707,70 @@ void extrapolator1d2d::apply_inverse(bool add, data_t * pmod, const data_t * pda
     {
         for (int iz=0; iz<nz; iz++) pm[iy][iz] = add*pm[iy][iz] + pd[iy][0][iz]; 
     }
+}
+
+void ssmth::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    if (!add) memset(pdat,0,_domain.getN123()*sizeof(data_t));
+
+    int nf=_domain.getAxis(1).n/2;
+    int ntr = _domain.getN123()/(2*nf);
+
+    data_t * pvec = new data_t[_domain.getN123()];
+    memset(pvec,0,_domain.getN123()*sizeof(data_t));
+
+    const data_t (*pv1) [2*nf] = (const data_t (*)[2*nf]) pmod;
+    data_t (*pv0) [2*nf] = (data_t (*)[2*nf]) pvec;
+    data_t (*pv2) [2*nf] = (data_t (*)[2*nf]) pdat;
+
+    #pragma omp parallel for
+    for (int itr=0; itr<ntr; itr++){
+        for (int f=0; f<nf; f++){
+            data_t sc = std::min(nf,f+_hl+1)-std::max(0,f-_hl);
+            for (int j=std::max(0,f-_hl); j<std::min(nf,f+_hl+1); j++) pv0[itr][2*f] += pv1[itr][2*j]/sc;
+            pv0[itr][2*f+1] = pv1[itr][2*f+1];
+        }
+    }
+    #pragma omp parallel for
+    for (int itr=0; itr<ntr; itr++){
+        for (int f=0; f<nf; f++){
+            data_t sc = std::min(nf,f+_hl+1)-std::max(0,f-_hl);
+            for (int j=std::max(0,f-_hl); j<std::min(nf,f+_hl+1); j++) pv2[itr][2*f] += pv0[itr][2*j]/sc;
+            pv2[itr][2*f+1] += pv0[itr][2*f+1];
+        }
+    }
+    delete [] pvec;
+}
+void ssmth::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+    if (!add) memset(pmod,0,_domain.getN123()*sizeof(data_t));
+
+    int nf=_domain.getAxis(1).n/2;
+    int ntr = _domain.getN123()/(2*nf);
+
+    data_t * pvec = new data_t[_domain.getN123()];
+    memset(pvec,0,_domain.getN123()*sizeof(data_t));
+
+    data_t (*pv1) [2*nf] = (data_t (*)[2*nf]) pmod;
+    data_t (*pv0) [2*nf] = (data_t (*)[2*nf]) pvec;
+    const data_t (*pv2) [2*nf] = (const data_t (*)[2*nf]) pdat;
+
+    #pragma omp parallel for
+    for (int itr=0; itr<ntr; itr++){
+        for (int f=0; f<nf; f++){
+            data_t sc = std::min(nf,f+_hl+1)-std::max(0,f-_hl);
+            for (int j=std::max(0,f-_hl); j<std::min(nf,f+_hl+1); j++) pv0[itr][2*j] += pv2[itr][2*f]/sc;
+            pv0[itr][2*f+1] = pv2[itr][2*f+1];
+        }
+    }
+
+    #pragma omp parallel for
+    for (int itr=0; itr<ntr; itr++){
+        for (int f=0; f<nf; f++){
+            data_t sc = std::min(nf,f+_hl+1)-std::max(0,f-_hl);
+            for (int j=std::max(0,f-_hl); j<std::min(nf,f+_hl+1); j++) pv1[itr][2*j] += pv0[itr][2*f]/sc;
+            pv1[itr][2*f+1] += pv0[itr][2*f+1];
+        }
+    }
+    delete [] pvec;
 }

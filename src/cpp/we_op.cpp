@@ -54,7 +54,7 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
         par.bc_left = std::max(1, par.bc_left);
         par.bc_right = std::max(1, par.bc_right);
     }
-    std::string bc[5] = {"none","free surface","locally absorbing","rigid-wall","mixed rigid-absorbing"};
+    std::string bc[6] = {"none","free surface","locally absorbing","rigid-wall","mixed rigid-absorbing","mixed rigid-free"};
     std::string taper_type[3] = {"none","cosine squared","PML"};
     if (verbose){
         fprintf(stderr,"Top boundary condition = %s\t taper size = %d\t taper type = %s\n",bc[par.bc_top].c_str(), par.taper_top, taper_type[(par.taper_top>0)*(1+par.pml)].c_str()); 
@@ -1845,8 +1845,13 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
         }
         else if (par.bc_top==4)
         {
-            const data_t * in[1] = {curr[0]};
+            const data_t * in[2] = {curr[0],prev[0]};
             asat_neumann_absorbing_top(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, _transmission->getCVals());
+        }
+        else if (par.bc_top==5)
+        {
+            const data_t * in[1] = {curr[0]};
+            asat_neumann_dirichlet_top(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha, _transmission->getCVals());
         }
         if (par.bc_bottom==1)
         {

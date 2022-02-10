@@ -135,6 +135,9 @@ target_link_libraries(FK_FILTER.x fwi2d sep)
 add_executable(SEP2BIN.x ${MAIN_DIR}/sep2bin.cpp)
 target_link_libraries(SEP2BIN.x fwi2d sep)
 
+add_executable(TR2TRDECON.x ${MAIN_DIR}/tr2trDecon.cpp)
+target_link_libraries(TR2TRDECON.x fwi2d sep)
+
 #installing libraries and executables
 install(FILES ${HEADERS} DESTINATION include)
 install(FILES ${PYTHON} DESTINATION bin)
@@ -152,6 +155,7 @@ install(TARGETS WE_MODELING.x
                 RESAMPLE.x
                 FK_FILTER.x
                 SEP2BIN.x
+                TR2TRDECON.x
                 LEAKY_TUBE_WAVE.x
                 #FWI2D_DRAFT.x
                 #FWI2D0.x

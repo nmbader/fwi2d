@@ -781,6 +781,35 @@ void asat_neumann_absorbing_top(bool add, const data_t** in, data_t* out, int nx
     }
 }
 
+void asat_neumann_dirichlet_top(bool add, const data_t** in, data_t* out, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, const data_t ** par, data_t a, const data_t * m)
+{
+    data_t scoef[4] = {11.0/6, -3, 1.5, -1.0/3};
+    data_t hcoef[4] = {17.0/48, 59.0/48, 43.0/48, 49.0/48};
+    int nc1=4;
+    data_t dz2=dz*dz;
+    data_t sum=0;
+
+    // SAT = (1-m).[ -H-1 (-f2.S.in )_0 ] + m.[ H-1 (-S'.(f2.in_0)) - H-1(f2.in_0/(h.a))_0 ] f2=reciprocal of density ; 'm' is like a mask (0,1) to flip between the two SATs
+    #pragma omp parallel for private(sum)
+    for (int ix=ixmin; ix<ixmax; ix++){
+        if (m[ix]==0)
+        {
+            sum=0;
+            for (int iz=0; iz<nc1; iz++){
+                sum += scoef[iz] * in[0][ix*nz+iz];
+            }
+            out[ix*nz] = add*out[ix*nz] - 1.0/(hcoef[0]*dz) * par[1][ix*nz]*sum/dz;
+        }
+        else
+        {
+            for (int iz=0; iz<nc1; iz++){
+                out[ix*nz+iz] = add*out[ix*nz+iz] + 1.0/(hcoef[iz]*dz2)*scoef[iz]*par[1][ix*nz]*in[0][ix*nz];
+            }
+            out[ix*nz] -= par[1][ix*nz]*in[0][ix*nz]/(a*hcoef[0]*dz2);
+        }
+    }
+}
+
 void asat_scale_boundaries_bis(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, const data_t * a, data_t dt, bool top, bool bottom, bool left, bool right){
 
     // par must at least contain K, 1/rho in this order

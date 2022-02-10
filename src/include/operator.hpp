@@ -286,6 +286,98 @@ public:
     void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
 };
 
+// class to transform from x+iy to r.exp(theta) (all with real numbers)
+class polar : public nloper {
+public:
+    polar(){}
+    ~polar(){}
+    polar(const hypercube<data_t> &domain){
+        successCheck(2*round(domain.getN123()/2)==domain.getN123(),__FILE__,__LINE__,"The number of samples must be even\n");
+        _domain = domain;
+        _range = domain;
+    }
+    polar * clone() const {
+        polar * op = new polar(_domain);
+        return op;
+    }   
+    // parameter add is ignored
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+};
+
+// class doing the inverse of polar
+class ipolar : public nloper {
+public:
+    ipolar(){}
+    ~ipolar(){}
+    ipolar(const hypercube<data_t> &domain){
+        successCheck(2*round(domain.getN123()/2)==domain.getN123(),__FILE__,__LINE__,"The number of samples must be even\n");
+        _domain = domain;
+        _range = domain;
+    }
+    ipolar * clone() const {
+        ipolar * op = new ipolar(_domain);
+        return op;
+    }   
+    // parameter add is ignored
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+};
+
+// class to perform spectral division with white noise added
+class sdivision : public nloper {
+protected:
+    data_t _fmin, _fmax, _eps;
+public:
+    sdivision(){}
+    ~sdivision(){}
+    sdivision(const hypercube<data_t> &domain, data_t fmin, data_t fmax, data_t eps){
+        successCheck(fmax>fmin && fmin>=0 && fmax<=1,__FILE__,__LINE__,"The high and low cutoff must satisfy 0<=fmin<fmax<=1\n");
+        successCheck(domain.getNdim()>=2,__FILE__,__LINE__,"The domain must contain at least 2 axes\n");
+        _domain = domain;
+        _range = domain;
+        _fmin = fmin;
+        _fmax = fmax;
+        _eps = eps;
+    }
+    sdivision * clone() const {
+        sdivision * op = new sdivision(_domain, _fmin, _fmax, _eps);
+        return op;
+    }   
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+};
+
+// Non-linear operator to compute deconvolution between 2 consecutive traces
+// The output is the matching filters (same size as the input)
+// The deconvolution is performed in the frequency domain
+class tr2trDecon : public nloper {
+protected:
+    data_t _fmin, _fmax; // low and high cut frequencies to be used in the deconvolution ; expressed as fraction of Nyquist
+    data_t _eps; // white noise to be added to amplitude spectra before deconvolution
+    int _hl; // half length smoothing window size applied to amplitude spectra after deconvolution
+public:
+    tr2trDecon(){}
+    ~tr2trDecon(){}
+    tr2trDecon(const hypercube<data_t> &domain, data_t fmin, data_t fmax, data_t eps, int window){
+        successCheck(fmax>fmin && fmin>=0 && fmax<=1,__FILE__,__LINE__,"The high and low cutoff must satisfy 0<=fmin<fmax<=1\n");
+        successCheck(window>=0,__FILE__,__LINE__,"The half length spectral smoothing window must be >= 0\n");
+        successCheck(domain.getNdim()>=2,__FILE__,__LINE__,"The domain must contain at least 2 axes\n");
+        _domain = domain;
+        _range = domain;
+        _fmin = fmin;
+        _fmax = fmax;
+        _eps = eps;
+        _hl = window;
+    }
+    tr2trDecon * clone() const {
+        tr2trDecon * op = new tr2trDecon(_domain, _fmin, _fmax, _eps, _hl);
+        return op;
+    }   
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+};
+
 // operator to resampler data in time (along the fast axis)
 class resampler : public loper {
 public:
@@ -572,8 +664,19 @@ public:
         bool ans4 = (dat->getHyper()->getAxis(1)==_crange.getAxis(1));
         return (ans1 && ans2 && ans3 && ans4);
     }
-    void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<cvecReg<data_t> > dat);
-    void inverse(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat);
+    void apply_forward(bool add, const data_t * pmod, std::complex<data_t> * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const std::complex<data_t> * pdat){
+        apply_inverse(add, pmod, pdat);
+    }
+    void apply_inverse(bool add, data_t * pmod, const std::complex<data_t> * pdat);
+    void forward(bool add, const std::shared_ptr<vecReg<data_t> > mod, std::shared_ptr<cvecReg<data_t> > dat){
+        successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+        apply_forward(add, mod->getCVals(), dat->getVals());
+    }
+    void inverse(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat){
+        successCheck(checkDomainRange(mod,dat),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+        apply_inverse(add, mod->getVals(), dat->getCVals());
+    }
     void adjoint(bool add, std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat){
         inverse(add, mod, dat);
     }
@@ -653,6 +756,56 @@ public:
     void cinverse(bool add, std::shared_ptr<cvecReg<data_t> > mod, const std::shared_ptr<cvecReg<data_t> > dat);
 };
 
+// class to tranform from t-x (or z-x) to f-x space using real numbers only
+// in forward mode, real parts are stored in even indices (0, 2, etc..) and imaginary parts in odd indices(1, 3, etc.)
+// note that the adjoint of this operator is NOT the inverse Fourier transform
+class fxTransformR : public loper {
+public:
+    fxTransformR(){}
+    ~fxTransformR(){}
+    fxTransformR(const hypercube<data_t> &domain){
+        _domain = domain;
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        axis<data_t> Z = axes[0];
+        Z.n = Z.n/2 + 1;
+        Z.n *=2;
+        Z.d = 1.0/((domain.getAxis(1).n-1)*Z.d);
+        Z.o = 0.0;
+        axes[0] = Z;
+        _range = hypercube<data_t>(axes);
+    }
+    fxTransformR * clone() const {
+        fxTransformR * op = new fxTransformR(_domain);
+        return op;
+    } 
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};
+
+// class to perform the inverse of fxTransformR
+class ifxTransformR : public loper {
+public:
+    ifxTransformR(){}
+    ~ifxTransformR(){}
+    ifxTransformR(const hypercube<data_t> &range){
+        _range = range;
+        std::vector<axis<data_t> > axes = range.getAxes();
+        axis<data_t> Z = axes[0];
+        Z.n = Z.n/2 + 1;
+        Z.n *=2;
+        Z.d = 1.0/((range.getAxis(1).n-1)*Z.d);
+        Z.o = 0.0;
+        axes[0] = Z;
+        _domain = hypercube<data_t>(axes);
+    }
+    ifxTransformR * clone() const {
+        ifxTransformR * op = new ifxTransformR(_range);
+        return op;
+    } 
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};
+
 // low order 2D gradient operator to be used in first order Tikhonov regularization
 // the boundary gradient is discarded
 class gradient2d : public loper {
@@ -725,3 +878,26 @@ public:
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
     void apply_inverse(bool add, data_t * pmod, const data_t * pdat);
 };
+
+// class to perform spectral triangular smoothing
+class ssmth : public loper {
+protected:
+    int _hl;
+public:
+    ssmth(){}
+    ~ssmth(){}
+    ssmth(const hypercube<data_t> &domain, int hl){
+        successCheck(hl>=0,__FILE__,__LINE__,"The half length spectral smoothing window must be >= 0\n");
+        _domain = domain;
+        _range = domain;
+        _hl=hl;
+    }
+    ssmth * clone() const {
+        ssmth * op = new ssmth(_domain,_hl);
+        return op;
+    } 
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};
+
+
