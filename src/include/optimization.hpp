@@ -465,11 +465,10 @@ protected:
     std::shared_ptr<vecReg<data_t> > _pg; // gradient before applying preconditioner Jacobian
     std::shared_ptr<vecReg<data_t> > _gmask; // gradient mask vector
     std::shared_ptr<vecReg<data_t> > _w; // residual weighting vector
-    std::shared_ptr<vecReg<data_t> > _d_bis; // copy of data vector in case needed for source rescaling
     data_t _dnorm; // data normalization factor
     data_t _f; // objective function
     bool _flag; // flag to re-evaluate or not the objective function
-    int _scale_source_times;
+    int _scale_source_times; // for source inversion by reduced Variable Projection
 
 public:
     std::vector <data_t> _dfunc; // vector that stores data objective function values for all trials (used in the regularization class)
@@ -518,10 +517,6 @@ public:
         }
         if (_w != nullptr) _d->mult(_w); // apply weighting
 
-        // create a copy of the data when needed
-        if (_L->_par.scale_source_times>0 && (_L->_par.normalize || _L->_par.envelop!=0)) _d_bis = _d->clone();
-        else _d_bis=_d;
-
         if (_L->_par.normalize) { // apply trace normalization
             int nt=_d->getHyper()->getAxis(1).n;
             int ntr=_d->getN123()/nt;
@@ -531,6 +526,23 @@ public:
         }
         if (_L->_par.envelop==1) envelop1(_d); // compute the envelop (or envelop squared) of the data
         else if (_L->_par.envelop==2) envelop2(_d);
+
+        if (_L->_par.interferometry){ // trace to trace deconvolution, for interferometric FWI
+            // compute the maxium of the amplitude spectrum of the data
+            fxTransform fx(*_d->getHyper());
+            std::shared_ptr<cvecReg<data_t> > fxvec = std::make_shared<cvecReg<data_t> > (*fx.getRange());
+            fxvec->zero();
+            fx.forward(false,_d,fxvec);
+            std::shared_ptr<vecReg<data_t> > spec=fxvec->modulus();
+            data_t max_spec=spec->max();
+            _L->_par.epsilon *= max_spec;
+
+            tr2trDecon decon(*_d->getHyper(),_L->_par.wmin,_L->_par.wmax, _L->_par.epsilon, _L->_par.smth_half_length);
+            std::shared_ptr<vecReg<data_t> > output = std::make_shared<vecReg<data_t> >(*decon.getRange());
+            output->zero();
+            decon.forward(false,_d,output);
+            _d = output;
+        }
 
         _dnorm = _d->norm2();
         _dnorm *= _d->getHyper()->getAxis(1).d;
@@ -636,7 +648,6 @@ public:
 
             // rescale the synthetics by u'd/u'u (equivalent to Variable Projection with the variable being a single scaler multiplying the source time function)
             data_t * pd = _d->getVals()+nr*nt;
-            data_t * pd_bis = _d_bis->getVals()+nr*nt;
             if (par.scale_source_times>0){
                 if (par.scale_source_times>_scale_source_times){
                     data_t scaler1=0;
@@ -644,14 +655,14 @@ public:
                     // first component
                     #pragma omp parallel for reduction(+: scaler1,scaler2)
                     for (int i=0; i<par.nr*nt; i++) {
-                        scaler1 += pr[i]*pd_bis[i];
+                        scaler1 += pr[i]*pd[i];
                         scaler2 += pr[i]*pr[i];
                     }
                     // second component
                     if ((par.nmodels>=3 && par.gl==0) || par.acoustic_elastic){
                         #pragma omp parallel for reduction(+: scaler1,scaler2)
                         for (int i=0; i<par.nr*nt; i++) {
-                            scaler1 += pr[par.nr*nt+i]*pd_bis[_L->_par.nr*nt+i];
+                            scaler1 += pr[par.nr*nt+i]*pd[_L->_par.nr*nt+i];
                             scaler2 += pr[par.nr*nt+i]*pr[par.nr*nt+i];
                         }
                     }
@@ -659,7 +670,7 @@ public:
                     if (par.gl==0 && par.acoustic_elastic){
                         #pragma omp parallel for reduction(+: scaler1,scaler2)
                         for (int i=0; i<par.nr*nt; i++) {
-                            scaler1 += pr[2*par.nr*nt+i]*pd_bis[2*_L->_par.nr*nt+i];
+                            scaler1 += pr[2*par.nr*nt+i]*pd[2*_L->_par.nr*nt+i];
                             scaler2 += pr[2*par.nr*nt+i]*pr[2*par.nr*nt+i];
                         }
                     }
@@ -674,18 +685,28 @@ public:
             std::shared_ptr<vecReg<data_t> > syn1;
             if (par.normalize){
                 norms = std::make_shared<vecReg<data_t> >(hypercube<data_t>(ntr));
-                syn1 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(rs->getN123()));
-                memcpy(syn1->getVals(), rs->getVals(), rs->getN123()*sizeof(data_t));
+                syn1 = rs->clone();
                 ttnormalize(rs->getVals(), norms->getVals(), nt, ntr);
             }
 
             std::shared_ptr<vecReg<data_t> > syn2;
             if (par.envelop != 0){
-                syn2 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(rs->getN123()));
-                memcpy(syn2->getVals(), rs->getVals(), rs->getN123()*sizeof(data_t));
+                syn2 = rs->clone();
                 if (par.envelop==1) envelop1(rs);
                 else envelop2(rs);
             }
+
+            std::shared_ptr<vecReg<data_t> > syn3;
+            if (_L->_par.interferometry){
+                syn3 = rs->clone();
+                tr2trDecon decon(*rs->getHyper(),_L->_par.wmin,_L->_par.wmax, _L->_par.epsilon, _L->_par.smth_half_length);
+                std::shared_ptr<vecReg<data_t> > output = std::make_shared<vecReg<data_t> >(*decon.getRange());
+                output->zero();
+                decon.forward(false,rs,output);
+                rs = output;
+            }
+
+            pr = rs->getVals();
 
             // compute the residual u-d
             // first component
@@ -709,6 +730,15 @@ public:
 
             // compute the gradient per shot
             applyHt(false, false, pr, pr, ntr, nt, dt, 0, ntr);
+
+            if (_L->_par.interferometry){
+                tr2trDecon decon(*rs->getHyper(),_L->_par.wmin,_L->_par.wmax, _L->_par.epsilon, _L->_par.smth_half_length);
+                std::shared_ptr<vecReg<data_t> > output = std::make_shared<vecReg<data_t> >(*decon.getDomain());
+                output->zero();
+                decon.jacobianT(false,output,syn3,rs);
+                rs=output;
+                pr = rs->getVals();
+            }
 
             if (par.envelop != 0){
                 std::shared_ptr<vecReg<data_t> > temp = syn2->clone();
@@ -890,7 +920,12 @@ public:
             integral S(*_d->getHyper());
             S.forward(false, _d, _d);
         }
+        if (_L->_par.double_difference){ // apply double difference between consecutive traces
+            xdifference xdiff(*_d->getHyper());
+            xdiff.forward(false, _d, _d);
+        }
         if (_w != nullptr) _d->mult(_w);
+
         if (_L->_par.normalize) {
             int nt=_d->getHyper()->getAxis(1).n;
             int ntr=_d->getN123()/nt;
@@ -900,6 +935,23 @@ public:
         }
         if (_L->_par.envelop==1) envelop1(_d);
         else if (_L->_par.envelop==2) envelop2(_d);
+
+        if (_L->_par.interferometry){ // trace to trace deconvolution, for interferometric FWI
+            // compute the maxium of the amplitude spectrum of the data
+            fxTransform fx(*_d->getHyper());
+            std::shared_ptr<cvecReg<data_t> > fxvec = std::make_shared<cvecReg<data_t> > (*fx.getRange());
+            fxvec->zero();
+            fx.forward(false,_d,fxvec);
+            std::shared_ptr<vecReg<data_t> > spec=fxvec->modulus();
+            data_t max_spec=spec->max();
+            _L->_par.epsilon *= max_spec;
+
+            tr2trDecon decon(*_d->getHyper(),_L->_par.wmin,_L->_par.wmax, _L->_par.epsilon, _L->_par.smth_half_length);
+            std::shared_ptr<vecReg<data_t> > output = std::make_shared<vecReg<data_t> >(*decon.getRange());
+            output->zero();
+            decon.forward(false,_d,output);
+            _d = output;
+        }
 
         _dnorm = _d->norm2();
         _dnorm *= _d->getHyper()->getAxis(1).d;

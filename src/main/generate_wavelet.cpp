@@ -307,6 +307,8 @@ void printdoc(){
     "   nt - int - [100]:\n\t\tnumber of samples in the wavelet. If it is even, it will be augmented by 1.\n"
     "   dt - positive float - [0.004]:\n\t\tsampling interval.\n"
     "   shift - int - [0]:\n\t\tshift in nb of samples, applied to the origin of the output. Inactive if 'phase' is not provided.\n"
+    "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
     "\nExample:\n"
     "   GENERATE_WAVELET.x < infile.H type=spectrum nt=100 dt=0.004 shift=11 phase=minimum > oufile.H\n"
     "   GENERATE_WAVELET.x type=bandpass nt=100 dt=0.004 shift=11 w1=0 w2=0.2 w3=0.6 w4=0.8 > oufile.H\n"
@@ -320,13 +322,15 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", output_file="out", type="ricker", phase="default";
+    std::string input_file="in", output_file="out", type="ricker", phase="default", datapath="none";
     data_t wc=0.1, dt=0.004, lwc=0, hwc=1, alpha=0.5, sigma=1, eps=1e-07, w1=0, w2=0.1, w3=0.6, w4=0.9, pow=1;
     int nt=100, shift=0, ho=2;
+    bool format=0;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "type", type);
     readParam<std::string>(argc, argv, "phase", phase);
+	readParam<std::string>(argc, argv, "datapath", datapath);
     readParam<data_t>(argc, argv, "wc", wc); // central freq for ricker
     readParam<data_t>(argc, argv, "sigma", sigma); // std dev in nb of samples for Gaussian (or exponential)
     readParam<data_t>(argc, argv, "low_cutoff", lwc); // cutoff for sinc and butterworth
@@ -342,6 +346,7 @@ int main(int argc, char **argv){
     readParam<int>(argc, argv, "half_order", ho); // half order used for butterworth
     readParam<int>(argc, argv, "nt", nt);
     readParam<int>(argc, argv, "shift", shift);
+    readParam<bool>(argc, argv, "format", format);
 
     if (type=="spectrum") {
         successCheck(input_file!="none",__FILE__,__LINE__,"Input file is expected for type=spectrum\n");
@@ -440,7 +445,7 @@ int main(int argc, char **argv){
         dat->scale(1.0/dat->max());
     }
     else if (type=="spectrum"){
-        std::shared_ptr<vec> input = sepRead<data_t>(input_file);
+        std::shared_ptr<vec> input = read<data_t>(input_file, format);
         ax T(length,0,dt);
         ax X(1,0,1);
         dat=std::make_shared<vec> (hyper(T));  
@@ -498,7 +503,7 @@ int main(int argc, char **argv){
     hyper hyp(T);
     dat->setHyper(hyp);
      
-    if (output_file!="none") sepWrite<data_t>(dat, output_file);
+    if (output_file!="none") write<data_t>(dat, output_file, format, datapath);
 
     return 0;
 }

@@ -491,12 +491,25 @@ void nl_we_op_e::compute_gradients(const data_t * model, const data_t * u_full, 
     Dx(false, pfor[par.nt/par.sub+1-it-1][1], temp[2], nx, nz, dx, 0, nx, 0, nz); // forwardz_x
     Dz(false, pfor[par.nt/par.sub+1-it-1][0], temp[3], nx, nz, dz, 0, nx, 0, nz); // forwardx_z
 
-    #pragma omp parallel for
-    for (int i=0; i<nxz; i++) 
-    {
-        g[0][i] += dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
-        g[1][i] += dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
-        g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+    // different from time zero
+    if (par.nt/par.sub+1-it-1>0){
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++) 
+        {
+            g[0][i] += dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
+            g[1][i] += dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
+            g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+        }
+    }
+    // time zero
+    else{
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++) 
+        {
+            g[0][i] += 0.5*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
+            g[1][i] += 0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
+            g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-pfor[par.nt/par.sub+1-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-pfor[par.nt/par.sub+1-it-1][1][i])); // rho gradient
+        }
     }
 }
 
@@ -805,6 +818,9 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         ext->extract(true, curr[0], rcvx, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
         ext->extract(true, curr[1], rcvz, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
     }
+
+    // last sample gradient
+    if ((grad != nullptr) && ((par.nt-1)%par.sub==0) ) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
     
     delete [] u;
     delete [] dux;
@@ -1413,18 +1429,37 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
 
     data_t val1=0, val2=0, val3=0, del=0;
 
-    #pragma omp parallel for private(val1,val2,val3,del)
-    for (int i=0; i<nxz; i++) 
-    {
-        del = ((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));
-        val1 = sqrt(2*(pm[0][i]+2*pm[1][i])*(pm[0][i]+pm[1][i])*del + (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i]));
-        val2 = ((1+2*del)*pm[0][i] + (1+3*del)*pm[1][i])/val1; // d(C13)/d(lambda)
-        val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
-        g[0][i] += dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
-        g[1][i] += dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
-        g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
-        g[3][i] = 0;
-        g[4][i] = 0;
+    // different from time zero
+    if (par.nt/par.sub+1-it-1>0){
+        #pragma omp parallel for private(val1,val2,val3,del)
+        for (int i=0; i<nxz; i++) 
+        {
+            del = ((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));
+            val1 = sqrt(2*(pm[0][i]+2*pm[1][i])*(pm[0][i]+pm[1][i])*del + (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i]));
+            val2 = ((1+2*del)*pm[0][i] + (1+3*del)*pm[1][i])/val1; // d(C13)/d(lambda)
+            val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
+            g[0][i] += dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
+            g[1][i] += dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
+            g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+            g[3][i] = 0;
+            g[4][i] = 0;
+        }
+    }
+    // time zero
+    else{
+        #pragma omp parallel for private(val1,val2,val3,del)
+        for (int i=0; i<nxz; i++) 
+        {
+            del = ((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));
+            val1 = sqrt(2*(pm[0][i]+2*pm[1][i])*(pm[0][i]+pm[1][i])*del + (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i]));
+            val2 = ((1+2*del)*pm[0][i] + (1+3*del)*pm[1][i])/val1; // d(C13)/d(lambda)
+            val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
+            g[0][i] += 0.5*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
+            g[1][i] += 0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
+            g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-pfor[par.nt/par.sub+1-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-pfor[par.nt/par.sub+1-it-1][1][i])); // rho gradient
+            g[3][i] = 0;
+            g[4][i] = 0;
+        }
     }
 }
 
@@ -1703,6 +1738,9 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         ext->extract(true, curr[0], rcvx, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
         ext->extract(true, curr[1], rcvz, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
     }
+
+    // last sample gradient
+    if ((grad != nullptr) && ((par.nt-1)%par.sub==0) ) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
     
     delete [] u;
     delete [] dux;
@@ -1750,11 +1788,23 @@ void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, 
     Dx(false, curr, temp[2], nx, nz, dx, 0, nx, 0, nz); // adjoint_x
     Dz(false, curr, temp[3], nx, nz, dz, 0, nx, 0, nz); // adjoint_z
 
-    #pragma omp parallel for
-    for (int i=0; i<nxz; i++) 
-    {
-        g[0][i] = g[0][i] - 1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-2*pfor[par.nt/par.sub+1-it-1][i]+pfor[par.nt/par.sub+1-it-2][i]); // K gradient
-        g[1][i] += dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
+    // different from time zero
+    if (par.nt/par.sub+1-it-1>0){
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++) 
+        {
+            g[0][i] = g[0][i] - 1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-2*pfor[par.nt/par.sub+1-it-1][i]+pfor[par.nt/par.sub+1-it-2][i]); // K gradient
+            g[1][i] += dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
+        }
+    }
+    // time zero
+    else{
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++) 
+        {
+            g[0][i] = g[0][i] - 1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-pfor[par.nt/par.sub+1-it-1][i]); // K gradient
+            g[1][i] += 0.5*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
+        }
     }
 }
 
@@ -1936,6 +1986,9 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
     {
         ext->extract(true, curr[0], rcv, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
     }
+
+    // last sample gradient
+    if ((grad != nullptr) && ((par.nt-1)%par.sub==0) ) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
     
     delete [] u;
     if (grad != nullptr) delete [] tmp;

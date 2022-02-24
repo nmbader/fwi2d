@@ -26,6 +26,8 @@ void printdoc(){
     "\nParameters:\n"
     "   domain - string - ['time']:\n\t\t'time' or 'frequency'.\n"
     "   eps - positive float - [1e-06]:\n\t\tdamping value.\n"
+    "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
     "\nExample:\n"
     "   INTEGRAL.x < infile.H domain=frequency eps=1e-04 > oufile.H\n"
     "\n";
@@ -38,16 +40,19 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", output_file="out", domain="time";
+    std::string input_file="in", output_file="out", domain="time", datapath="none";
+    bool format=0;
     data_t eps=1e-6;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "domain", domain);
+	readParam<std::string>(argc, argv, "datapath", datapath);
     readParam<data_t>(argc, argv, "eps", eps);
+    readParam<bool>(argc, argv, "format", format);
 
     successCheck(input_file!="none",__FILE__,__LINE__,"Input file is not provided\n");
     
-    std::shared_ptr<vec> input = sepRead<data_t>(input_file);
+    std::shared_ptr<vec> input = read<data_t>(input_file, format);
 
     if (domain=="time")
     {
@@ -78,7 +83,7 @@ int main(int argc, char **argv){
         successCheck(false, __FILE__,__LINE__,"domain must be time or frequency\n");
     }
           
-    if (output_file!="none") sepWrite<data_t>(input, output_file);
+    if (output_file!="none") write<data_t>(input, output_file, format, datapath);
 
     return 0;
 }

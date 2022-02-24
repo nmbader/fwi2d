@@ -57,6 +57,8 @@ void printdoc(){
     "   sinc_half_length - int - [21]:\n\t\thalf length in nb of samples of the filter used for sinc and kaiser interpolation.\n"
     "   si - non-negative float - [0]:\n\t\tdesired output sampling. If > 0 it overwrites 'factor' and is valid for time domain only.\n"
     "   alpha - 0<=float<=1 or >0 - [0.5]:\n\t\tused in the cosine window for the sinc filter (1 means no taper). It is also used for kaiser window; recommended value 10.\n"
+    "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
     "\nExample:\n"
     "   RESAMPLE.x < infile.H domain=time type=linear si=0.1 > oufile.H\n"
     "\n";
@@ -69,13 +71,16 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", output_file="out", domain="time", type="sinc";
+    std::string input_file="in", output_file="out", domain="time", type="sinc", datapath="none";
+    bool format=0;
     int a=2, hl=21;
     data_t si=0, alpha=0.5;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "domain", domain);
     readParam<std::string>(argc, argv, "type", type);
+	readParam<std::string>(argc, argv, "datapath", datapath);
+    readParam<bool>(argc, argv, "format", format);
     readParam<int>(argc, argv, "factor", a);
     readParam<int>(argc, argv, "sinc_half_length", hl);
     readParam<data_t>(argc, argv, "si", si);
@@ -87,7 +92,7 @@ int main(int argc, char **argv){
         return 0;
     }
 
-    std::shared_ptr<vec> input = sepRead<data_t>(input_file);
+    std::shared_ptr<vec> input = read<data_t>(input_file, format);
 
     int n123 = input->getN123();
     std::vector<ax > axes = input->getHyper()->getAxes();
@@ -160,7 +165,7 @@ int main(int argc, char **argv){
         fx2.inverse(false,output,fxvec2);
     }
           
-    if (output_file!="none") sepWrite<data_t>(output, output_file);
+    if (output_file!="none") write<data_t>(output, output_file, format, datapath);
 
     return 0;
 }

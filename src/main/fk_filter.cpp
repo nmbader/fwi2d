@@ -28,6 +28,8 @@ void printdoc(){
     "   vmin - non-negative float - [0]:\n\t\thighest absolute phase velocity (m/s) to fully remove (0 means no cone filtering).\n"
     "   vmax - vmin<=float - [0]:\n\t\tlowest absolute phase velocity (m/s) to fully preserve (0 means no cone filtering).\n"
     "   taper - non-negative float - [0.1]:\n\t\tlength of the cosine taper, applied in the wavenumber direction.\n"
+    "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
     "\nExample:\n"
     "   FK_FILTER.x < infile.H kmin=-0.3 kmax=0.3 vmin=1000 vmax=10000 taper=0.05 > oufile.H\n"
     "\n";
@@ -40,10 +42,13 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", output_file="out";
+    std::string input_file="in", output_file="out", datapath="none";
+    bool format=0;
     data_t kLow=-0.5, kHigh=0.5, taper=0.1, vmin=0, vmax=0;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
+	readParam<std::string>(argc, argv, "datapath", datapath);
+    readParam<bool>(argc, argv, "format", format);
     readParam<data_t>(argc, argv, "kmin", kLow);
     readParam<data_t>(argc, argv, "kmax", kHigh);
     readParam<data_t>(argc, argv, "vmin", vmin);
@@ -57,7 +62,7 @@ int main(int argc, char **argv){
     vmin = abs(vmin);
     successCheck(vmin<=vmax,__FILE__,__LINE__,"The cutoff velocities must obey 0 <= vmin <= vmax\n");
 
-    std::shared_ptr<vec> input = sepRead<data_t>(input_file);
+    std::shared_ptr<vec> input = read<data_t>(input_file, format);
 
     int n123 = input->getN123();
     std::vector<ax > axes = input->getHyper()->getAxes();
@@ -147,7 +152,7 @@ int main(int argc, char **argv){
 
     fk.inverse(false, input, fkvec);
      
-    if (output_file!="none") sepWrite<data_t>(input, output_file);
+    if (output_file!="none") write<data_t>(input, output_file, format, datapath);
 
     return 0;
 }

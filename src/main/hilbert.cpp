@@ -24,6 +24,8 @@ void printdoc(){
     "\nParameters:\n"
     "   type - string - ['hilbert']:\n\t\toptions: 'hilbert', 'envelop', 'iphase'.\n"
     "   wrapped - bool - ['1']:\n\t\twrap or unwrap the instantaneous phase.\n"
+    "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
     "\nExample:\n"
     "   HILBERT.x < infile.H > oufile.H.\n"
     "   HILBERT.x < infile.H type=iphase wrapped=0 > oufile.H\n"
@@ -37,16 +39,18 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", output_file="out", type="hilbert";
-    bool wrapped=true;
+    std::string input_file="in", output_file="out", type="hilbert", datapath="none";
+    bool wrapped=true, format=0;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "type", type);
+	readParam<std::string>(argc, argv, "datapath", datapath);
     readParam<bool>(argc, argv, "wrapped", wrapped);
+    readParam<bool>(argc, argv, "format", format);
 
     successCheck(input_file!="none",__FILE__,__LINE__,"Input file is not provided\n");
     
-    std::shared_ptr<vec> input = sepRead<data_t>(input_file);
+    std::shared_ptr<vec> input = read<data_t>(input_file, format);
 
 // transfer input to a complex vector
     std::shared_ptr<cvec> cinput = std::make_shared<cvec> (*input->getHyper());
@@ -106,7 +110,7 @@ int main(int argc, char **argv){
         for (int i=0; i<input->getN123(); i++) pin[i] = phil[i];
     }      
 
-    if (output_file!="none") sepWrite<data_t>(input, output_file);
+    if (output_file!="none") write<data_t>(input, output_file, format, datapath);
 
     return 0;
 }

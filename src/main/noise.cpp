@@ -33,6 +33,8 @@ void printdoc(){
     "   max - float - [1]:\n\t\tmaximum value for the uniform distribution.\n"
     "   seed - float - [date]:\n\t\tseed for random numbers generation.\n"
     "   replace - int - [0]:\n\t\t0 = add noise to input, 1 = replace input.\n"
+    "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
     "\nExample:\n"
     "   NOISE.x < infile.H type=uniform min=-10 max=20 > oufile.H.\n"
     "   NOISE.x < infile.H type=normal mean=3 sigma=5 replace=1 > oufile.H\n"
@@ -46,22 +48,24 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", output_file="out", type="uniform";
+    std::string input_file="in", output_file="out", type="uniform", datapath="none";
     data_t mean=0, sigma=1, min=-1, max=1, seed=0;
-    bool replace=0;
+    bool replace=0, format=0;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "type", type);
+	readParam<std::string>(argc, argv, "datapath", datapath);
     readParam<data_t>(argc, argv, "mean", mean);
     readParam<data_t>(argc, argv, "sigma", sigma);
     readParam<data_t>(argc, argv, "min", min);
     readParam<data_t>(argc, argv, "max", max);
     readParam<data_t>(argc, argv, "seed", seed);
     readParam<bool>(argc, argv, "replace", replace);
+    readParam<bool>(argc, argv, "format", format);
 
     successCheck(input_file!="none",__FILE__,__LINE__,"Input file is not provided\n");
     
-    std::shared_ptr<vec> input = sepRead<data_t>(input_file);
+    std::shared_ptr<vec> input = read<data_t>(input_file, format);
 
     if (seed == 0) seed = (data_t) time(0);
 
@@ -84,7 +88,7 @@ int main(int argc, char **argv){
         successCheck(false, __FILE__,__LINE__,"Type is not implemented\n");
     }
  
-    if (output_file!="none") sepWrite<data_t>(input, output_file);
+    if (output_file!="none") write<data_t>(input, output_file, format, datapath);
 
     return 0;
 }

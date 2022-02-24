@@ -1405,7 +1405,7 @@ __global__ void cudaExtractDIPM3(const data_t * in, data_t ** out, int nx, int n
     atomicAdd(out[0]+itr*nt+it, val);
 }
 
-__global__ void cudaComputeGradients(const data_t * model, const data_t * u_for, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, int nx, int nz, int nt, int sub, data_t dx, data_t dz, data_t dt){
+__global__ void cudaComputeGradients(const data_t * model, const data_t * u_for, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, int nx, int nz, int nt, int sub, int it, data_t dx, data_t dz, data_t dt){
 
     int ix = threadIdx.x + blockIdx.x*BLOCK_SIZE;
     int iz = threadIdx.y + blockIdx.y*BLOCK_SIZE;
@@ -1427,13 +1427,20 @@ __global__ void cudaComputeGradients(const data_t * model, const data_t * u_for,
     if (ix<nx && iz<nz)
     {
         i=ix*nz+iz;
-        gla[i] += dt*(padjx_x[i] + padjz_z[i])*(pforx_x[i] + pforz_z[i]);
-        gmu[i] += dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i]);
-        grho[i] += 1.0/dt*(padjx[i]*(pfor2x[i]-2*pfor1x[i]+pfor0x[i]) + padjz[i]*(pfor2z[i]-2*pfor1z[i]+pfor0z[i]));
+        if (nt/sub+1-it-1>0){
+            gla[i] += dt*(padjx_x[i] + padjz_z[i])*(pforx_x[i] + pforz_z[i]);
+            gmu[i] += dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i]);
+            grho[i] += 1.0/dt*(padjx[i]*(pfor2x[i]-2*pfor1x[i]+pfor0x[i]) + padjz[i]*(pfor2z[i]-2*pfor1z[i]+pfor0z[i]));
+        }
+        else{
+            gla[i] += 0.5*dt*(padjx_x[i] + padjz_z[i])*(pforx_x[i] + pforz_z[i]);
+            gmu[i] += 0.5*dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i]);
+            grho[i] += 1.0/dt*(padjx[i]*(pfor2x[i]-pfor1x[i]) + padjz[i]*(pfor2z[i]-pfor1z[i]));
+        }
     }
 }
 
-__global__ void cudaComputeGradientsVTI(const data_t * model, const data_t * u_for, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, int nx, int nz, int nt, int sub, data_t dx, data_t dz, data_t dt){
+__global__ void cudaComputeGradientsVTI(const data_t * model, const data_t * u_for, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, int nx, int nz, int nt, int sub, int it, data_t dx, data_t dz, data_t dt){
 
     int ix = threadIdx.x + blockIdx.x*BLOCK_SIZE;
     int iz = threadIdx.y + blockIdx.y*BLOCK_SIZE;
@@ -1461,11 +1468,20 @@ __global__ void cudaComputeGradientsVTI(const data_t * model, const data_t * u_f
         val1 = sqrt(2*(pm0[i]+2*pm1[i])*(pm0[i]+pm1[i])*del + (pm0[i]+pm1[i])*(pm0[i]+pm1[i]));
         val2 = ((1+2*del)*pm0[i] + (1+3*del)*pm1[i])/val1; // d(C13)/d(lambda)
         val3 = ((1+3*del)*pm0[i] + (1+4*del)*pm1[i])/val1 - 1; // d(C13)/d(mu)
-        gla[i] += dt*((1+2*pm4[i])*padjx_x[i]*pforx_x[i] + padjz_z[i]*pforz_z[i] + val2*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // lambda gradient
-        gmu[i] += dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*(1+2*pm4[i])*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i] + val3*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // mu gradient
-        grho[i] += 1.0/dt*(padjx[i]*(pfor2x[i]-2*pfor1x[i]+pfor0x[i]) + padjz[i]*(pfor2z[i]-2*pfor1z[i]+pfor0z[i])); // rho gradient
-        gc13[i] = 0;
-        geps[i] = 0;
+        if (nt/sub+1-it-1>0){
+            gla[i] += dt*((1+2*pm4[i])*padjx_x[i]*pforx_x[i] + padjz_z[i]*pforz_z[i] + val2*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // lambda gradient
+            gmu[i] += dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*(1+2*pm4[i])*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i] + val3*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // mu gradient
+            grho[i] += 1.0/dt*(padjx[i]*(pfor2x[i]-2*pfor1x[i]+pfor0x[i]) + padjz[i]*(pfor2z[i]-2*pfor1z[i]+pfor0z[i])); // rho gradient
+            gc13[i] = 0;
+            geps[i] = 0;
+        }
+        else{
+            gla[i] += 0.5*dt*((1+2*pm4[i])*padjx_x[i]*pforx_x[i] + padjz_z[i]*pforz_z[i] + val2*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // lambda gradient
+            gmu[i] += 0.5*dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*(1+2*pm4[i])*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i] + val3*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // mu gradient
+            grho[i] += 1.0/dt*(padjx[i]*(pfor2x[i]-pfor1x[i]) + padjz[i]*(pfor2z[i]-pfor1z[i])); // rho gradient
+            gc13[i] = 0;
+            geps[i] = 0;
+        }
     }
 }
 
@@ -1791,7 +1807,7 @@ void nl_we_op_e::compute_gradients_gpu(const data_t * model, const data_t * u_fo
 
     dim3 threads(BLOCK_SIZE,BLOCK_SIZE);
     dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    cudaComputeGradients<<<blocks,threads,0,streams[3]>>>(model, u_for, curr, u_x, u_z, tmp, grad, nx, nz, par.nt, par.sub, dx, dz, dt);
+    cudaComputeGradients<<<blocks,threads,0,streams[3]>>>(model, u_for, curr, u_x, u_z, tmp, grad, nx, nz, par.nt, par.sub, it, dx, dz, dt);
     cudaKernelError();
 }
 
@@ -1810,7 +1826,7 @@ void nl_we_op_vti::compute_gradients_gpu(const data_t * model, const data_t * u_
 
     dim3 threads(BLOCK_SIZE,BLOCK_SIZE);
     dim3 blocks((nx+BLOCK_SIZE-1)/BLOCK_SIZE,(nz+BLOCK_SIZE-1)/BLOCK_SIZE);
-    cudaComputeGradientsVTI<<<blocks,threads,0,streams[3]>>>(model, u_for, curr, u_x, u_z, tmp, grad, nx, nz, par.nt, par.sub, dx, dz, dt);
+    cudaComputeGradientsVTI<<<blocks,threads,0,streams[3]>>>(model, u_for, curr, u_x, u_z, tmp, grad, nx, nz, par.nt, par.sub, it, dx, dz, dt);
     cudaKernelError();
 }
 

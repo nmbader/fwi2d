@@ -28,6 +28,8 @@ void printdoc(){
     "   nx,nz - int - [3] :\n\t\tnumber of control points in each direction. If provided, will override the parameters below.\n"
     "   controlx,controlz - [float] :\n\t\tarrays of control points manually entered. Must contain the first and last physical points. To be used in conjunction with mx,mz.\n"
     "   mx,mz - [int] :\n\t\tarrays of control points multiplicity manually entered.\n"
+    "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
     "\nNote:\n"
     "   The number of control points must be >= 3 in all cases, unless nx=0 in which case the smoothing will be applied in the z-direction only.\n"
     "\nExamples:\n"
@@ -45,22 +47,25 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", bsmodel_file="none", output_file="out";
+    std::string input_file="in", bsmodel_file="none", output_file="out", datapath="none";
     int nx=3, nz=3;
+    bool format=0;
     std::vector<data_t> controlx={0}, controlz={0}; // locations of the control points that define the B-splines
     std::vector<int> mx={0}, mz={0}; // multiplicity of the control points that define the B-splines
 
 	readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "bsmodel", bsmodel_file);
 	readParam<std::string>(argc, argv, "output", output_file);
+	readParam<std::string>(argc, argv, "datapath", datapath);
     readParam<int>(argc, argv, "nx", nx);
     readParam<int>(argc, argv, "nz", nz);
     readParam<int>(argc, argv, "mx", mx);
     readParam<int>(argc, argv, "mz", mz);
+    readParam<bool>(argc, argv, "format", format);
     readParam<data_t>(argc, argv, "controlx", controlx);
     readParam<data_t>(argc, argv, "controlz", controlz);
     
-    std::shared_ptr<vec> input = sepRead<data_t>(input_file);
+    std::shared_ptr<vec> input = read<data_t>(input_file,format);
     std::shared_ptr<vec> output = std::make_shared<vec>(*input->getHyper());
     const data_t* pinput = input->getCVals();
     data_t* poutput = output->getVals();
@@ -112,7 +117,7 @@ int main(int argc, char **argv){
         else fillin1d(bsmodel,input,controlz);
     }
     else{
-        bsmodel = sepRead<data_t>(bsmodel_file);
+        bsmodel = read<data_t>(bsmodel_file,format);
         successCheck(bsmodel->getHyper()->isCompatible(hyper(axes)),__FILE__,__LINE__,"The B-splines model is not compatible with the input and B-splines parameters\n");
     }
   
@@ -132,7 +137,7 @@ int main(int argc, char **argv){
     }
 // ----------------------------------------------------------------------------------------//
 
-    if (output_file!="none") sepWrite<data_t>(output,output_file);
+    if (output_file!="none") write<data_t>(output,output_file,format,datapath);
 
     return 0;
 }

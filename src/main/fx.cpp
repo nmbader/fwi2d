@@ -23,6 +23,8 @@ void printdoc(){
     "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
     "\nParameters:\n"
     "   type - string - ['amplitude']:\n\t\toptions: 'amplitude', 'power', 'phase', 'real', 'imag'.\n"
+    "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
     "\nExample:\n"
     "   FX.x < infile.H type=power > oufile.H\n"
     "\n";
@@ -35,14 +37,17 @@ int main(int argc, char **argv){
 
 	initpar(argc,argv);
 
-    std::string input_file="in", output_file="out", type="amplitude";
+    std::string input_file="in", output_file="out", type="amplitude", datapath="none";
+    bool format=0;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "type", type);
+	readParam<std::string>(argc, argv, "datapath", datapath);
+    readParam<bool>(argc, argv, "format", format);
 
     successCheck(input_file!="none",__FILE__,__LINE__,"Input file is not provided\n");
     
-    std::shared_ptr<vec> input = sepRead<data_t>(input_file);
+    std::shared_ptr<vec> input = read<data_t>(input_file, format);
 
     fxTransform fx(*input->getHyper());
     std::shared_ptr<cvec> fxvec = std::make_shared<cvec> (*fx.getRange());
@@ -58,7 +63,7 @@ int main(int argc, char **argv){
 
     output->setHyper(*fx.getRange());
      
-    if (output_file!="none") sepWrite<data_t>(output, output_file);
+    if (output_file!="none") write<data_t>(output, output_file, format, datapath);
 
     return 0;
 }

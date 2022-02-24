@@ -798,6 +798,7 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
                 write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
                 write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
@@ -917,6 +918,7 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
                 write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
                 write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
@@ -1060,6 +1062,7 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
                 write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
                 write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
@@ -1274,6 +1277,7 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
                 write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
                 write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }
@@ -1473,6 +1477,7 @@ fprintf(stderr,"################################################################
             _geval++;
             gnorm=g->norm();
             if (output!="none" && k==0 && isave!=0 && rank==0){
+                write(m,output+"model_iter_"+std::to_string(k)+".H", format, datapath);
                 write(g,output+"gradient_iter_"+std::to_string(k)+".H", format, datapath);
                 write(prob->getRes(),output+"residual_iter_"+std::to_string(k)+".H", format, datapath);
             }

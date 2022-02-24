@@ -127,6 +127,9 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "lambda", par.lambda);
     readParam<data_t>(argc, argv, "reg_xweight", par.reg_xweight);
     readParam<data_t>(argc, argv, "reg_zweight", par.reg_zweight);
+    readParam<data_t>(argc, argv, "wmin", par.wmin);
+    readParam<data_t>(argc, argv, "wmax", par.wmax);
+    readParam<data_t>(argc, argv, "epsilon", par.epsilon);
     readParam<data_t>(argc, argv, "scale_source_log_clip", par.scale_source_log_clip);
     readParam<int>(argc, argv, "ns", par.ns);
     readParam<int>(argc, argv, "nr", par.nr);
@@ -148,6 +151,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "max_trial", par.max_trial);
     readParam<int>(argc, argv, "isave", par.isave);
     readParam<int>(argc, argv, "envelop", par.envelop);
+    readParam<int>(argc, argv, "smth_half_length", par.smth_half_length);
     readParam<int>(argc, argv, "regularization", par.regularization);
     readParam<int>(argc, argv, "scale_source_times", par.scale_source_times);
     readParam<int>(argc, argv, "version", par.version);
@@ -164,6 +168,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<bool>(argc, argv, "normalize", par.normalize);
     readParam<bool>(argc, argv, "integrate", par.integrate);
     readParam<bool>(argc, argv, "double_difference", par.double_difference);
+    readParam<bool>(argc, argv, "interferometry", par.interferometry);
     readParam<bool>(argc, argv, "ls_version", par.ls_version);
     readParam<bool>(argc, argv, "format", par.format);
     readParam<int>(argc, argv, "bs_mx", par.bs_mx);
@@ -241,7 +246,16 @@ void analyzeNLInversion(param &par)
     if (par.prior_file != "none" && par.verbose>0) fprintf(stderr,"A prior model file is expected and will be used in the regularization if any\n");
     if (par.regularization>-1 && par.verbose>0) fprintf(stderr,"A Tikhonov regularization will be used, of order=%d and damping=%f\n",par.regularization,par.lambda);
     else if (par.verbose>0) fprintf(stderr,"No regularization will be used\n");
-    if (par.scale_source_times>0 && par.verbose>0) fprintf(stderr,"The source time function will be rescaled for the first %d trials as part of Variable Projection method\n",par.scale_source_times);
+    if (par.scale_source_times>0 ) {
+        par.normalize=0;
+        par.envelop=0;
+        par.interferometry=0;
+        if (par.verbose>0) fprintf(stderr,"The source time function will be rescaled for the first %d trials as part of Variable Projection method. All non-linear operators on the data will be deactivated\n",par.scale_source_times);
+    }
+    if (par.interferometry){
+        par.double_difference=0;
+        if (par.verbose>0) fprintf(stderr,"The trace-to-trace deconvolution will be applied to modeled and observed data (interferometry). Offsets must be in ascending order. The double-difference option will be deactivated\n",par.scale_source_times);
+    }
     if (par.normalize && par.verbose>0) fprintf(stderr,"The modeled and observed data will be normalized trace by trace\n");
     if (par.double_difference && par.verbose>0) fprintf(stderr,"The trace-to-trace double-difference will be applied to modeled and observed data\n");
     if (par.integrate && par.verbose>0) fprintf(stderr,"The modeled and observed data will be integrated in time trace by trace\n");
