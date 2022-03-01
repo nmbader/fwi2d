@@ -49,7 +49,7 @@ void printdoc(){
     "   Resample along the fast axis (often time), in time or frequency domain.\n"
     "   The origin remains fixed and the maximum time of the output is <= then that of the input.\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'. '<' and '>' are valid for SEPlib format only.\n"
     "\nParameters:\n"
     "   domain - string - ['time']:\n\t\t'time' or 'frequency'.\n"
     "   type - string - ['sinc']:\n\t\t'sinc' or 'kaiser' or 'linear'. 'linear' and 'kaiser' are valid for time domain only. 'kaiser' uses a sinc filter with a Kaiser window.\n"

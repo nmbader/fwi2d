@@ -24,7 +24,7 @@ void printdoc(){
     std::string doc = "\nDescription:\n"
     "   Generate noise and add it (or replace) to the input.\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'. '<' and '>' are valid for SEPlib format only.\n"
     "\nParameters:\n"
     "   type - string - ['uniform']:\n\t\toptions: 'uniform', 'normal'.\n"
     "   mean - float - [0]:\n\t\tmean value for the normal distribution.\n"

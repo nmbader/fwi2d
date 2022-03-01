@@ -19,6 +19,7 @@ void sepWrite(const std::shared_ptr<vecReg<T> > vec, std::string output){
     std::string ni, oi, di, labeli, esize="esize";
     float of, df;
     const char* out=output.c_str();
+    int size=sizeof(T);
     for (int i=0; i<axes.size(); i++){
         ni = "n" + std::to_string(i+1);
         oi = "o" + std::to_string(i+1);
@@ -41,8 +42,8 @@ void sepWrite(const std::shared_ptr<vecReg<T> > vec, std::string output){
         }
     }
 
-    if (output == "out") putch((char*)esize.c_str(),(char*)"s",(void*)std::to_string(sizeof(T)).c_str());
-    else auxputch(esize.c_str(),"s",std::to_string(sizeof(T)).c_str(),out);
+    if (output == "out") putch((char*)esize.c_str(),(char*)"d",(int*)&size);
+    else auxputch(esize.c_str(),"d",&size,out);
 
     if (sizeof(T)==4){
         successCheck(4*n123 == srite_big(out,vec->getVals(),4*n123), __FILE__,__LINE__,"Cannot write data\n");
@@ -189,7 +190,7 @@ void binWrite(const std::shared_ptr<vecReg<T> > vec, std::string output, std::st
         output_file << oi << "=" << axes[i].o << "\n";
         output_file << di << "=" << axes[i].d << "\n";
     }
-    output_file << "esize=" << sizeof(T)<<"\n";
+    output_file << "esize=" << sizeof(T) <<"\n";
 
     char* pPath;
     std::string bin_output;

@@ -20,7 +20,7 @@ void printdoc(){
     std::string doc = "\nDescription:\n"
     "   Compute 2D spectra using Fourier transform along the two fastest axes (often time and first spatial dimension).\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.  '<' and '>' are valid for SEPlib format only.\n"
     "\nParameters:\n"
     "   type - string - ['amplitude']:\n\t\toptions: 'amplitude', 'power', 'phase', 'real', 'imag'.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"

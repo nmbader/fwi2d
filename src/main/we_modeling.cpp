@@ -29,13 +29,17 @@ int main(int argc, char **argv){
 
     initpar(argc,argv);
 
-    // Read parameters for wave propagation
+// Read parameters for wave propagation
     param par;
     readParameters(argc, argv, par);
+    int verbose=par.verbose;
     if (rank>0) par.verbose=0;
     par.device+=rank;
 
-    // Read inputs/outputs files
+// Set the maximum number of threads
+    if (par.nthreads>0) omp_set_num_threads(par.nthreads);
+
+// Read inputs/outputs files
     std::string source_file="none", model_file="none", wavefield_file="none", output_file="none";
     readParam<std::string>(argc, argv, "source", source_file);
     readParam<std::string>(argc, argv, "model", model_file);
@@ -48,7 +52,7 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> src = read<data_t>(source_file, par.format);
     std::shared_ptr<vec> model = read<data_t>(model_file, par.format);
     
-    // Analyze the input source time function and duplicate if necessary, analyze geometry
+// Analyze the input source time function and duplicate if necessary, analyze geometry
     analyzeGeometry(*model->getHyper(),par, par.verbose>0);
     std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
     //analyzeModel(*allsrc->getHyper(),model,par);
@@ -58,14 +62,15 @@ int main(int argc, char **argv){
     // If more than one shot is modeled, don't save the wavefield
     // if (par.ns>1) par.sub=0;
 
-    // Build the appropriate wave equation operator
+// Build the appropriate wave equation operator
     nl_we_op_e * op;
     if (par.nmodels==2) op=new nl_we_op_a(*model->getHyper(),allsrc,par);
     else if (par.nmodels==3 && !par.acoustic_elastic) op=new nl_we_op_e(*model->getHyper(),allsrc,par);
     else if (par.nmodels==3 && par.acoustic_elastic) op=new nl_we_op_ae(*model->getHyper(),allsrc,par);
     else if (par.nmodels==5) op=new nl_we_op_vti(*model->getHyper(),allsrc,par);
 
-    // Run the forward modeling
+// Run the forward modeling
+    if (rank>0) par.verbose=verbose;
     std::shared_ptr<vec> allrcv = std::make_shared<vec> (*op->getRange());
     op->forward(false,model,allrcv);
 

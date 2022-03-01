@@ -20,7 +20,7 @@ void printdoc(){
     std::string doc = "\nDescription:\n"
     "   Apply F-K filter to a dataset (tapered mute in the F-K domain).\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.  '<' and '>' are valid for SEPlib format only.\n"
     "   Input first axis is interpreted as time, second axis as space.\n"
     "\nParameters:\n"
     "   kmin - -0.5<=float<=0.5 - [-0.5]:\n\t\tlowest wavenumber to fully preserve (-0.5 means no boxcar filtering).\n"

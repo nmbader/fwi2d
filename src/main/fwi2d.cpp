@@ -33,8 +33,12 @@ int rank=0, size=0;
 // Read parameters for wave propagation and inversion
     param par;
     readParameters(argc, argv, par);
+    int verbose=par.verbose;
     if (rank>0) par.verbose=0;
     par.device+=rank;
+
+// Set the maximum number of threads
+    if (par.nthreads>0) omp_set_num_threads(par.nthreads);
 
 // Read inputs/outputs files
     std::string source_file="none", model_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none";
@@ -171,13 +175,15 @@ if (par.bsplines)
     }
 // ----------------------------------------------------------------------------------------//
 
+    if (rank>0) par.verbose=verbose;
     nloper * op = nullptr;
     nl_we_op * L;
     if (par.nmodels==2) L=new nl_we_op_a(*model->getHyper(),allsrc,par);
     else if (par.nmodels==3 && !par.acoustic_elastic) L=new nl_we_op_e(*model->getHyper(),allsrc,par);
     else if (par.nmodels==3 && par.acoustic_elastic) L=new nl_we_op_ae(*model->getHyper(),allsrc,par);
     else if (par.nmodels==5) L=new nl_we_op_vti(*model->getHyper(),allsrc,par);
-    
+
+    if (rank>0) par.verbose=0;
 
     if (par.bsplines)
     {
@@ -234,7 +240,7 @@ if (par.bsplines)
     if (par.nlsolver=="nlsd") solver = new nlsd(par.niter, par.max_trial, par.threshold, ls); 
     else if (par.nlsolver=="nlcg") solver = new nlcg(par.niter, par.max_trial, par.threshold, ls); 
     else if (par.nlsolver=="bfgs") solver = new bfgs(par.niter, par.max_trial, par.threshold, ls); 
-    else solver = new lbfgs(par.niter, par.max_trial, par.threshold, ls, bsinvDiagH,5); 
+    else solver = new lbfgs(par.niter, par.max_trial, par.threshold, ls, bsinvDiagH, par.lbfgs_m); 
     
     solver->run(prob, par.verbose>0, ioutput_file, par.isave, par.format, par.datapath);
     

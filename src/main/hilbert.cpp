@@ -20,7 +20,7 @@ void printdoc(){
     std::string doc = "\nDescription:\n"
     "   Hilbert transform (90 deg phase shift) along the fast axis (often time).\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.  '<' and '>' are valid for SEPlib format only.\n"
     "\nParameters:\n"
     "   type - string - ['hilbert']:\n\t\toptions: 'hilbert', 'envelop', 'iphase'.\n"
     "   wrapped - bool - ['1']:\n\t\twrap or unwrap the instantaneous phase.\n"

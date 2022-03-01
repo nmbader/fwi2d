@@ -22,7 +22,7 @@ void printdoc(){
     std::string doc = "\nDescription:\n"
     "   Apply cubic B-splines smoothing.\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'. '<' and '>' are valid for SEPlib format only.\n"
     "   bsmodel - string - ['none'] : optional B-splines model to map back to the input space. Must be compatible with the input and parameters below.\n"
     "\nParameters:\n"
     "   nx,nz - int - [3] :\n\t\tnumber of control points in each direction. If provided, will override the parameters below.\n"

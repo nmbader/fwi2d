@@ -21,7 +21,7 @@ void printdoc(){
     "   Compute deconvolution filters between consecutive traces: filter_n=trace_n/trace_n-1 (division in frequency domain)\n"
     "   First filter is always a Dirac.\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.  '<' and '>' are valid for SEPlib format only.\n"
     "\nParameters:\n"
     "   fmin - 0<=float<=1 - [0.0]:\n\t\tlowest frequency for spectral division.\n"
     "   fmax - 0<=float<=1 - [1.0]:\n\t\thighest frequency for spectral division.\n"

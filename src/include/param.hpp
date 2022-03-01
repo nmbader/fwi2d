@@ -57,17 +57,18 @@ struct param{
     std::string nlsolver="lbfgs", lsearch="regular_wolfe", mask_file="none", weights_file="none", inverse_diagonal_hessian_file="none";
     std::string prior_file = "none";
     data_t threshold=0, lambda=0, reg_xweight=1, reg_zweight=1, scale_source_log_clip=1; // threshold to stop the solver, lambda to control total regularization weight, reg_x-zweight to control regularization directional weights, scale_... to clip source scalers 
-    int niter=0, max_trial=10, isave=10, envelop=0, regularization=-1, scale_source_times=0; // envelop in {0,1,2}, regul in {-1,0,1,2}, scale_... specifies for how many trials the source scalers will be computed
+    int lbfgs_m=5, niter=0, max_trial=10, isave=10, envelop=0, regularization=-1, scale_source_times=0; // envelop in {0,1,2}, regul in {-1,0,1,2}, scale_... specifies for how many trials the source scalers will be computed
     bool normalize=0, integrate=0, double_difference=0, interferometry=0; // trace-by-trace normalization, time integration, double difference between consecutive traces, interferometry by deconvolution of consecutive traces, over residuals
     data_t wmin=0, wmax=1, epsilon=0.1; int smth_half_length=5; // parameters needed for interferometric objective function
 
-    // advances line search parameters (check nlsolver.hpp)
+    // advanced line search parameters (check nlsolver.hpp)
     data_t ls_a0=1, ls_a1=0, ls_c1=1e-4, ls_c2=0.9, ls_max_step=1e6;
     bool ls_version=0;
 
     // miscallenous
     int version=2; // spatial operators version (1 or 2) for elastic WE
     int device=0; // first gpu device to use
+    int nthreads=0; // maximum number of threads to use in openMP
     int verbose=1; // logging level {0,1,2,3}
     bool skip_mpi=false; // parameter to be used when running inversion with MPI
     bool format=0; // data format for read/write : SEP (0) or binary (1)

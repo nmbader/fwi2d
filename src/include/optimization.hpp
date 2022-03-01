@@ -568,14 +568,13 @@ public:
         int nt = _d->getHyper()->getAxis(1).n;
         data_t dt = _d->getHyper()->getAxis(1).d;
 
-        time_t t = time(NULL);
-        if (_L->_par.verbose>0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t));
-
         int size=1, rank=0;
 #ifdef ENABLE_MPI
     MPI_Comm_size(MPI_COMM_WORLD,&size);
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 #endif
+        time_t t = time(NULL);
+        if (_L->_par.verbose>0 && rank==0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t));
 
         for (int s=rank; s<ns; s+=size)
         {
@@ -592,9 +591,10 @@ public:
             par.ns=1;
             par.nr=par.rxz[s].size();
             par.skip_mpi=true;
+            par.verbose=0;
             if (par.gl>0) par.rdip = std::vector<data_t>(_L->_par.rdip.begin()+nr, _L->_par.rdip.begin()+nr+par.nr);
 
-            if (s>0) par.verbose=0;
+            //if (s>0) par.verbose=0;
 
             // extract the time functions for a single shot
             hypercube<data_t> hyper_s = *_L->_allsrc->getHyper();
@@ -825,11 +825,14 @@ public:
         } // end of loop over shots
 
 #ifdef ENABLE_MPI
+        // Sum all gradients
         data_t * gtemp = new data_t[_pg->getN123()];
+        memset(gtemp, 0, _pg->getN123()*sizeof(data_t));
         if (sizeof(data_t)==8) MPI_Allreduce(_pg->getVals(), gtemp, _pg->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         else MPI_Allreduce(_pg->getVals(), gtemp, _pg->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
         memcpy(_pg->getVals(), gtemp, _pg->getN123()*sizeof(data_t));
         delete [] gtemp;
+        MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
 
@@ -840,7 +843,20 @@ public:
         if (_L->_par.scale_source_times>0) _scale_source_times++;
     }
 
-    virtual void res(){compute_res_and_grad(_r->getVals(), _g); _flag = true;}
+    virtual void res(){
+        _r->zero();
+        compute_res_and_grad(_r->getVals(), _g); _flag = true;
+#ifdef ENABLE_MPI
+        // gather all residual
+        data_t * temp = new data_t[_r->getN123()];
+        memset(temp, 0, _r->getN123()*sizeof(data_t));
+        if (sizeof(data_t)==8) MPI_Allreduce(_r->getVals(), temp, _r->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        else MPI_Allreduce(_r->getVals(), temp, _r->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        memcpy(_r->getVals(), temp, _r->getN123()*sizeof(data_t));
+        delete [] temp;
+        MPI_Barrier(MPI_COMM_WORLD);
+#endif
+        }
 
     virtual data_t getFunc(){
         if (_flag)

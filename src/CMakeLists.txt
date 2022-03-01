@@ -27,13 +27,6 @@ else()
         set(SRC_FWI2D ${SRC_FWI2D} ${SRC_DIR}/dummy.cpp)
 endif()
 
-#set(SRC_NLSOLVER ${CMAKE_CURRENT_SOURCE_DIR}/../external/nlsolvers/lbfgs_c.cpp
-#        ${CMAKE_CURRENT_SOURCE_DIR}/../external/nlsolvers/nlcg.cpp
-#        ${CMAKE_CURRENT_SOURCE_DIR}/../external/nlsolvers/steepest.cpp
-#        ${CMAKE_CURRENT_SOURCE_DIR}/../external/nlsolvers/lsearch.cpp
-#        ${CMAKE_CURRENT_SOURCE_DIR}/../external/nlsolvers/la.cpp
-#)
-
 set(HEADERS ${INC_DIR}/injector.hpp
                 ${INC_DIR}/IO.hpp
                 ${INC_DIR}/lsolver.hpp
@@ -58,12 +51,12 @@ endif()
 
 if(DOUBLE_PRECISION)
         add_custom_command(OUTPUT spatial_operators_ISPC.o
-                        COMMAND ${ISPC} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -DDOUBLE_PRECISION -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf
+                        COMMAND ${ISPC} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -DDOUBLE_PRECISION -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf --pic
                         DEPENDS ${SRC_DIR}/spatial_operators.ispc
                         )
 else()
         add_custom_command(OUTPUT spatial_operators_ISPC.o
-                        COMMAND ${ISPC} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf
+                        COMMAND ${ISPC} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf --pic
                         DEPENDS ${SRC_DIR}/spatial_operators.ispc
                         )
 endif()
@@ -75,32 +68,21 @@ if (MPI_FOUND)
         target_link_libraries(fwi2d ${MPI_CXX_LIBRARIES} )
 endif()
 
-#add_library(nlsolvers ${SRC_NLSOLVER})
-
 #building the executables
 #add_executable(TEST.x ${MAIN_DIR}/test.cpp)
 #target_link_libraries(TEST.x fwi2d sep)
 
-add_executable(TEST_FD.x ${MAIN_DIR}/test_fd.cpp)
-target_link_libraries(TEST_FD.x fwi2d sep)
-#
+#add_executable(TEST_FD.x ${MAIN_DIR}/test_fd.cpp)
+#target_link_libraries(TEST_FD.x fwi2d sep)
+
 add_executable(WE_MODELING.x ${MAIN_DIR}/we_modeling.cpp)
 target_link_libraries(WE_MODELING.x fwi2d sep)
-#if (MPI_FOUND)
-#        target_link_libraries(WE_MODELING.x ${MPI_CXX_LIBRARIES} )
-#endif()
-
-#add_executable(FWI2D_DRAFT.x ${MAIN_DIR}/fwi2d_draft.cpp)
-#target_link_libraries(FWI2D_DRAFT.x fwi2d sep)
 
 add_executable(LEAKY_TUBE_WAVE.x ${MAIN_DIR}/test_leaky_tw.cpp)
 target_link_libraries(LEAKY_TUBE_WAVE.x fwi2d sep)
 
 add_executable(FWI2D.x ${MAIN_DIR}/fwi2d.cpp)
 target_link_libraries(FWI2D.x fwi2d sep)
-
-#add_executable(FWI2D0.x ${MAIN_DIR}/test_fwi2d_2.cpp)
-#target_link_libraries(FWI2D0.x fwi2d nlsolvers sep)
 
 add_executable(BSPLINES.x ${MAIN_DIR}/bsplines.cpp)
 target_link_libraries(BSPLINES.x fwi2d sep)
@@ -157,8 +139,6 @@ install(TARGETS WE_MODELING.x
                 SEP2BIN.x
                 TR2TRDECON.x
                 LEAKY_TUBE_WAVE.x
-                #FWI2D_DRAFT.x
-                #FWI2D0.x
-                TEST_FD.x
+                #TEST_FD.x
                 #TEST.x
         DESTINATION bin)

@@ -147,6 +147,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "sub", par.sub);
     readParam<int>(argc, argv, "bs_nx", par.bs_nx);
     readParam<int>(argc, argv, "bs_nz", par.bs_nz);
+    readParam<int>(argc, argv, "lbfgs_m", par.lbfgs_m);
     readParam<int>(argc, argv, "niter", par.niter);
     readParam<int>(argc, argv, "max_trial", par.max_trial);
     readParam<int>(argc, argv, "isave", par.isave);
@@ -157,6 +158,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "version", par.version);
     readParam<int>(argc, argv, "verbose", par.verbose);
     readParam<int>(argc, argv, "device", par.device);
+    readParam<int>(argc, argv, "nthreads", par.nthreads);
     readParam<bool>(argc, argv, "mt", par.mt);
     readParam<bool>(argc, argv, "pml", par.pml);
     readParam<bool>(argc, argv, "acoustic_elastic", par.acoustic_elastic);

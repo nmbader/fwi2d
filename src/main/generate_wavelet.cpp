@@ -291,7 +291,7 @@ void printdoc(){
     std::string doc = "\nDescription:\n"
     "   Generate a 1D wavelet.\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.  '<' and '>' are valid for SEPlib format only.\n"
     "   Input is required only if the wavelet is built from a provided amplitude spectrum.\n"
     "\nParameters:\n"
     "   type - string - ['ricker']:\n\t\toptions: 'ricker', 'gaussian', 'sinc', 'butterworth', 'exponential', 'bandpass','spectrum','power'.\n"

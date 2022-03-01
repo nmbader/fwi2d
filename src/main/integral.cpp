@@ -22,7 +22,7 @@ void printdoc(){
     "   For time domain, a trapezoidal quadrature is used for the integration.\n"
     "   For frequency domain, a damping is added to avoid dividing by zero.\n"
     "\nInput/Output:\n"
-    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.\n"
+    "   Provide input as 'input=file.H' or '< file.H' and output as 'output=file.H' or '> file.H'.  '<' and '>' are valid for SEPlib format only.\n"
     "\nParameters:\n"
     "   domain - string - ['time']:\n\t\t'time' or 'frequency'.\n"
     "   eps - positive float - [1e-06]:\n\t\tdamping value.\n"
