@@ -416,6 +416,83 @@ public:
     }
 };
 
+// operator doing the opposite (not the inverse) of bsplines3; it populated the B-spline model using a gridded model with bilinear interpolation
+class bsfillin : public loper {
+protected:
+    std::vector<data_t> _controlx; // control points
+    std::vector<data_t> _controlz; // control points
+public:
+    bsfillin(){}
+    ~bsfillin(){}
+    bsfillin(const hypercube<data_t> &domain, const std::vector<data_t> &controlx, const std::vector<data_t> &controlz){
+
+        _domain = domain;
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        axes[0]=controlz.size();
+        axes[1]=controlx.size();
+        _range = hypercube<data_t>(axes);
+        _controlx = controlx;
+        _controlz = controlz;
+    }
+    bsfillin * clone() const {
+        bsfillin * op = new bsfillin(_domain, _controlx, _controlz);
+        return op;
+    }
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+        axis<data_t> Z = _range.getAxis(1);
+        axis<data_t> Z2 = _domain.getAxis(1);
+        axis<data_t> X = _range.getAxis(2);
+        axis<data_t> X2 = _domain.getAxis(2);
+        int ny = _range.getN123()/(X.n*Z.n);
+        data_t (*pc) [X.n][Z.n] = (data_t (*) [X.n][Z.n]) pdat;
+        const data_t (*pv) [X2.n][Z2.n] = (const data_t (*) [X2.n][Z2.n]) pmod;
+        for (int iy=0; iy<ny; iy++){
+            #pragma omp parallel for
+            for (int ix=0; ix<X.n; ix++){
+                int ix2 = floor((_controlx[ix]-X2.o)/X2.d);
+                int ix3 = std::min(X2.n-1,ix2+1);
+                data_t wx = (_controlx[ix] - X2.o - ix2*X2.d)/X2.d;
+                for (int iz=0; iz<Z.n; iz++){
+                    int iz2 = floor((_controlz[iz]-Z2.o)/Z2.d);
+                    int iz3 = std::min(Z2.n-1,iz2+1);
+                    data_t wz = (_controlz[iz] - Z2.o - iz2*Z2.d)/Z2.d;
+                    pc[iy][ix][iz] = add*pc[iy][ix][iz] + (1-wx)*(1-wz)*pv[iy][ix2][iz2]  + wx*(1-wz)*pv[iy][ix3][iz2] + (1-wx)*wz*pv[iy][ix2][iz3] + wx*wz*pv[iy][ix3][iz3];
+                }
+            }
+        }
+    }
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+        if (!add) memset(pmod, 0, _domain.getN123()*sizeof(data_t));
+        
+        axis<data_t> Z = _range.getAxis(1);
+        axis<data_t> Z2 = _domain.getAxis(1);
+        axis<data_t> X = _range.getAxis(2);
+        axis<data_t> X2 = _domain.getAxis(2);
+        int ny = _range.getN123()/(X.n*Z.n);
+        const data_t (*pc) [X.n][Z.n] = (const data_t (*) [X.n][Z.n]) pdat;
+        data_t (*pv) [X2.n][Z2.n] = (data_t (*) [X2.n][Z2.n]) pmod;
+        #pragma omp parallel for
+        for (int iy=0; iy<ny; iy++){
+            for (int ix=0; ix<X.n; ix++){
+                int ix2 = floor((_controlx[ix]-X2.o)/X2.d);
+                int ix3 = std::min(X2.n-1,ix2+1);
+                data_t wx = (_controlx[ix] - X2.o - ix2*X2.d)/X2.d;
+                for (int iz=0; iz<Z.n; iz++){
+                    int iz2 = floor((_controlz[iz]-Z2.o)/Z2.d);
+                    int iz3 = std::min(Z2.n-1,iz2+1);
+                    data_t wz = (_controlz[iz] - Z2.o - iz2*Z2.d)/Z2.d;                    
+                    pv[iy][ix2][iz2] += (1-wx)*(1-wz)*pc[iy][ix][iz];
+                    pv[iy][ix3][iz2] += wx*(1-wz)*pc[iy][ix][iz];
+                    pv[iy][ix2][iz3] += (1-wx)*wz*pc[iy][ix][iz];
+                    pv[iy][ix3][iz3] += wx*wz*pc[iy][ix][iz];
+                }
+            }
+        }
+    }
+};
+
 // set the knot vector from control points and multiplicity vectors
 void setKnot(std::vector<data_t> &u, std::vector<data_t> &c, std::vector<int> &m){
     successCheck(c.size() == m.size(),__FILE__,__LINE__,"Control and multiplicity vectors must have the same size\n");
@@ -438,8 +515,8 @@ void fillin(std::shared_ptr<vecReg<data_t> > c, const std::shared_ptr<vecReg<dat
     successCheck(Z.n == cz.size(),__FILE__,__LINE__,"The coarse spline vector must have the same z size as the control vector\n");
     successCheck(X.n == cx.size(),__FILE__,__LINE__,"The coarse spline vector must have the same x size as the control vector\n");
     int ny = c->getN123()/(X.n*Z.n);
-    data_t * pc = c->getVals();
-    const data_t * pv = v->getCVals();
+    data_t (*pc) [X.n][Z.n] = (data_t (*) [X.n][Z.n]) c->getVals();
+    const data_t (*pv) [X2.n][Z2.n] = (const data_t (*) [X2.n][Z2.n]) v->getCVals();
     int ix2, iz2, ix3, iz3;
     data_t wx, wz;
     for (int iy=0; iy<ny; iy++){
@@ -451,7 +528,7 @@ void fillin(std::shared_ptr<vecReg<data_t> > c, const std::shared_ptr<vecReg<dat
                 iz2 = floor((cz[iz]-Z2.o)/Z2.d);
                 iz3 = std::min(Z2.n-1,iz2+1);
                 wz = (cz[iz] - Z2.o - iz2*Z2.d)/Z2.d;
-                pc[iy*X.n*Z.n+ix*Z.n+iz] = (1-wx)*(1-wz)*pv[iy*X2.n*Z2.n+ix2*Z2.n+iz2]  + wx*(1-wz)*pv[iy*X2.n*Z2.n+ix3*Z2.n+iz2] + (1-wx)*wz*pv[iy*X2.n*Z2.n+ix2*Z2.n+iz3] + wx*wz*pv[iy*X2.n*Z2.n+ix3*Z2.n+iz3];
+                pc[iy][ix][iz] = (1-wx)*(1-wz)*pv[iy][ix2][iz2]  + wx*(1-wz)*pv[iy][ix3][iz2] + (1-wx)*wz*pv[iy][ix2][iz3] + wx*wz*pv[iy][ix3][iz3];
             }
         }
     }

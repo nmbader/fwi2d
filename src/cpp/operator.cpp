@@ -1774,3 +1774,104 @@ void ssmth::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
     }
     delete [] pvec;
 }
+
+void conv1dnd::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    if (!add) memset(pdat,0,_range.getN123()*sizeof(data_t));
+
+    int nt = _domain.getAxis(1).n;
+    int nx = _domain.getN123()/nt;
+    int nf = _f->getN123();
+
+    data_t * pf = _f->getVals();
+    data_t scale = 1;
+    //data_t scale = nt;
+
+    int sh = 0;
+    if (_centered) sh = std::floor((nf+1)/2)-1;
+
+    #pragma omp parallel for
+    for (int ix=0; ix<nx; ix++){
+        for (int it=0; it<nt; it++){
+            for (int j=std::max(0,it-nt+1+sh); j<std::min(nf,it+1+sh); j++) pdat[ix*nt+it] += pf[j]*pmod[ix*nt+it-j+sh]/scale;
+        }
+    }
+}
+
+void conv1dnd::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+    if (!add) memset(pmod,0,_domain.getN123()*sizeof(data_t));
+
+    int nt = _domain.getAxis(1).n;
+    int nx = _domain.getN123()/nt;
+    int nf = _f->getN123();
+
+    data_t * pf = _f->getVals();
+    data_t scale = 1;
+    //data_t scale = nt;
+
+    int sh = 0;
+    if (_centered) sh = std::floor((nf+1)/2)-1;
+
+    #pragma omp parallel for
+    for (int ix=0; ix<nx; ix++){
+        for (int it=0; it<nt; it++){
+            for (int j=std::max(0,it-nt+1+sh); j<std::min(nf,it+1+sh); j++) pmod[ix*nt+it-j+sh] += pf[j]*pdat[ix*nt+it]/scale;
+        }
+    }
+}
+
+void convnd1d::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    if (!add) memset(pdat,0,_range.getN123()*sizeof(data_t));
+
+    int nt = _range.getAxis(1).n;
+    int nx = _range.getN123()/nt;
+    int nf = _domain.getN123();
+
+    data_t * pf = _f->getVals();
+    data_t scale = 1;
+    //data_t scale = nt;
+
+    int sh = 0;
+    if (_centered) sh = std::floor((nf+1)/2)-1;
+    
+    #pragma omp parallel for
+    for (int ix=0; ix<nx; ix++){
+        for (int it=0; it<nt; it++){
+            for (int j=std::max(0,it-nt+1+sh); j<std::min(nf,it+1+sh); j++) pdat[ix*nt+it] += pmod[j]*pf[ix*nt+it-j+sh]/scale;
+        }
+    }
+}
+
+void convnd1d::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+    if (!add) memset(pmod,0,_domain.getN123()*sizeof(data_t));
+
+    int nt = _range.getAxis(1).n;
+    int nx = _range.getN123()/nt;
+    int nf = _domain.getN123();
+
+    data_t * pf = _f->getVals();
+    data_t scale = 1; 
+    //data_t scale = nt; 
+
+    int sh = 0;
+    if (_centered) sh = std::floor((nf+1)/2)-1;
+
+    if (!_centered){
+        #pragma omp parallel for
+        for (int j=0; j<nf; j++){
+            for (int ix=0; ix<nx; ix++){
+                for (int it=j; it<nt; it++) pmod[j] += pdat[ix*nt+it]*pf[ix*nt+it-j]/scale;
+            }
+        }
+    }
+    else{
+        for (int ix=0; ix<nx; ix++){
+            for (int it=0; it<nt; it++){
+                for (int j=std::max(0,it-nt+1+sh); j<std::min(nf,it+1+sh); j++) pmod[j] += pdat[ix*nt+it]*pf[ix*nt+it-j+sh]/scale;
+            }
+        }
+    }
+}

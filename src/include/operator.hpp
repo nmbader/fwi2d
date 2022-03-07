@@ -900,4 +900,53 @@ public:
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
 };
 
+// Time domain Convolution of 1D filter with N-dimensional vector
+class conv1dnd : public loper {
+protected:
+    std::shared_ptr<vecReg<data_t> > _f; // filter always treated as 1D
+//    bool _frequency; // perform convolution in time or frequency domain
+    bool _centered; // center the convolution
 
+public:
+    conv1dnd(){}
+    ~conv1dnd(){}
+    conv1dnd(const hypercube<data_t> domain, const std::shared_ptr<vecReg<data_t> > f, bool centered = true){
+        successCheck(f->getHyper()->getAxis(1).d==domain.getAxis(1).d,__FILE__,__LINE__,"Filter must have the same sampling as the domain fast axis\n");
+        _domain=domain;
+        _range=domain;
+        _f=f->clone();
+        _centered = centered;
+    }
+    conv1dnd * clone() const {
+        conv1dnd * op = new conv1dnd(_domain,_f,_centered);
+        return op;
+    }
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};
+
+// Time domain Convolution of N-dimensional data with 1D filter
+// domain always treated as 1D
+class convnd1d : public loper {
+protected:
+    std::shared_ptr<vecReg<data_t> > _f; // N-dimensional data
+//    bool _frequency; // perform convolution in time or frequency domain
+    bool _centered; // center the convolution (in the case of time domain)
+
+public:
+    convnd1d(){}
+    ~convnd1d(){}
+    convnd1d(const hypercube<data_t> domain, const std::shared_ptr<vecReg<data_t> > f, bool centered = true){
+        successCheck(f->getHyper()->getAxis(1).d==domain.getAxis(1).d,__FILE__,__LINE__,"Data must have the same sampling as the domain fast axis\n");
+        _domain=domain;
+        _range=*f->getHyper();
+        _f=f->clone();
+        _centered = centered;
+    }
+    convnd1d * clone() const {
+        convnd1d * op = new convnd1d(_domain,_f,_centered);
+        return op;
+    }
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};

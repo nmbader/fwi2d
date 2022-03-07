@@ -8,6 +8,7 @@ set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 set(CUDA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cuda)
 set(PYTHON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/python)
 set(MAIN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/main)
+set(DEV_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dev)
 
 set(SRC_FWI2D ${SRC_DIR}/injector.cpp
                 ${SRC_DIR}/lsolver.cpp
@@ -68,21 +69,13 @@ if (MPI_FOUND)
         target_link_libraries(fwi2d ${MPI_CXX_LIBRARIES} )
 endif()
 
-#building the executables
-#add_executable(TEST.x ${MAIN_DIR}/test.cpp)
-#target_link_libraries(TEST.x fwi2d sep)
-
-#add_executable(TEST_FD.x ${MAIN_DIR}/test_fd.cpp)
-#target_link_libraries(TEST_FD.x fwi2d sep)
-
+#building the main executables
 add_executable(WE_MODELING.x ${MAIN_DIR}/we_modeling.cpp)
 target_link_libraries(WE_MODELING.x fwi2d sep)
 
-add_executable(LEAKY_TUBE_WAVE.x ${MAIN_DIR}/test_leaky_tw.cpp)
-target_link_libraries(LEAKY_TUBE_WAVE.x fwi2d sep)
-
 add_executable(FWI2D.x ${MAIN_DIR}/fwi2d.cpp)
 target_link_libraries(FWI2D.x fwi2d sep)
+
 
 add_executable(BSPLINES.x ${MAIN_DIR}/bsplines.cpp)
 target_link_libraries(BSPLINES.x fwi2d sep)
@@ -114,6 +107,9 @@ target_link_libraries(RESAMPLE.x fwi2d sep)
 add_executable(FK_FILTER.x ${MAIN_DIR}/fk_filter.cpp)
 target_link_libraries(FK_FILTER.x fwi2d sep)
 
+add_executable(MATCHING.x ${MAIN_DIR}/matching.cpp)
+target_link_libraries(MATCHING.x fwi2d sep)
+
 add_executable(SEP2BIN.x ${MAIN_DIR}/sep2bin.cpp)
 target_link_libraries(SEP2BIN.x fwi2d sep)
 
@@ -122,8 +118,10 @@ target_link_libraries(TR2TRDECON.x fwi2d sep)
 
 #installing libraries and executables
 install(FILES ${HEADERS} DESTINATION include)
-install(FILES ${PYTHON} DESTINATION bin)
 install(TARGETS fwi2d DESTINATION lib)
+install(FILES ${PYTHON} 
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+        DESTINATION bin)
 install(TARGETS WE_MODELING.x
                 FWI2D.x
                 BSPLINES.x
@@ -136,9 +134,30 @@ install(TARGETS WE_MODELING.x
                 NOISE.x
                 RESAMPLE.x
                 FK_FILTER.x
+                MATCHING.x
                 SEP2BIN.x
                 TR2TRDECON.x
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+        DESTINATION bin)
+
+# For development purposes
+if (DEV)
+        #add_executable(TEST.x ${MAIN_DIR}/test.cpp)
+        #target_link_libraries(TEST.x fwi2d sep)
+
+        #add_executable(TEST_FD.x ${MAIN_DIR}/test_fd.cpp)
+        #target_link_libraries(TEST_FD.x fwi2d sep)
+
+        add_executable(FWI2D_MODEL_EXTENSION.x ${DEV_DIR}/fwi2d_model_extension.cpp)
+        target_link_libraries(FWI2D_MODEL_EXTENSION.x fwi2d sep)
+
+        add_executable(LEAKY_TUBE_WAVE.x ${DEV_DIR}/leaky_tw.cpp)
+        target_link_libraries(LEAKY_TUBE_WAVE.x fwi2d sep)
+
+        install(TARGETS FWI2D_MODEL_EXTENSION.x
                 LEAKY_TUBE_WAVE.x
                 #TEST_FD.x
                 #TEST.x
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
         DESTINATION bin)
+endif()
