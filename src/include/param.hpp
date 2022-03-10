@@ -60,6 +60,9 @@ struct param{
     int lbfgs_m=5, niter=0, max_trial=10, isave=10, envelop=0, regularization=-1, scale_source_times=0; // envelop in {0,1,2}, regul in {-1,0,1,2}, scale_... specifies for how many trials the source scalers will be computed
     bool normalize=0, integrate=0, double_difference=0, interferometry=0; // trace-by-trace normalization, time integration, double difference between consecutive traces, interferometry by deconvolution of consecutive traces, over residuals
     data_t wmin=0, wmax=1, epsilon=0.1; int smth_half_length=5; // parameters needed for interferometric objective function
+    
+    // Dev parameters with limited implementation
+    data_t gdamp_tmin=0, gdamp_tmax=0, gdamp_power=1; // gradient damping during time integration ; cosine square damping between time gdamp_tmin and gdamp_tmax with power gdamp_power;
 
     // advanced line search parameters (check nlsolver.hpp)
     data_t ls_a0=1, ls_a1=0, ls_c1=1e-4, ls_c2=0.9, ls_max_step=1e6;

@@ -83,44 +83,45 @@ void set_bs_sources(bs_sources &bss, const hyper &domain, std::vector<std::vecto
     }
 }
 
-// operator that maps from several B-spline models (one for each source) to the physical space, with optional damping (cosine squared) around the sources location
-// Op = sum(Ws.Ss.ps) where summation is over sources, 'ps' is the B-spline model for source 's', 'Ss' is the B-spline back-projection operator, 'Ws' is the normalized cosine squared weighting operator
+// operator that maps from several models (one for each source) to the physical space, with damping (cosine squared) around the sources location
+// Op = sum(Ws.S.ps) where summation is over sources, 'ps' is the B-spline model for each source 's', 'S' is the B-spline operator, 'Ws' is the normalized cosine squared weighting operator
 class model_extension : public loper {
 protected:
     data_t _dpower; // damping strength for cosine^2
     data_t _dwidthx; // damping width
     data_t _dwidthz;
+    loper * _BD; // B-spline operator (same for all sources)
     //std::vector<loper *> _BDs; // all B-splines operators (one per source)
     std::shared_ptr<vec> _nW; // normalization for the weighting (sum of all weighting operators)
     std::vector<std::vector<data_t> > _sxz; // sources location
 
 public:
-    std::vector<loper *> _BDs; // all B-splines operators (one per source)
     model_extension(){}
     ~model_extension(){
-        int ns = _sxz.size();
-        for (int s=0; s<ns; s++) delete _BDs[s];
+        delete _BD;
+        //int ns = _sxz.size();
+        //for (int s=0; s<ns; s++) delete _BDs[s];
     }
-    model_extension(const hypercube<data_t> &range, bs_sources &bss, std::vector<std::vector<data_t> > &sxz, data_t dwidthx, data_t dwidthz, data_t dpower){
-        successCheck(range.getNdim() == 3,__FILE__,__LINE__,"Range must contain 3 dimensions\n");
-        successCheck(sxz.size() == bss.mx.size(),__FILE__,__LINE__,"Number of sources must be the same in 'sxz' and 'bss'\n");
-
-        std::vector<ax > axes = range.getAxes();
-        axes[0].n=bss.mz[0].size(); axes[1].n=bss.mx[0].size();
+    model_extension(const loper * BD, const std::vector<std::vector<data_t> > &sxz, const data_t dwidthx, const data_t dwidthz, const data_t dpower){
+        //successCheck(range.getNdim() == 3,__FILE__,__LINE__,"Range must contain 3 dimensions\n");
+        //successCheck(sxz.size() == bss.mx.size(),__FILE__,__LINE__,"Number of sources must be the same in 'sxz' and 'bss'\n");
+        _BD=BD->clone();
+        _range = *BD->getRange();
+        std::vector<ax > axes = BD->getDomain()->getAxes();
+        //axes[0].n=bss.mz[0].size(); axes[1].n=bss.mx[0].size();
         ax S(sxz.size(),0,1);
         axes.push_back(S);
         
         _domain = hyper(axes);
-        _range = range;
         _dwidthx = dwidthx;
         _dwidthz = dwidthz;
         _dpower = dpower;
         _sxz=sxz;
 
-        // build the B-spline operators and the normalization weights
-        ax Z = range.getAxis(1);
-        ax X = range.getAxis(2);
-        ax C = range.getAxis(3);
+        // build the normalization weights
+        ax Z = _range.getAxis(1);
+        ax X = _range.getAxis(2);
+        ax C = _range.getAxis(3);
         int ns = sxz.size();
         _nW = std::make_shared<vec> (vec(hyper(Z,X)));
         _nW->zero();
@@ -129,11 +130,11 @@ public:
         for (int s=0; s<ns; s++){
 
             // B-spline operator
-            hyper hyp(ax(bss.mz[s].size(),0,1),ax(bss.mx[s].size(),0,1),C);
-            duplicate D(hyp,bss.mx[s],bss.mz[s]);
-            bsplines3 B(*D.getRange(),range,bss.kx[s],bss.kz[s]);
-            loper * BD = new chainLOper(&B,&D);
-            _BDs.push_back(BD);
+            //hyper hyp(ax(bss.mz[s].size(),0,1),ax(bss.mx[s].size(),0,1),C);
+            //duplicate D(hyp,bss.mx[s],bss.mz[s]);
+            //bsplines3 B(*D.getRange(),range,bss.kx[s],bss.kz[s]);
+            //loper * BD = new chainLOper(&B,&D);
+            //_BDs.push_back(BD);
 
             // normalization weight
             int ixmin = ceil((sxz[s][0]-dwidthx-X.o)/X.d);
@@ -170,49 +171,38 @@ public:
     }
 
     model_extension * clone() const {
-        model_extension * op = new model_extension();
-        op->_dpower = _dpower;
-        op->_dwidthx = _dwidthx;
-        op->_dwidthz = _dwidthz;
-        op->_domain = _domain;
-        op->_range = _range;
-        op->_sxz = _sxz;
-        op->_nW = _nW->clone();
-        int ns = _sxz.size();
-        for (int s=0; s<ns; s++) {
-            loper * BD = _BDs[s]->clone();
-            op->_BDs.push_back(BD);
-        }
+        model_extension * op = new model_extension(_BD, _sxz, _dwidthx, _dwidthz, _dpower);
         return op;
     }    
     void apply_forward(bool add, const data_t * pmod, data_t * pdat){
 
-        if (add == false) memset(pdat, 0, _range.getN123()*sizeof(data_t));
+        if (!add) memset(pdat,0,sizeof(data_t)*_range.getN123());
 
         ax Z = _range.getAxis(1);
         ax X = _range.getAxis(2);
         ax C = _range.getAxis(3);
+        ax Zm = _domain.getAxis(1);
+        ax Xm = _domain.getAxis(2);
         int ns = _sxz.size();
-        int nm = _domain.getN123()/ns;
+        int nm=C.n*Xm.n*Zm.n;
         data_t (*pd) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) pdat;
         const data_t (*pw) [Z.n] = (const data_t (*)[Z.n]) _nW->getVals();
 
         data_t * vec = new data_t[_range.getN123()];
         memset(vec, 0, _range.getN123()*sizeof(data_t));
-        data_t (*pvec) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) vec;
+        const data_t (*pv) [X.n][Z.n] = (const data_t (*)[X.n][Z.n]) vec;
 
         for (int s=0; s<ns; s++){
 
-            // Ss.ps
-            _BDs[s]->apply_forward(false, pmod+s*nm, vec);
+            // S.ps
+            _BD->apply_forward(false, pmod+s*nm, vec);
 
-            // Ws.Ss.ps
+            // Ws.S.ps
             int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
             int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
             int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
             int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
             for (int c=0; c<C.n; c++){
-
                 #pragma omp parallel for
                 for (int ix=ixmin; ix<ixmax; ix++){
                     data_t x = X.o + ix*X.d;
@@ -225,13 +215,22 @@ public:
                         data_t d = sqrt(rx+rz);
                         data_t val = 1;
                         if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
-                        pvec[c][ix][iz] *= val*val;
+                        pd[c][ix][iz] += pv[c][ix][iz]*val*val/pw[ix][iz];
                     }
                 }
 
                 #pragma omp parallel for
-                for (int ix=0; ix<X.n; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pd[c][ix][iz] += pvec[c][ix][iz]/pw[ix][iz];
+                for (int ix=0; ix<ixmin; ix++){
+                    for (int iz=0; iz<Z.n; iz++) pd[c][ix][iz] += pv[c][ix][iz]/pw[ix][iz];
+                }
+                #pragma omp parallel for
+                for (int ix=ixmax; ix<X.n; ix++){
+                    for (int iz=0; iz<Z.n; iz++) pd[c][ix][iz] += pv[c][ix][iz]/pw[ix][iz];
+                }
+                #pragma omp parallel for
+                for (int ix=ixmin; ix<ixmax; ix++){
+                    for (int iz=0; iz<izmin; iz++) pd[c][ix][iz] += pv[c][ix][iz]/pw[ix][iz];
+                    for (int iz=izmax; iz<Z.n; iz++) pd[c][ix][iz] += pv[c][ix][iz]/pw[ix][iz];
                 }
             }            
         }
@@ -240,22 +239,21 @@ public:
 
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
 
-        if (add == false) memset(pmod, 0, _domain.getN123()*sizeof(data_t));
-
         ax Z = _range.getAxis(1);
         ax X = _range.getAxis(2);
         ax C = _range.getAxis(3);
+        ax Zm = _domain.getAxis(1);
+        ax Xm = _domain.getAxis(2);
         int ns = _sxz.size();
-        int nm = _domain.getN123()/ns;
+        int nm=C.n*Xm.n*Zm.n;
+        const data_t (*pd) [X.n][Z.n] = (const data_t (*)[X.n][Z.n]) pdat;
         const data_t (*pw) [Z.n] = (const data_t (*)[Z.n]) _nW->getVals();
 
         data_t * vec = new data_t[_range.getN123()];
         memset(vec, 0, _range.getN123()*sizeof(data_t));
-        data_t (*pvec) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) vec;
+        data_t (*pv) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) vec;
 
         for (int s=0; s<ns; s++){
-
-            memcpy(vec, pdat, _range.getN123()*sizeof(data_t));
 
             // Ws'.m
             int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
@@ -263,8 +261,6 @@ public:
             int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
             int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
             for (int c=0; c<C.n; c++){
-
-                #pragma omp parallel for
                 for (int ix=ixmin; ix<ixmax; ix++){
                     data_t x = X.o + ix*X.d;
                     data_t rx = (x-_sxz[s][0])/_dwidthx;
@@ -276,18 +272,24 @@ public:
                         data_t d = sqrt(rx+rz);
                         data_t val = 1;
                         if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
-                        pvec[c][ix][iz] *= val*val;
+                        pv[c][ix][iz] = pd[c][ix][iz]*val*val/pw[ix][iz];
                     }
                 }
 
-                #pragma omp parallel for
-                for (int ix=0; ix<X.n; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pvec[c][ix][iz] /= pw[ix][iz];
+                for (int ix=0; ix<ixmin; ix++){
+                    for (int iz=0; iz<Z.n; iz++) pv[c][ix][iz] = pd[c][ix][iz]/pw[ix][iz];
+                }
+                for (int ix=ixmax; ix<X.n; ix++){
+                    for (int iz=0; iz<Z.n; iz++) pv[c][ix][iz] = pd[c][ix][iz]/pw[ix][iz];
+                }
+                for (int ix=ixmin; ix<ixmax; ix++){
+                    for (int iz=0; iz<izmin; iz++) pv[c][ix][iz] = pd[c][ix][iz]/pw[ix][iz];
+                    for (int iz=izmax; iz<Z.n; iz++) pv[c][ix][iz] = pd[c][ix][iz]/pw[ix][iz];
                 }
             }
 
-            // Ss'.Ws'.m
-            _BDs[s]->apply_adjoint(add, pmod+s*nm, vec);
+            // S'.Ws'.m
+            _BD->apply_adjoint(add, pmod+s*nm, vec);
         }
         delete [] vec;
     }
@@ -310,6 +312,7 @@ int rank=0, size=0;
 // Read parameters for wave propagation and inversion
     param par;
     readParameters(argc, argv, par);
+    par.bsplines=1;
     int verbose=par.verbose;
     if (rank>0) par.verbose=0;
     par.device+=rank;
@@ -327,10 +330,7 @@ int rank=0, size=0;
     readParam<std::string>(argc, argv, "obj_func", obj_func_file);
 
 // Read some parameters
-    int gapx=0, gapz=0;
     data_t dwidthx=0, dwidthz=0, dpower=0;
-    readParam<int>(argc, argv, "damping_gapx", gapx);
-    readParam<int>(argc, argv, "damping_gapz", gapz);
     readParam<data_t>(argc, argv, "damping_widthx", dwidthx);
     readParam<data_t>(argc, argv, "damping_widthz", dwidthz);
     readParam<data_t>(argc, argv, "damping_power", dpower);
@@ -359,51 +359,55 @@ int rank=0, size=0;
     analyzeBsplines(*model->getHyper(),par);
     analyzeNLInversion(par);
 
-// Build model precon for model extension along sources
+// ----------------------------------------------------------------------------------------//
+// Build model precon for model extension along sources with B-splines included
 // ----------------------------------------------------------------------------------------//
     std::shared_ptr<vec> bsmodel = model;
     std::shared_ptr<vec> bsmask = gmask;
     std::shared_ptr<vec> bsinvDiagH = invDiagH;
     std::shared_ptr<vec> bsprior = prior;
-    bs_sources bss;
-    set_bs_sources(bss, *model->getHyper(), par.sxz, gapx, gapz);
-    loper * E = new model_extension(*model->getHyper(), bss, par.sxz, dwidthx, dwidthz, dpower);
+    loper * E;
 
-    bsmodel = std::make_shared<vec>(vec(*E->getDomain()));
-    int n123 = bsmodel->getN123()/par.sxz.size();  
-    if (par.mask_file != "none") bsmask = std::make_shared<vec>(vec(*E->getDomain()));
-    if (par.inverse_diagonal_hessian_file != "none") bsinvDiagH = std::make_shared<vec>(vec(*E->getDomain()));
-    if (par.prior_file != "none") bsprior = std::make_shared<vec>(vec(*E->getDomain()));
-
-    for (int s=0; s<par.sxz.size(); s++){
-        bsfillin F(*model->getHyper(),bss.controlx[s],bss.controlz[s]);
-        F.apply_forward(false,model->getCVals(),bsmodel->getVals()+s*n123);
-        if (par.mask_file != "none") F.apply_forward(false,gmask->getCVals(),bsmask->getVals()+s*n123);
-        if (par.inverse_diagonal_hessian_file != "none") F.apply_forward(false,invDiagH->getCVals(),bsinvDiagH->getVals()+s*n123);
-        if (par.prior_file != "none") F.apply_forward(false,prior->getCVals(),bsprior->getVals()+s*n123);
-    }
-
-// ----------------------------------------------------------------------------------------//
-
-// Build model precon if B-splines are activated
-// ----------------------------------------------------------------------------------------//
-    loper * BDF;
-
-if (par.bsplines)
-{
     std::vector<data_t> kx;
     std::vector<data_t> kz;
     setKnot(kx,par.bs_controlx,par.bs_mx);
     setKnot(kz,par.bs_controlz,par.bs_mz);
 
-    bsfillin F(*E->getRange(),par.bs_controlx,par.bs_controlz);
+    bsfillin F(*model->getHyper(),par.bs_controlx,par.bs_controlz);
+{   
     duplicate D(*F.getRange(),par.bs_mx,par.bs_mz);
     bsplines3 B(*D.getRange(),*model->getHyper(),kx,kz);
-    chainLOper DF(&D,&F);
-    BDF = new chainLOper(&B,&DF);
-}    
+    chainLOper BD(&B,&D);
+    E = new model_extension(&BD, par.sxz, dwidthx, dwidthz, dpower);
+}
+    bsmodel = std::make_shared<vec>(vec(*E->getDomain()));
+    bsmodel->zero();
+    F.apply_forward(false, model->getVals(), bsmodel->getVals());
+    if (par.mask_file != "none") {
+        bsmask = std::make_shared<vec>(vec(*E->getDomain()));
+        bsmask->zero();
+        F.apply_forward(false, gmask->getVals(), bsmask->getVals());
+    }
+    if (par.inverse_diagonal_hessian_file != "none") {
+        bsinvDiagH = std::make_shared<vec>(vec(*E->getDomain()));
+        bsinvDiagH->zero();
+        F.apply_forward(false, invDiagH->getVals(), bsinvDiagH->getVals());
+    }
+    if (par.prior_file != "none") {
+        bsprior = std::make_shared<vec>(vec(*E->getDomain()));
+        bsprior->zero();
+        F.apply_forward(false, prior->getVals(), bsprior->getVals());
+    }
+    
+    int n123 = bsmodel->getN123()/par.sxz.size();
+    for (int s=0; s<par.sxz.size(); s++){
+        memcpy(bsmodel->getVals()+s*n123, bsmodel->getVals(), sizeof(data_t)*n123);
+        if (par.mask_file != "none") memcpy(bsmask->getVals()+s*n123, bsmask->getVals(), sizeof(data_t)*n123);
+        if (par.inverse_diagonal_hessian_file != "none") memcpy(bsinvDiagH->getVals()+s*n123, bsinvDiagH->getVals(), sizeof(data_t)*n123);
+        if (par.prior_file != "none") memcpy(bsprior->getVals()+s*n123, bsprior->getVals(), sizeof(data_t)*n123);
+    }
+ 
 // ----------------------------------------------------------------------------------------//
-
 // Build model precon if soft clipping is activated
 // ----------------------------------------------------------------------------------------//
     emodelSoftClip * S;
@@ -423,26 +427,15 @@ if (par.bsplines)
 
     if (rank>0) par.verbose=0;
 
-    if (par.bsplines)
+   
+    if (par.soft_clip)
     {
-        if (par.soft_clip)
-        {
-            chainLOper BDFE(BDF,E);
-            op = new chainNLOper(S,&BDFE);
-        }
-        else{
-            op = new chainLOper(BDF,E);
-        }
+        op = new chainNLOper(S,E);
     }
-    else
-    {
-        if (par.soft_clip)
-        {
-            op = new chainNLOper(S,E);
-        }
-        else op = E->clone();
+    else{
+        op = E->clone();
     }
-    if (par.bsplines) delete BDF;
+  
     delete E;
     if (par.soft_clip) delete S;
 

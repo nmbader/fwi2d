@@ -491,14 +491,20 @@ void nl_we_op_e::compute_gradients(const data_t * model, const data_t * u_full, 
     Dx(false, pfor[par.nt/par.sub+1-it-1][1], temp[2], nx, nz, dx, 0, nx, 0, nz); // forwardz_x
     Dz(false, pfor[par.nt/par.sub+1-it-1][0], temp[3], nx, nz, dz, 0, nx, 0, nz); // forwardx_z
 
+    // cosine square damping in a given time window, often around the source function (gradient close to the source)
+    data_t t = (par.nt/par.sub-it)*dt;
+    data_t w = 1;
+    if (par.gdamp_tmax-t>0 && t-par.gdamp_tmin>=0) w = cos(par.gdamp_power*M_PI*(t-par.gdamp_tmin)/(par.gdamp_tmax-par.gdamp_tmin));
+    w *= w;
+
     // different from time zero
-    if (par.nt/par.sub+1-it-1>0){
+    if (par.nt/par.sub-it>0){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] += dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
-            g[1][i] += dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
-            g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+            g[0][i] += w*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
+            g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
         }
     }
     // time zero
@@ -506,9 +512,9 @@ void nl_we_op_e::compute_gradients(const data_t * model, const data_t * u_full, 
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] += 0.5*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
-            g[1][i] += 0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
-            g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-pfor[par.nt/par.sub+1-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-pfor[par.nt/par.sub+1-it-1][1][i])); // rho gradient
+            g[0][i] += w*0.5*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
+            g[1][i] += w*0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-pfor[par.nt/par.sub+1-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-pfor[par.nt/par.sub+1-it-1][1][i])); // rho gradient
         }
     }
 }
@@ -1429,8 +1435,14 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
 
     data_t val1=0, val2=0, val3=0, del=0;
 
+    // cosine square damping in a given time window, often around the source function (gradient close to the source)
+    data_t t = (par.nt/par.sub-it)*dt;
+    data_t w = 1;
+    if (par.gdamp_tmax-t>0 && t-par.gdamp_tmin>=0) w = cos(par.gdamp_power*M_PI*(t-par.gdamp_tmin)/(par.gdamp_tmax-par.gdamp_tmin));
+    w *= w;
+
     // different from time zero
-    if (par.nt/par.sub+1-it-1>0){
+    if (par.nt/par.sub-it>0){
         #pragma omp parallel for private(val1,val2,val3,del)
         for (int i=0; i<nxz; i++) 
         {
@@ -1438,9 +1450,9 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
             val1 = sqrt(2*(pm[0][i]+2*pm[1][i])*(pm[0][i]+pm[1][i])*del + (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i]));
             val2 = ((1+2*del)*pm[0][i] + (1+3*del)*pm[1][i])/val1; // d(C13)/d(lambda)
             val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
-            g[0][i] += dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
-            g[1][i] += dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
-            g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+            g[0][i] += w*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
+            g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
             g[3][i] = 0;
             g[4][i] = 0;
         }
@@ -1454,9 +1466,9 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
             val1 = sqrt(2*(pm[0][i]+2*pm[1][i])*(pm[0][i]+pm[1][i])*del + (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i]));
             val2 = ((1+2*del)*pm[0][i] + (1+3*del)*pm[1][i])/val1; // d(C13)/d(lambda)
             val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
-            g[0][i] += 0.5*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
-            g[1][i] += 0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
-            g[2][i] += 1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-pfor[par.nt/par.sub+1-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-pfor[par.nt/par.sub+1-it-1][1][i])); // rho gradient
+            g[0][i] += w*0.5*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
+            g[1][i] += w*0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-pfor[par.nt/par.sub+1-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-pfor[par.nt/par.sub+1-it-1][1][i])); // rho gradient
             g[3][i] = 0;
             g[4][i] = 0;
         }
@@ -1788,13 +1800,19 @@ void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, 
     Dx(false, curr, temp[2], nx, nz, dx, 0, nx, 0, nz); // adjoint_x
     Dz(false, curr, temp[3], nx, nz, dz, 0, nx, 0, nz); // adjoint_z
 
+    // cosine square damping in a given time window, often around the source function (gradient close to the source)
+    data_t t = (par.nt/par.sub-it)*dt;
+    data_t w = 1;
+    if (par.gdamp_tmax-t>0 && t-par.gdamp_tmin>=0) w = cos(par.gdamp_power*M_PI*(t-par.gdamp_tmin)/(par.gdamp_tmax-par.gdamp_tmin));
+    w *= w;
+
     // different from time zero
-    if (par.nt/par.sub+1-it-1>0){
+    if (par.nt/par.sub-it>0){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] = g[0][i] - 1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-2*pfor[par.nt/par.sub+1-it-1][i]+pfor[par.nt/par.sub+1-it-2][i]); // K gradient
-            g[1][i] += dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
+            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-2*pfor[par.nt/par.sub+1-it-1][i]+pfor[par.nt/par.sub+1-it-2][i]); // K gradient
+            g[1][i] += w*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
         }
     }
     // time zero
@@ -1802,8 +1820,8 @@ void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, 
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] = g[0][i] - 1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-pfor[par.nt/par.sub+1-it-1][i]); // K gradient
-            g[1][i] += 0.5*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
+            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-pfor[par.nt/par.sub+1-it-1][i]); // K gradient
+            g[1][i] += w*0.5*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
         }
     }
 }

@@ -119,6 +119,9 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "bs_controlx", par.bs_controlx);
     readParam<data_t>(argc, argv, "bs_controlz", par.bs_controlz);
     readParam<data_t>(argc, argv, "threshold", par.threshold);
+    readParam<data_t>(argc, argv, "gdamp_tmin", par.gdamp_tmin);
+    readParam<data_t>(argc, argv, "gdamp_tmax", par.gdamp_tmax);
+    readParam<data_t>(argc, argv, "gdamp_power", par.gdamp_power);
     readParam<data_t>(argc, argv, "ls_a0", par.ls_a0);
     readParam<data_t>(argc, argv, "ls_a1", par.ls_a1);
     readParam<data_t>(argc, argv, "ls_c1", par.ls_c1);

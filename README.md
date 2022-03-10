@@ -19,7 +19,7 @@ Key features include:
 
 ## Prerequisites
 
-The **fwi2d** library is written almost entirely in **_C++_** and **_CUDA_** and has been built on Linux environments (**centos 7**) using **_CMAKE_**. A portion of the code is compiled using **_ISPC_** which needs to be installed *a priori*. Downloading the binary directly from [here](https://ispc.github.io/) should suffice. Moreover, **_Python_** and **_Jupyter_** are only required for data format conversion and examples generation.
+The **fwi2d** library is written almost entirely in **_C++_** and **_CUDA_** and has been built on Linux environments (**centos 7**) using **_CMAKE_**. The **_FFTW3_** library is required. A portion of the code is compiled using **_ISPC_** which needs to be installed *a priori*. Downloading the binary directly from [here](https://ispc.github.io/) should suffice. Moreover, **_Python_** and **_Jupyter_** are only required for data format conversion and examples generation.
 
 ## Installation
 
