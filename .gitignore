@@ -2,8 +2,9 @@
 **/.vscode
 **/._*
 **/__*
+**/.ipynb*
 **/build*
 **/test*
 **/local*
-**/examples
-**/external
+**/examples/data
+**/external/nlsolvers
