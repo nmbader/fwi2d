@@ -308,7 +308,7 @@ void printdoc(){
     "   dt - positive float - [0.004]:\n\t\tsampling interval.\n"
     "   shift - int - [0]:\n\t\tshift in nb of samples, applied to the origin of the output. Inactive if 'phase' is not provided.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nExample:\n"
     "   GENERATE_WAVELET.x < infile.H type=spectrum nt=100 dt=0.004 shift=11 phase=minimum > oufile.H\n"
     "   GENERATE_WAVELET.x type=bandpass nt=100 dt=0.004 shift=11 w1=0 w2=0.2 w3=0.6 w4=0.8 > oufile.H\n"
@@ -321,6 +321,7 @@ int main(int argc, char **argv){
     if (argc == 1 && isatty(STDIN_FILENO)==true) {printdoc(); return 0;}
 
 	initpar(argc,argv);
+    omp_set_num_threads(1);
 
     std::string input_file="in", output_file="out", type="ricker", phase="default", datapath="none";
     data_t wc=0.1, dt=0.004, lwc=0, hwc=1, alpha=0.5, sigma=1, eps=1e-07, w1=0, w2=0.1, w3=0.6, w4=0.9, pow=1;

@@ -29,7 +29,7 @@ void printdoc(){
     "   smth_half_length - int>0 - [0]:\n\t\thalf length in nb of samples of the triangular smoothing window applied to the amplitude spectrum after division.\n"
     "   filter - string - ['none'] : optional filters (previously computed) to map back to the input space. If provided, the Jacobian of the operator will be applied to the filters wrt input.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nExample:\n"
     "   TR2TRDECON.x < infile.H fmin=0.1 fmax=0.5 eps=0.05 smth_half_length=3 > oufile.H\n"
     "   TR2TRDECON.x < infile.H filter=filters.H fmin=0.1 fmax=0.5 eps=0.05 smth_half_length=3 > oufile.H\n"

@@ -58,7 +58,7 @@ void printdoc(){
     "   si - non-negative float - [0]:\n\t\tdesired output sampling. If > 0 it overwrites 'factor' and is valid for time domain only.\n"
     "   alpha - 0<=float<=1 or >0 - [0.5]:\n\t\tused in the cosine window for the sinc filter (1 means no taper). It is also used for kaiser window; recommended value 10.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nExample:\n"
     "   RESAMPLE.x < infile.H domain=time type=linear si=0.1 > oufile.H\n"
     "\n";
@@ -70,6 +70,7 @@ int main(int argc, char **argv){
     if (argc == 1 && isatty(STDIN_FILENO)==true) {printdoc(); return 0;}
 
 	initpar(argc,argv);
+    omp_set_num_threads(1);
 
     std::string input_file="in", output_file="out", domain="time", type="sinc", datapath="none";
     bool format=0;

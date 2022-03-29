@@ -16,7 +16,7 @@ void readCoord(std::string srcoord, param &par){
         data_t sid = 0;
         while ( getline (ifs, line) )
         {
-            if (line[0] != '#')
+            if (line[0] != '#' && line[0] != '//')
             {
                 std::istringstream ss(line);
 
@@ -190,7 +190,7 @@ void readParam(std::string parfile, param &par){
         while ( getline (ifs, line) )
         {
             line = line + " ";
-            if (line [0]!= '#')
+            if (line [0]!= '#' && line [0]!='//')
             {
                 lines.push_back(line);
             }

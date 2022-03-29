@@ -2238,6 +2238,11 @@ void nl_we_op_ae::propagate(bool adj, const data_t * model, const data_t * allsr
             const data_t * in[2] = {curra[0],preva[0]};
             asat_absorbing_top(true, in, nexta[0], nx, nza, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, moda, 1.0);
         }
+        else if (par.bc_top==3)
+        {
+            const data_t * in[1] = {curra[0]};
+            asat_neumann_top(true, in, nexta[0], nx, nza, dx, dz, par.pml_L*l, nx-par.pml_R*l, moda, 1.0);
+        }
         if (par.bc_bottom==1)
         {
             const data_t * in[2] = {curr[1],curr[0]};

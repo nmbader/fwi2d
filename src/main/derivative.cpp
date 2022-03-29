@@ -25,7 +25,7 @@ void printdoc(){
     "\nParameters:\n"
     "   domain - string - ['time']:\n\t\t'time' or 'frequency'.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nExample:\n"
     "   DERIVATIVE.x < infile.H domain=frequency > oufile.H\n"
     "\n";
@@ -37,6 +37,7 @@ int main(int argc, char **argv){
     if (argc == 1 && isatty(STDIN_FILENO)==true) {printdoc(); return 0;}
 
 	initpar(argc,argv);
+    omp_set_num_threads(1);
 
     std::string input_file="in", output_file="out", domain="time", datapath="none";
     bool format=0;

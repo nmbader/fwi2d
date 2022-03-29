@@ -26,7 +26,7 @@ void printdoc(){
     "   Provide input as 'input=file.H' and output as 'output=file.H' where 'file.H' is a description file.\n"
     "\nParameters:\n"
     "   mode - int - [0]:\n\t\t0: convert sep file to binary. otherwise: convert binary file to sep format.\n"
-    "   datapath - string - ['none']:\n\t\tdatapath to save binary data in mode 0. If 'none' it will default to DATAPATH or PWD environment vavriables.\n"
+    "   datapath - string - ['none']:\n\t\tdatapath to save binary data. If 'none' it will default to DATAPATH or PWD environment vavriables.\n"
     "\nExample:\n"
     "   SEP2BIN.x input=seplib_data.H output=description_file.H mode=0 datapath=/path/to/binaries\n"
     "   SEP2BIN.x input=description_file.H output=seplib_data.H mode=1\n"

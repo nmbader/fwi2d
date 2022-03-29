@@ -89,7 +89,7 @@ void printdoc(){
     "   verbose - bool - [1]:\n\t\tprint info during iterations.\n"
     "   obj_func - string - ['none']:\n\t\tname of file to output the objective functions.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nExample:\n"
     "   MATCHING.x < infile.H target=target.H filter_half_length=11 niter=20 filter=filters.H obj_func=func.H > oufile.H\n"
     "\n";

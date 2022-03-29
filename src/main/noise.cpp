@@ -34,7 +34,7 @@ void printdoc(){
     "   seed - float - [date]:\n\t\tseed for random numbers generation.\n"
     "   replace - int - [0]:\n\t\t0 = add noise to input, 1 = replace input.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nExample:\n"
     "   NOISE.x < infile.H type=uniform min=-10 max=20 > oufile.H.\n"
     "   NOISE.x < infile.H type=normal mean=3 sigma=5 replace=1 > oufile.H\n"
@@ -47,6 +47,7 @@ int main(int argc, char **argv){
     if (argc == 1 && isatty(STDIN_FILENO)==true) {printdoc(); return 0;}
 
 	initpar(argc,argv);
+    omp_set_num_threads(1);
 
     std::string input_file="in", output_file="out", type="uniform", datapath="none";
     data_t mean=0, sigma=1, min=-1, max=1, seed=0;

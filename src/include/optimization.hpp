@@ -92,18 +92,20 @@ protected:
 public:
     llsq_reg(){}
     virtual ~llsq_reg(){}
-    llsq_reg(loper * L, loper * D, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, const data_t lambda, const std::shared_ptr<vecReg<data_t> > mp){
+    llsq_reg(loper * L, loper * D, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, const data_t lambda, const std::shared_ptr<vecReg<data_t> > mprior=nullptr){
        successCheck(L->checkDomainRange(m,d),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
        successCheck(D->checkDomainRange(m,m),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
-        successCheck(m->getN123()==mp->getN123(),__FILE__,__LINE__,"Model and prior model do not have the same number of samples\n");
+        successCheck(m->getN123()==mprior->getN123(),__FILE__,__LINE__,"Model and prior model do not have the same number of samples\n");
         _L = L;
         _D = D;
         _m = m;
         _d = d;
         _lambda = lambda;
-        _Dmp = std::make_shared<vecReg<data_t> >(*m->getHyper());
+
+        _Dmp = std::make_shared<vecReg<data_t> > (*_D->getRange());
         _Dmp->zero();
-        _D->apply_forward(false,mp->getCVals(),_Dmp->getVals());
+        if (mprior==nullptr) _D->forward(false, _m, _Dmp); // mprior assumed = m0 if not provided
+        else _D->forward(false, mprior, _Dmp);
     }
     void initRes() {
         _r = std::make_shared<vecReg<data_t> >(hypercube<data_t>(_d->getN123()+_m->getN123()));
@@ -572,6 +574,7 @@ public:
 #ifdef ENABLE_MPI
     MPI_Comm_size(MPI_COMM_WORLD,&size);
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+    MPI_Barrier(MPI_COMM_WORLD);
 #endif
         time_t t = time(NULL);
         if (_L->_par.verbose>0 && rank==0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t));
@@ -835,7 +838,6 @@ public:
         MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
-
         if (_P != nullptr) _P->jacobianT(false,_g,_m,_pg);
 
         if (_gmask != nullptr) _g->mult(_gmask);
@@ -993,13 +995,23 @@ public:
     // res = ( L(m) - d ; lambda*(D(m) - D(m_prior)) )
     // grad = (dL(m)/dm)'.Ht.(L(m)-d)/(d'.Ht.d) + lambda.(dD(m)/dm)'.(D(m)-D(m_prior))/|D(m_prior)|^2
     void res(){
+        _r->zero();
         int nd = _d->getN123();
         int nm = _D->getRange()->getN123();
         data_t * pr = _r->getVals();
         const data_t * pd = _d->getCVals();
         const data_t * pdmp = _Dmp->getCVals();
-
         compute_res_and_grad(_r->getVals(), _g);
+#ifdef ENABLE_MPI
+        // gather all residual
+        data_t * temp = new data_t[_d->getN123()];
+        memset(temp, 0, _d->getN123()*sizeof(data_t));
+        if (sizeof(data_t)==8) MPI_Allreduce(_r->getVals(), temp, _d->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        else MPI_Allreduce(_r->getVals(), temp, _d->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        memcpy(_r->getVals(), temp, _d->getN123()*sizeof(data_t));
+        delete [] temp;
+        MPI_Barrier(MPI_COMM_WORLD);
+#endif
         _D->apply_forward(false,_m->getCVals(),pr+nd);
         #pragma omp parallel for
         for (int i=0; i<nm; i++) pr[nd+i] = _lambda*(pr[nd+i] - pdmp[i]);

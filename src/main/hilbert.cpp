@@ -25,7 +25,7 @@ void printdoc(){
     "   type - string - ['hilbert']:\n\t\toptions: 'hilbert', 'envelop', 'iphase'.\n"
     "   wrapped - bool - ['1']:\n\t\twrap or unwrap the instantaneous phase.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nExample:\n"
     "   HILBERT.x < infile.H > oufile.H.\n"
     "   HILBERT.x < infile.H type=iphase wrapped=0 > oufile.H\n"
@@ -38,6 +38,7 @@ int main(int argc, char **argv){
     if (argc == 1 && isatty(STDIN_FILENO)==true) {printdoc(); return 0;}
 
 	initpar(argc,argv);
+    omp_set_num_threads(1);
 
     std::string input_file="in", output_file="out", type="hilbert", datapath="none";
     bool wrapped=true, format=0;

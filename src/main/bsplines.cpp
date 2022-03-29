@@ -29,7 +29,7 @@ void printdoc(){
     "   controlx,controlz - [float] :\n\t\tarrays of control points manually entered. Must contain the first and last physical points. To be used in conjunction with mx,mz.\n"
     "   mx,mz - [int] :\n\t\tarrays of control points multiplicity manually entered.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nNote:\n"
     "   The number of control points must be >= 3 in all cases, unless nx=0 in which case the smoothing will be applied in the z-direction only.\n"
     "\nExamples:\n"
@@ -46,6 +46,7 @@ int main(int argc, char **argv){
     if (argc == 1 && isatty(STDIN_FILENO)==true) {printdoc(); return 0;}
 
 	initpar(argc,argv);
+    omp_set_num_threads(1);
 
     std::string input_file="in", bsmodel_file="none", output_file="out", datapath="none";
     int nx=3, nz=3;

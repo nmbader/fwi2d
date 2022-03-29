@@ -456,6 +456,7 @@ void linear_resampler::apply_forward(bool add, const data_t * pmod, data_t * pda
 
     int i, j;
     data_t wi, wj;
+    #pragma omp parallel for
     for (int ix=0; ix<nx; ix++){
         for (int it=0; it<Td.n; it++){
 
@@ -481,6 +482,7 @@ void linear_resampler::apply_adjoint(bool add, data_t * pmod, const data_t * pda
 
     int i, j;
     data_t wi, wj;
+    #pragma omp parallel for
     for (int ix=0; ix<nx; ix++){
         for (int it=0; it<Td.n; it++){
 
@@ -504,6 +506,7 @@ void sinc_resampler::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     data_t t;
     data_t a = _alpha; // 0 < a < 1 for the windowing of the cosine taper
 
+    #pragma omp parallel for
     for (int ix=0; ix<nx; ix++){
         for (int itd=0; itd<Td.n; itd++){
             t = itd * Td.d;
@@ -530,6 +533,7 @@ void sinc_resampler::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     int itm0;
     data_t t;
     data_t a = _alpha; // 0 < a < 1 for the windowing of the cosine taper
+    #pragma omp parallel for
     for (int ix=0; ix<nx; ix++){
         for (int itd=0; itd<Td.n; itd++){
             t = itd * Td.d;

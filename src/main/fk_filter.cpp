@@ -29,7 +29,7 @@ void printdoc(){
     "   vmax - vmin<=float - [0]:\n\t\tlowest absolute phase velocity (m/s) to fully preserve (0 means no cone filtering).\n"
     "   taper - non-negative float - [0.1]:\n\t\tlength of the cosine taper, applied in the wavenumber direction.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
-    "   datapath - string - ['none']:\n\t\tpath for output binaries when format=1 is used.\n"
+    "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nExample:\n"
     "   FK_FILTER.x < infile.H kmin=-0.3 kmax=0.3 vmin=1000 vmax=10000 taper=0.05 > oufile.H\n"
     "\n";
@@ -41,6 +41,7 @@ int main(int argc, char **argv){
     if (argc == 1 && isatty(STDIN_FILENO)==true) {printdoc(); return 0;}
 
 	initpar(argc,argv);
+    omp_set_num_threads(1);
 
     std::string input_file="in", output_file="out", datapath="none";
     bool format=0;
