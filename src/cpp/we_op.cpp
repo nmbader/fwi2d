@@ -1972,7 +1972,19 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
         for (int i=0; i<nxz; i++)
         {
             next[0][i] = par.dt*par.dt*next[0][i]*mod[0][i] + 2*curr[0][i] - prev[0][i];
+            //next[0][i] = par.dt*par.dt*next[0][i]*mod[0][i] + curr[0][i] - prev[0][i];
         }
+
+        //taperz(next[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+        //taperz(next[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+        //taperx(next[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+        //taperx(next[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+
+        //#pragma omp parallel for
+        //for (int i=0; i<nxz; i++)
+        //{
+        //    next[0][i] += curr[0][i];
+        //}
 
         // scale boundaries when relevant (for locally absorbing BC only)
         data_t * in[1] = {next[0]};
@@ -2389,7 +2401,7 @@ void nl_we_op_ae::propagate(bool adj, const data_t * model, const data_t * allsr
                 next[1][ix*nz] = next[1][ix*nz] - sign*val0/mod[2][ix*nz]*(nexta[0][ix*nza+nza-1] - preva[0][ix*nza+nza-1]);
             }
         }
-        
+
         taperz(curra[0], nx, nza, 0, nx, par.taper_top, 0, par.taper_strength);
         taperx(curra[0], nx, nza, 0, nza, par.taper_left, 0, par.taper_strength);
         taperx(curra[0], nx, nza, 0, nza, nx-par.taper_right, nx, par.taper_strength);
@@ -2409,7 +2421,7 @@ void nl_we_op_ae::propagate(bool adj, const data_t * model, const data_t * allsr
         taperz(next[1], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
         taperx(next[1], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
         taperx(next[1], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
-
+        
         bucketa=preva;
         preva=curra;
         curra=nexta;
