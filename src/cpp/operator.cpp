@@ -1,5 +1,5 @@
 #include "operator.hpp"
-#include <fftw3.h>
+#include "fftw3.h"
 
 void nloper::dotProduct(){
 

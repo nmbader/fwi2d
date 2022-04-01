@@ -958,6 +958,17 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
             memcpy(allrcv->getVals(), temp, allrcv->getN123()*sizeof(data_t));
             delete [] temp;
         }
+
+        if (_par.sub>0){
+            data_t * temp;
+            if (rank==0) temp = new data_t[_full_wfld->getN123()];
+            if (sizeof(data_t)==8) MPI_Reduce(_full_wfld->getCVals(), temp, _full_wfld->getN123(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+            else MPI_Reduce(_full_wfld->getCVals(), temp, _full_wfld->getN123(), MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+            if (rank==0) {
+                memcpy(_full_wfld->getVals(), temp, _full_wfld->getN123()*sizeof(data_t));
+                delete [] temp;
+            }
+        }
     }
 #endif              
 

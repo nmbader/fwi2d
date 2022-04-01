@@ -21,12 +21,6 @@
     #include "mpi.h"
 #endif
 
-//#ifdef DOUBLE_PRECISION
-//    typedef MPI_DOUBLE mpi_data_t;
-//#else
-//    typedef MPI_FLOAT mpi_data_t;
-//#endif
-
 template <typename T1>
 class axis {
 public:

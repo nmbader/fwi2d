@@ -1,5 +1,5 @@
 #include "misc.hpp"
-#include <fftw3.h>
+#include "fftw3.h"
 
 void successCheck(bool success, std::string file, int line, std::string msg) {
     if (!success) {

@@ -34,7 +34,7 @@ cp ispc-v1.17.0-linux/bin/ispc path_to_ispc_binary/ispc
 Then clone and install the main **fwi2d** library
 ```
 # get the code
-git clone http://cees-gitlab.stanford.edu/nmbader/fwi2d.git
+git clone https://github.com/nmbader/fwi2d.git
 cd fwi2d
 
 # create subdirectories
@@ -62,4 +62,4 @@ If the host machine has **_CUDA_** enabled, add the flag `-DGPU=1`. In this case
 
 ## Data format
 
-By default, the main executables read and write data in *SEPlib* format. Alternatively, regular binary format is also accepted provided that a description file is built (see [Examples](http://cees-gitlab.stanford.edu/nmbader/fwi2d)). A **_C++_** executable is provided to convert between these two formats. Moreover, a python script is provided to convert to/from *SEPlib* from/to **_numpy_**.
+By default, the main executables read and write data in *SEPlib* format. Alternatively, regular binary format is also accepted provided that a description file is built (see [examples](https://github.com/nmbader/fwi2d/tree/master/examples)). A **_C++_** executable is provided to convert between these two formats. Moreover, a python script is provided to convert to/from *SEPlib* from/to **_numpy_**.
