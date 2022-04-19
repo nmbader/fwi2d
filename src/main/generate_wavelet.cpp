@@ -162,130 +162,6 @@ void iirBpButterworth(data_t * p, int nt, data_t wcl, data_t wch, int ho){
         }
     }
 }
-std::shared_ptr<vec> zero_phase(const std::shared_ptr<vec> dat){
-
-    ax T = dat->getHyper()->getAxis(1);
-    ax X(1,0,1);
-    
-    // Make a new vector with odd length
-    std::shared_ptr<vec> vec0;
-	if (2*(T.n/2)==T.n) {
-		T.n+=1;
-        vec0 = std::make_shared<vec>(hyper(T));
-
-        for (int iz=0; iz<T.n-1; iz++){
-        vec0->getVals()[iz] = dat->getVals()[iz];
-        }
-        vec0->getVals()[T.n-1] = 0;
-    }
-	
-    else {
-        vec0 = dat;
-        vec0->setHyper((hyper(T,X)));
-    }
-
-    // Fourier transform the vector
-    fxTransform fx(hyper(T,X));
-    ax F;
-    F.d=fx.getRange()->getAxis(1).d;
-    F.o=0;
-    F.n=T.n/2 + 1;
-    std::shared_ptr<cvec> fxvec = std::make_shared<cvec >(hyper(F,X));
-    fx.forward(false,vec0,fxvec);
-
-    int N = F.n;
-    data_t dw = 2*M_PI/T.n;
-    data_t r;
-    std::complex<data_t> z (0,0);
-
-    // Modify the FT by setting a linear phase while keeping the same amplitude spectrum
-	for (int i=0; i<N; i++){
-
-        r = abs(fxvec->getVals()[i]);
-
-        // add linear phase shift (* exp (-j.omega.dt.(Nt-1)/2)))
-        z.real(r*cos(-i*dw*(T.n - 1)/2));
-        z.imag(r*sin(-i*dw*(T.n - 1)/2));
-
-        fxvec->getVals()[i] = z;
-	}
-
-    // inverse FT and modify the original vector
-    fx.inverse(false,vec0,fxvec);
-    T.o = (int)(-T.n/2) * T.d; 
-    vec0->setHyper(hyper(T));
-    
-    return vec0;
-}
-std::shared_ptr<vec> minimum_phase(const std::shared_ptr<vec> dat, const data_t eps){
-    
-    ax T = dat->getHyper()->getAxis(1);
-    ax X(1,0,1);
-    
-    // Make a new vector with odd length
-    std::shared_ptr<vec> vec0;
-	if (2*(T.n/2)==T.n) {
-		T.n+=1;
-        vec0 = std::make_shared<vec>(hyper(T));
-
-        for (int iz=0; iz<T.n-1; iz++){
-        vec0->getVals()[iz] = dat->getVals()[iz];
-        }
-        vec0->getVals()[T.n-1] = 0;
-    }
-	
-    else {
-        vec0 = dat;
-        vec0->setHyper((hyper(T,X)));
-    }
-
-    // Fourier transform the vector
-    fxTransform fx(hyper(T,X));
-    ax F;
-    F.d=fx.getRange()->getAxis(1).d;
-    F.o=0;
-    F.n=T.n/2 + 1;
-    std::shared_ptr<cvec> fxvec = std::make_shared<cvec >(hyper(F,X));
-    fx.forward(false,vec0,fxvec);
-
-    int N = F.n;
-    data_t r;
-    std::complex<data_t> z (0,0);
-
-    // Modify the FT by making it real and equal to the logarithm of the power spectrum
-	for (int i=0; i<N; i++){
-
-        r = sqrt(norm(fxvec->getVals()[i]));
-
-        // set FT = log(r+eps)
-        z.real(log(r+eps));
-        z.imag(0);
-
-        fxvec->getVals()[i] = z;
-	}
-
-    // inverse FT and keep the causal part
-    fx.inverse(false,vec0,fxvec);
-    for (int iz=1; iz<T.n/2+1; iz++){
-        vec0->getVals()[iz] *= 2;
-    }
-    for (int iz=T.n/2+1; iz<T.n; iz++){
-        vec0->getVals()[iz] = 0;
-    }
-
-    // FT again and take the exponent
-    fx.forward(false,vec0,fxvec);
-    for (int iz=0; iz<N; iz++){
-        fxvec->getVals()[iz] = exp(fxvec->getVals()[iz]);
-    }
-
-    // inverse FT 
-    fx.inverse(false,vec0,fxvec);
-    T.o = 0; 
-    vec0->setHyper(hyper(T));
-    
-    return vec0;
-}
 
 void printdoc(){
     std::string doc = "\nDescription:\n"
@@ -304,6 +180,7 @@ void printdoc(){
     "   w1,w2,w3,w4 - 0<=w1<w2<w3<w4<=1 - [0,0.1,0.6,0.9]:\n\t\tfrequencies defining band-pass wavelet, given in fraction of the Nyquist. A cosine taper is applied to the spectrum between w1 and w2, w3 and w4.\n"
     "   pow - float - [1]:\n\t\tpower used for the power function t^pow t>0.\n"
     "   phase - string - ['default']:\n\t\toptions: 'default', 'zero', 'minimum'.\n"
+    "   epsilon - float - [1e-07]:\n\t\tused in Kolgomoroff factorization for minimum phase\n"
     "   nt - int - [100]:\n\t\tnumber of samples in the wavelet. If it is even, it will be augmented by 1.\n"
     "   dt - positive float - [0.004]:\n\t\tsampling interval.\n"
     "   shift - int - [0]:\n\t\tshift in nb of samples, applied to the origin of the output. Inactive if 'phase' is not provided.\n"

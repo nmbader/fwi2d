@@ -107,6 +107,9 @@ target_link_libraries(RESAMPLE.x fwi2d sep)
 add_executable(FK_FILTER.x ${MAIN_DIR}/fk_filter.cpp)
 target_link_libraries(FK_FILTER.x fwi2d sep)
 
+add_executable(FX_FILTER.x ${MAIN_DIR}/fx_filter.cpp)
+target_link_libraries(FX_FILTER.x fwi2d sep)
+
 add_executable(MATCHING.x ${MAIN_DIR}/matching.cpp)
 target_link_libraries(MATCHING.x fwi2d sep)
 
@@ -134,6 +137,7 @@ install(TARGETS WE_MODELING.x
                 NOISE.x
                 RESAMPLE.x
                 FK_FILTER.x
+                FX_FILTER.x
                 MATCHING.x
                 SEP2BIN.x
                 TR2TRDECON.x

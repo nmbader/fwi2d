@@ -1880,3 +1880,132 @@ void convnd1d::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
         }
     }
 }
+
+
+
+
+
+std::shared_ptr<vecReg<data_t> > zero_phase(const std::shared_ptr<vecReg<data_t> > dat){
+
+    axis<data_t>T = dat->getHyper()->getAxis(1);
+    axis<data_t>X(1,0,1);
+    
+    // Make a new vector with odd length
+    std::shared_ptr<vecReg<data_t> > vec0;
+	if (2*(T.n/2)==T.n) {
+		T.n+=1;
+        vec0 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(T));
+
+        for (int iz=0; iz<T.n-1; iz++){
+        vec0->getVals()[iz] = dat->getVals()[iz];
+        }
+        vec0->getVals()[T.n-1] = 0;
+    }
+	
+    else {
+        vec0 = dat;
+        vec0->setHyper((hypercube<data_t>(T,X)));
+    }
+
+    // Fourier transform the vector
+    fxTransform fx(hypercube<data_t>(T,X));
+    axis<data_t>F;
+    F.d=fx.getRange()->getAxis(1).d;
+    F.o=0;
+    F.n=T.n/2 + 1;
+    std::shared_ptr<cvecReg<data_t> > fxvec = std::make_shared<cvecReg<data_t> >(hypercube<data_t>(F,X));
+    fx.forward(false,vec0,fxvec);
+
+    int N = F.n;
+    data_t dw = 2*M_PI/T.n;
+    data_t r;
+    std::complex<data_t> z (0,0);
+
+    // Modify the FT by setting a linear phase while keeping the same amplitude spectrum
+	for (int i=0; i<N; i++){
+
+        r = abs(fxvec->getVals()[i]);
+
+        // add linear phase shift (* exp (-j.omega.dt.(Nt-1)/2)))
+        z.real(r*cos(-i*dw*(T.n - 1)/2));
+        z.imag(r*sin(-i*dw*(T.n - 1)/2));
+
+        fxvec->getVals()[i] = z;
+	}
+
+    // inverse FT and modify the original vector
+    fx.inverse(false,vec0,fxvec);
+    T.o = (int)(-T.n/2) * T.d; 
+    vec0->setHyper(hypercube<data_t>(T));
+    
+    return vec0;
+}
+std::shared_ptr<vecReg<data_t> > minimum_phase(const std::shared_ptr<vecReg<data_t> > dat, const data_t eps){
+    
+    axis<data_t>T = dat->getHyper()->getAxis(1);
+    axis<data_t>X(1,0,1);
+    
+    // Make a new vector with odd length
+    std::shared_ptr<vecReg<data_t> > vec0;
+	if (2*(T.n/2)==T.n) {
+		T.n+=1;
+        vec0 = std::make_shared<vecReg<data_t> >(hypercube<data_t>(T));
+
+        for (int iz=0; iz<T.n-1; iz++){
+        vec0->getVals()[iz] = dat->getVals()[iz];
+        }
+        vec0->getVals()[T.n-1] = 0;
+    }
+	
+    else {
+        vec0 = dat;
+        vec0->setHyper((hypercube<data_t>(T,X)));
+    }
+
+    // Fourier transform the vector
+    fxTransform fx(hypercube<data_t>(T,X));
+    axis<data_t>F;
+    F.d=fx.getRange()->getAxis(1).d;
+    F.o=0;
+    F.n=T.n/2 + 1;
+    std::shared_ptr<cvecReg<data_t> > fxvec = std::make_shared<cvecReg<data_t> >(hypercube<data_t>(F,X));
+    fx.forward(false,vec0,fxvec);
+
+    int N = F.n;
+    data_t r;
+    std::complex<data_t> z (0,0);
+
+    // Modify the FT by making it real and equal to the logarithm of the power spectrum
+	for (int i=0; i<N; i++){
+
+        r = sqrt(norm(fxvec->getVals()[i]));
+
+        // set FT = log(r+eps)
+        z.real(log(r+eps));
+        z.imag(0);
+
+        fxvec->getVals()[i] = z;
+	}
+
+    // inverse FT and keep the causal part
+    fx.inverse(false,vec0,fxvec);
+    for (int iz=1; iz<T.n/2+1; iz++){
+        vec0->getVals()[iz] *= 2;
+    }
+    for (int iz=T.n/2+1; iz<T.n; iz++){
+        vec0->getVals()[iz] = 0;
+    }
+
+    // FT again and take the exponent
+    fx.forward(false,vec0,fxvec);
+    for (int iz=0; iz<N; iz++){
+        fxvec->getVals()[iz] = exp(fxvec->getVals()[iz]);
+    }
+
+    // inverse FT 
+    fx.inverse(false,vec0,fxvec);
+    T.o = 0; 
+    vec0->setHyper(hypercube<data_t>(T));
+    
+    return vec0;
+}

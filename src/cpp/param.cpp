@@ -174,6 +174,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<bool>(argc, argv, "integrate", par.integrate);
     readParam<bool>(argc, argv, "double_difference", par.double_difference);
     readParam<bool>(argc, argv, "interferometry", par.interferometry);
+    readParam<bool>(argc, argv, "normalize_obj_func", par.normalize_obj_func);
     readParam<bool>(argc, argv, "ls_version", par.ls_version);
     readParam<bool>(argc, argv, "format", par.format);
     readParam<int>(argc, argv, "bs_mx", par.bs_mx);

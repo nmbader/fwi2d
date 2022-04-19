@@ -467,6 +467,7 @@ protected:
     std::shared_ptr<vecReg<data_t> > _pg; // gradient before applying preconditioner Jacobian
     std::shared_ptr<vecReg<data_t> > _gmask; // gradient mask vector
     std::shared_ptr<vecReg<data_t> > _w; // residual weighting vector
+    std::shared_ptr<vecReg<data_t> > _filter; // 1D filter
     data_t _dnorm; // data normalization factor
     data_t _f; // objective function
     bool _flag; // flag to re-evaluate or not the objective function
@@ -478,13 +479,14 @@ public:
     std::vector<data_t> _scalers; // scalers applied to each source at a given trial
     nlls_fwi_eco(){}
     virtual ~nlls_fwi_eco(){}
-    nlls_fwi_eco(nl_we_op * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr){
+    nlls_fwi_eco(nl_we_op * L, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr, std::shared_ptr<vecReg<data_t> > filter = nullptr){
         _L = L;
         _P = P;
         _m = m;
         _d = d;
         _gmask = gmask;
         _w = w;
+        _filter = filter;
         _f = 0;
         _flag = true;
        
@@ -519,6 +521,21 @@ public:
         }
         if (_w != nullptr) _d->mult(_w); // apply weighting
 
+        if (_filter != nullptr){ // apply filtering
+            data_t eps=1e-07;
+            if (_L->_par.filter_phase=="zero") _filter = zero_phase(filter);
+            else if (_L->_par.filter_phase=="minimum") _filter = minimum_phase(filter,eps);
+            axis<data_t> Tf = _filter->getHyper()->getAxis(1);
+            axis<data_t> T = _d->getHyper()->getAxis(1);
+            Tf.d=T.d;
+            _filter->setHyper(hypercube<data_t>(Tf)); 
+            conv1dnd op(*_d->getHyper(), _filter, _L->_par.filter_phase!="minimum");
+            std::shared_ptr<vecReg<data_t> > output = std::make_shared<vecReg<data_t> >(*op.getRange());
+            output->zero();
+            op.forward(false,_d,output);
+            _d=output;
+        }
+
         if (_L->_par.normalize) { // apply trace normalization
             int nt=_d->getHyper()->getAxis(1).n;
             int ntr=_d->getN123()/nt;
@@ -546,9 +563,12 @@ public:
             _d = output;
         }
 
-        _dnorm = _d->norm2();
-        _dnorm *= _d->getHyper()->getAxis(1).d;
-        if (_dnorm<ZERO) _dnorm=1;
+        if (_L->_par.normalize_obj_func){
+            _dnorm = _d->norm2();
+            _dnorm *= _d->getHyper()->getAxis(1).d;
+            if (_dnorm<ZERO) _dnorm=1;
+        }
+        else _dnorm=1.0;
 
         _scale_source_times=0;
         if (_L->_par.scale_source_times>0) {
@@ -647,6 +667,16 @@ public:
                     #pragma omp parallel for
                     for (int i=0; i<par.nr*nt; i++) pr[2*par.nr*nt+i] *= pw[2*_L->_par.nr*nt+i];
                 }
+            }
+
+            if (_filter != nullptr){
+                data_t eps=1e-07;
+                conv1dnd op(*rs->getHyper(), _filter, _L->_par.filter_phase!="minimum");
+                std::shared_ptr<vecReg<data_t> > output = std::make_shared<vecReg<data_t> >(*op.getRange());
+                output->zero();
+                op.forward(false,rs,output);
+                rs=output;
+                pr = rs->getVals();
             }
 
             // rescale the synthetics by u'd/u'u (equivalent to Variable Projection with the variable being a single scaler multiplying the source time function)
@@ -788,6 +818,16 @@ public:
                 }
             }
 
+            if (_filter != nullptr){
+                data_t eps=1e-07;
+                conv1dnd op(*rs->getHyper(), _filter, _L->_par.filter_phase!="minimum");
+                std::shared_ptr<vecReg<data_t> > output = std::make_shared<vecReg<data_t> >(*op.getDomain());
+                output->zero();
+                op.adjoint(false,output,rs);
+                rs=output;
+                pr = rs->getVals();
+            }
+
             if (_w != nullptr) {
                 data_t * pw = _w->getVals()+nr*nt;
                 // first component
@@ -893,7 +933,7 @@ protected:
 public:
     nlls_fwi_reg(){}
     virtual ~nlls_fwi_reg(){}
-    nlls_fwi_reg(nl_we_op * L, nloper * D, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, data_t lambda, std::shared_ptr<vecReg<data_t> > mprior = nullptr, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr){
+    nlls_fwi_reg(nl_we_op * L, nloper * D, std::shared_ptr<vecReg<data_t> > m, std::shared_ptr<vecReg<data_t> > d, data_t lambda, std::shared_ptr<vecReg<data_t> > mprior = nullptr, nloper * P = nullptr, std::shared_ptr<vecReg<data_t> > gmask = nullptr, std::shared_ptr<vecReg<data_t> > w = nullptr, std::shared_ptr<vecReg<data_t> > filter = nullptr){
         _L = L;
         _D = D;
         _P = P;
@@ -902,6 +942,7 @@ public:
         _lambda = lambda;    
         _gmask = gmask;
         _w = w;
+        _filter = filter;
         _f = 0;
         _flag = true;
 
@@ -944,6 +985,21 @@ public:
         }
         if (_w != nullptr) _d->mult(_w);
 
+        if (_filter != nullptr){ // apply filtering
+            data_t eps=1e-07;
+            if (_L->_par.filter_phase=="zero") _filter = zero_phase(filter);
+            else if (_L->_par.filter_phase=="minimum") _filter = minimum_phase(filter,eps);
+            axis<data_t> Tf = _filter->getHyper()->getAxis(1);
+            axis<data_t> T = _d->getHyper()->getAxis(1);
+            Tf.d=T.d;
+            _filter->setHyper(hypercube<data_t>(Tf)); 
+            conv1dnd op(*_d->getHyper(), _filter, _L->_par.filter_phase!="minimum");
+            std::shared_ptr<vecReg<data_t> > output = std::make_shared<vecReg<data_t> >(*op.getRange());
+            output->zero();
+            op.forward(false,_d,output);
+            _d=output;
+        }
+
         if (_L->_par.normalize) {
             int nt=_d->getHyper()->getAxis(1).n;
             int ntr=_d->getN123()/nt;
@@ -971,13 +1027,19 @@ public:
             _d = output;
         }
 
-        _dnorm = _d->norm2();
-        _dnorm *= _d->getHyper()->getAxis(1).d;
-        if (_dnorm<ZERO) _dnorm=1;
+        if (L->_par.normalize_obj_func){
+            _dnorm = _d->norm2();
+            _dnorm *= _d->getHyper()->getAxis(1).d;
+            if (_dnorm<ZERO) _dnorm=1;
 
-        _mnorm = _Dmp->norm2();
-        if (_mnorm<ZERO) _mnorm=1;
-        //_mnorm = std::max((data_t)1.0, _mnorm);
+            _mnorm = _Dmp->norm2();
+            if (_mnorm<ZERO) _mnorm=1;
+            //_mnorm = std::max((data_t)1.0, _mnorm);
+        }
+        else{
+            _dnorm=1.0;
+            _mnorm=1.0;
+        }
 
         _scale_source_times=0;
         if (_L->_par.scale_source_times>0) {
