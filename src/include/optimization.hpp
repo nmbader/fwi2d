@@ -405,7 +405,7 @@ public:
                 temp2 = temp->clone();
                 data_t * ptemp2 = temp2->getVals();
                 for (int i=0; i<temp->getN123(); i++) {
-                    ptemp2[i] = std::max(ZERO,sqrt(ptemp[i]*ptemp[i]+psyn[i]*psyn[i]));
+                    ptemp2[i] = std::max((data_t)ZERO,(data_t)sqrt(ptemp[i]*ptemp[i]+psyn[i]*psyn[i]));
                     ptemp[i] *= pr[i]/ptemp2[i];
                 }
             }
@@ -783,7 +783,7 @@ public:
                     temp2 = temp->clone();
                     data_t * ptemp2 = temp2->getVals();
                     for (int i=0; i<temp->getN123(); i++) {
-                        ptemp2[i] = std::max(ZERO,sqrt(ptemp[i]*ptemp[i]+psyn[i]*psyn[i]));
+                        ptemp2[i] = std::max((data_t)ZERO,(data_t)sqrt(ptemp[i]*ptemp[i]+psyn[i]*psyn[i]));
                         ptemp[i] *= pr[i]/ptemp2[i];
                     }
                 }

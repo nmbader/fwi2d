@@ -63,9 +63,9 @@ int rank=0, size=0;
     std::shared_ptr<vec> invDiagH = nullptr;
     std::shared_ptr<vec> prior = nullptr;
     if (par.mask_file!="none") {gmask = read<data_t>(par.mask_file, par.format); successCheck(gmask->getN123()==model->getN123(),__FILE__,__LINE__,"Gradient mask must have the same number of samples as the model\n");}
-    if (par.weights_file!="none") {w = read<data_t>(par.weights_file, par.format); successCheck(gmask->getN123()==model->getN123(),__FILE__,__LINE__,"Data weights must have the same number of samples as the data\n");}
-    if (par.inverse_diagonal_hessian_file!="none") {invDiagH = read<data_t>(par.inverse_diagonal_hessian_file, par.format); successCheck(gmask->getN123()==model->getN123(),__FILE__,__LINE__,"Inverse diagonal Hessian must have the same number of samples as the model\n");}
-    if (par.prior_file!="none") {prior = read<data_t>(par.prior_file, par.format); successCheck(gmask->getN123()==model->getN123(),__FILE__,__LINE__,"Prior model must have the same number of samples as the model\n");}
+    if (par.weights_file!="none") {w = read<data_t>(par.weights_file, par.format); successCheck(w->getN123()==data->getN123(),__FILE__,__LINE__,"Data weights must have the same number of samples as the data\n");}
+    if (par.inverse_diagonal_hessian_file!="none") {invDiagH = read<data_t>(par.inverse_diagonal_hessian_file, par.format); successCheck(invDiagH->getN123()==model->getN123(),__FILE__,__LINE__,"Inverse diagonal Hessian must have the same number of samples as the model\n");}
+    if (par.prior_file!="none") {prior = read<data_t>(par.prior_file, par.format); successCheck(prior->getN123()==model->getN123(),__FILE__,__LINE__,"Prior model must have the same number of samples as the model\n");}
 
 // Analyze the inputs and parameters and modify if necessary
     analyzeGeometry(*model->getHyper(),par, par.verbose>0);
