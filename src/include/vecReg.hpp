@@ -16,6 +16,9 @@
 #else
     typedef float data_t;
 #endif
+#ifdef DOUBLE_PRECISION
+#undef DOUBLE_PRECISION
+#endif
 
 #ifdef ENABLE_MPI
     #include "mpi.h"

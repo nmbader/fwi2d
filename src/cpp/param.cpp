@@ -275,7 +275,7 @@ void analyzeBsplines(const hypercube<data_t> &domain, param &par)
     if (par.bsplines)
     {
         if (par.verbose>0) fprintf(stderr,"\n==========================\n Model parameterization with B-spline functions\n==========================\n");
-        if (par.bs_mx.size()==0 && par.bs_mz.size()==0){
+        if (par.bs_mx.size()==0){
             par.bs_nx = std::max(3,par.bs_nx);
             if (par.verbose>0) fprintf(stderr,"The B-spline nodes are regularly spaced with %d nodes in x\n",par.bs_nx);
 
@@ -297,7 +297,7 @@ void analyzeBsplines(const hypercube<data_t> &domain, param &par)
             successCheck(par.bs_nx>2,__FILE__,__LINE__,"There should be at least 3 B-spline nodes in x dimension\n");
             if (par.verbose>0) fprintf(stderr,"The B-spline nodes and their multiplicity in x are read from parameters list\n");
         }
-        if (par.bs_mz.size()==0 && par.bs_mz.size()==0){
+        if (par.bs_mz.size()==0){
             par.bs_nz = std::max(3,par.bs_nz);
             if (par.verbose>0) fprintf(stderr,"The B-spline nodes are regularly spaced with %d nodes in z\n",par.bs_nz);
 

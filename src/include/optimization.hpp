@@ -586,6 +586,9 @@ public:
         }
         else _pg=_g;
 
+        hypercube<data_t> hyp(_p->getHyper()->getAxis(1),_p->getHyper()->getAxis(2),_p->getHyper()->getAxis(3));
+        int ncxz = hyp.getN123();
+
         int ns = _L->_par.ns;
         int nt = _d->getHyper()->getAxis(1).n;
         data_t dt = _d->getHyper()->getAxis(1).d;
@@ -630,14 +633,14 @@ public:
 
             // build the we operator for a single shot
             nl_we_op * L;
-            if (par.nmodels==2) L=new nl_we_op_a(*_p->getHyper(),src,par);
-            else if (par.nmodels==3 && !par.acoustic_elastic) L=new nl_we_op_e(*_p->getHyper(),src,par);
-            else if (par.nmodels==3 && par.acoustic_elastic) L=new nl_we_op_ae(*_p->getHyper(),src,par);
-            else if (par.nmodels==5) L=new nl_we_op_vti(*_p->getHyper(),src,par);
+            if (par.nmodels==2) L=new nl_we_op_a(hyp,src,par);
+            else if (par.nmodels==3 && !par.acoustic_elastic) L=new nl_we_op_e(hyp,src,par);
+            else if (par.nmodels==3 && par.acoustic_elastic) L=new nl_we_op_ae(hyp,src,par);
+            else if (par.nmodels==5) L=new nl_we_op_vti(hyp,src,par);
             std::shared_ptr<vecReg<data_t> > rs = std::make_shared<vecReg<data_t> >(*L->getRange());
             int ntr = rs->getN123()/nt;
             
-            L->forward(false,_p,rs);
+            L->apply_forward(false,_p->getVals()+s*par.sextension*ncxz,rs->getVals());
             data_t * pr = rs->getVals();
 
             if (par.integrate){
@@ -859,7 +862,7 @@ public:
 
             rs->scale(1.0/_dnorm);
 
-            L->jacobianT(true,_pg,_p,rs);
+            L->apply_jacobianT(true,_pg->getVals()+s*par.sextension*ncxz,_p->getVals()+s*par.sextension*ncxz,rs->getVals());
 
             delete L;
 
@@ -948,8 +951,7 @@ public:
 
         _Dmp = std::make_shared<vecReg<data_t> > (*_D->getRange());
         _Dmp->zero();
-        if (mprior==nullptr) _D->forward(false, _m, _Dmp); // mprior assumed = m0 if not provided
-        else _D->forward(false, mprior, _Dmp);
+        if (mprior!=nullptr) _D->forward(false, mprior, _Dmp); // mprior assumed = 0 if not provided
 
         _dg = std::make_shared<vecReg<data_t> >(*m->getHyper());
         _dg->zero();

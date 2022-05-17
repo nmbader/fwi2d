@@ -1,9 +1,3 @@
-#ifdef DOUBLE_PRECISION
-    typedef double data_t;
-#else
-    typedef float data_t;
-#endif
-
 #include <string.h>
 #include "we_op.hpp"
 #include "bsplines.hpp"

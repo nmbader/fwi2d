@@ -1,9 +1,3 @@
-#ifdef DOUBLE_PRECISION
-    typedef double data_t;
-#else
-    typedef float data_t;
-#endif
-
 #include <unistd.h>
 
 #include <stdio.h>
