@@ -868,3 +868,7 @@ void scanfval();
 }
 #endif
 #endif
+
+
+
+#undef pi

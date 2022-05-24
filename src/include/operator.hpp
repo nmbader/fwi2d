@@ -271,7 +271,7 @@ public:
     emodelSoftClip(){}
     ~emodelSoftClip(){}
     emodelSoftClip(const hypercube<data_t> &domain, data_t vpmin, data_t vpmax, data_t vsmin, data_t vsmax, data_t rhomin, data_t rhomax, data_t spratio=1/sqrt(2.00001), int p=9, int q=9){
-        successCheck((domain.getNdim()>=3) && (domain.getAxis(3).n==3),__FILE__,__LINE__,"The domain must be 3D with 3rd dimension containing at least 3 fields\n");
+        successCheck((domain.getNdim()==3) && (domain.getAxis(3).n>=3),__FILE__,__LINE__,"The domain must be 3D with 3rd dimension containing at least 3 fields\n");
         _domain = domain;
         _range = domain;
         _vpmin=vpmin; _vpmax=vpmax; _vsmin=vsmin; _vsmax=vsmax; _rhomin=rhomin; _rhomax=rhomax; _spratio=spratio;

@@ -543,6 +543,11 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         tmp = new data_t[4*nx*nz];
         memset(tmp, 0, 4*nx*nz*sizeof(data_t));
     }
+    else if (par.version==2)
+    {
+        tmp = new data_t[nx*nz];
+        memset(tmp, 0, nx*nz*sizeof(data_t));
+    }
 	const data_t* mod[3] = {model, model+nx*nz, model+2*nx*nz};
 
     // #############  PML stuff ##################
@@ -652,12 +657,19 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         
         if (par.version==2)
         {
-            mult_Dx(true, u_x[0], next[0], nx, nz, dx, 0, nx, 0, nz, mod[0], 1.0);
-            mult_Dz(true, u_z[1], next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
+            #pragma omp parallel for
+            for (int i=0; i<nx*nz; i++)
+            {
+                tmp[i] = u_x[0][i] + u_z[1][i];
+            }
+            mult_Dx(true, tmp, next[0], nx, nz, dx, 0, nx, 0, nz, mod[0], 1.0);
+            mult_Dz(true, tmp, next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
         }
-        
-        mult_Dx(true, u_z[1], next[0], nx, nz, dx, 0, nx, 0, nz, mod[0], 1.0);
-        mult_Dz(true, u_x[0], next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
+        else
+        {
+            mult_Dx(true, u_z[1], next[0], nx, nz, dx, 0, nx, 0, nz, mod[0], 1.0);
+            mult_Dz(true, u_x[0], next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
+        }
 
         Dx(false, curr[1], u_x[1], nx, nz, dx, 0, nx, 0, nz);
         Dz(false, curr[0], u_z[0], nx, nz, dz, 0, nx, 0, nz);
@@ -831,7 +843,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
     delete [] u;
     delete [] dux;
     delete [] duz;
-    if (grad != nullptr) delete [] tmp;
+    if (grad != nullptr || par.version==2) delete [] tmp;
     if (par.pml==true)
     {
         pml_deallocate(top_ac, top_an, top_s2, bottom_ac, bottom_an, bottom_s2,

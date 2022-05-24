@@ -74,3 +74,8 @@ _XFUNCPROTOEND
 }
 #endif
 #endif
+
+
+
+
+#undef pi

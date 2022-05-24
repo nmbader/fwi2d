@@ -37,3 +37,8 @@ extern int rvfft();
 
 
 #endif /*end of  sepfft header defined */
+
+
+
+
+#undef pi

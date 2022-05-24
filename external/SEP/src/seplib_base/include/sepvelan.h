@@ -8,3 +8,8 @@ static double snftEkd=3.14159265358979323846264338327950288419716939937510;
 #define pi snftEkd
 #endif
 #endif /*end of  sepfilter header defined */
+
+
+
+
+#undef pi

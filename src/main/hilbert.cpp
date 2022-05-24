@@ -76,7 +76,7 @@ int main(int argc, char **argv){
     {
         for (int i=0; i<input->getN123(); i++) pin[i] = sqrt(pin[i]*pin[i] + phil[i]*phil[i]);
     }
-    else if (type == "iphase") // unwrapped instantaneous phase
+    else if (type == "iphase") // instantaneous phase
     {
         if (wrapped)
         {
@@ -90,7 +90,6 @@ int main(int argc, char **argv){
             std::complex<data_t> val1(pin[0],phil[0]);
             std::complex<data_t> val2(pin[0],phil[0]);
             pin[0] = std::arg(val1);
-            //pin[0] = 0;
             for (int i=1; i<input->getN123(); i++) 
             {
                 val1=val2;

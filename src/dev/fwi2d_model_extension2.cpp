@@ -15,15 +15,16 @@ typedef hypercube<data_t> hyper;
 class sWeighting : public loper {
 protected:
     data_t _dpower; // damping strength for cosine^2
-    data_t _dwidthx; // damping width
+    data_t _dwidthx; // damping width (radius)
     data_t _dwidthz;
     std::shared_ptr<vec> _nW; // normalization for the weighting (sum of all weighting operators)
     std::vector<std::vector<data_t> > _sxz; // sources location
+    std::vector<std::vector<int> > _box; // box delimiting the size of the zone of influence of each shot point
 
 public:
     sWeighting(){}
     ~sWeighting(){}
-    sWeighting(const hypercube<data_t> &domain,const std::vector<std::vector<data_t> > &sxz, const data_t dwidthx, const data_t dwidthz, const data_t dpower){
+    sWeighting(const hypercube<data_t> &domain,const std::vector<std::vector<data_t> > &sxz, const std::vector<std::vector<std::vector<data_t> > > &rxz, const data_t dwidthx, const data_t dwidthz, const data_t dpower, const data_t xextension, const data_t zextension){
         std::vector<ax > axes = domain.getAxes();
         successCheck(axes.size()>=3,__FILE__,__LINE__,"The domain must contain at least 3 axes\n");
         int ns=domain.getN123()/(axes[0].n*axes[1].n*axes[2].n);
@@ -37,7 +38,6 @@ public:
         _dpower = dpower;
         _sxz=sxz;
 
-        // build the normalization weights
         ax Z = _range.getAxis(1);
         ax X = _range.getAxis(2);
         ax C = _range.getAxis(3);
@@ -45,13 +45,99 @@ public:
         _nW->zero();
         data_t (*pw) [Z.n] = (data_t (*)[Z.n]) _nW->getVals();
 
+        data_t val0 = pow(cos(_dpower*0.5*M_PI),2);
+
         for (int s=0; s<ns; s++){
 
-            // normalization weight
+            // find the bounding box for each shot
             int ixmin = ceil((sxz[s][0]-dwidthx-X.o)/X.d);
             int ixmax = ceil((sxz[s][0]+dwidthx-X.o)/X.d);
             int izmin = ceil((sxz[s][1]-dwidthz-Z.o)/Z.d);
             int izmax = ceil((sxz[s][1]+dwidthz-Z.o)/Z.d);
+            ixmin=std::max(0,ixmin);
+            ixmax=std::min(X.n,ixmax);
+            izmin=std::max(0,izmin);
+            izmax=std::min(Z.n,izmax);
+
+            // find the bounding box for each shot+receivers spread (shot zone of influence)
+            std::vector<int> v (4,0);
+            data_t rxmin=rxz[s][0][0];
+            data_t rxmax=rxz[s][0][0];
+            data_t rzmin=rxz[s][0][1];
+            data_t rzmax=rxz[s][0][1];
+            for (int r=0; r<rxz[s].size(); r++){
+                if (rxmin>rxz[s][r][0]) rxmin=rxz[s][r][0];
+                if (rxmax<rxz[s][r][0]) rxmax=rxz[s][r][0];
+                if (rzmin>rxz[s][r][1]) rzmin=rxz[s][r][1];
+                if (rzmax<rxz[s][r][1]) rzmax=rxz[s][r][1];
+            }
+            rxmin = std::min(rxmin,_sxz[s][0]-dwidthx);
+            rxmax = std::max(rxmax,_sxz[s][0]+dwidthx);
+            rzmin = std::min(rzmin,_sxz[s][1]-dwidthz);
+            rzmax = std::max(rzmax,_sxz[s][1]+dwidthz);
+            rxmin -= xextension; 
+            rxmax += xextension;
+            rzmin -= zextension; 
+            rzmax += zextension; 
+            v[0] = floor((rxmin-X.o)/X.d);
+            v[1] = ceil((rxmax-X.o)/X.d);
+            v[2] = floor((rzmin-Z.o)/Z.d);
+            v[3] = ceil((rzmax-Z.o)/Z.d);
+            v[0]=std::max(0,v[0]);
+            v[1]=std::min(X.n,v[1]);
+            v[2]=std::max(0,v[2]);
+            v[3]=std::min(Z.n,v[3]);
+            
+            if (xextension<0) {v[0]=0; v[1]=X.n;}
+            if (zextension<0) {v[2]=0; v[3]=Z.n;}
+
+            _box.push_back(v);
+
+            int ixw=ceil(dwidthx/X.d);
+            int izw=ceil(dwidthz/Z.d);
+
+fprintf(stderr,"s=%d ixmin=%d ixmax=%d izmin=%d izmax=%d\n",s,v[0],v[1],v[2],v[3]);
+
+            // normalization weight
+            for (int ix=0; ix<v[0]-ixw; ix++){
+                data_t val0x=val0;
+                for (int iz=0; iz<v[2]-izw; iz++) pw[ix][iz] += val0x*val0;
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=v[2]; iz<v[3]; iz++) pw[ix][iz] += val0x;
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+                for (int iz=v[3]+izw; iz<Z.n; iz++) pw[ix][iz] += val0x*val0;
+            }
+            for (int ix=std::max(v[0]-ixw,0); ix<v[0]; ix++){
+                data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[0]-ix)/ixw),2);
+                for (int iz=0; iz<v[2]-izw; iz++) pw[ix][iz] += val0x*val0;
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=v[2]; iz<v[3]; iz++) pw[ix][iz] += val0x;
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+                for (int iz=v[3]+izw; iz<Z.n; iz++) pw[ix][iz] += val0x*val0;
+            }
+            for (int ix=v[0]; ix<v[1]; ix++){
+                data_t val0x=1;
+                for (int iz=0; iz<v[2]-izw; iz++) pw[ix][iz] += val0x*val0;
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+                for (int iz=v[3]+izw; iz<Z.n; iz++) pw[ix][iz] += val0x*val0;
+            }
+            for (int ix=v[1]; ix<std::min(v[1]+ixw,X.n); ix++){
+                data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[1]-ix)/ixw),2);
+                for (int iz=0; iz<v[2]-izw; iz++) pw[ix][iz] += val0x*val0;
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=v[2]; iz<v[3]; iz++) pw[ix][iz] += val0x;
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+                for (int iz=v[3]+izw; iz<Z.n; iz++) pw[ix][iz] += val0x*val0;
+            }
+            for (int ix=v[1]+ixw; ix<X.n; ix++){
+                data_t val0x=val0;
+                for (int iz=0; iz<v[2]-izw; iz++) pw[ix][iz] += val0x*val0;
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=v[2]; iz<v[3]; iz++) pw[ix][iz] += val0x;
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pw[ix][iz] += val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+                for (int iz=v[3]+izw; iz<Z.n; iz++) pw[ix][iz] += val0x*val0;
+            }
 
             for (int ix=ixmin; ix<ixmax; ix++){
                 data_t x = X.o + ix*X.d;
@@ -68,23 +154,33 @@ public:
                 }
             }
 
-            for (int ix=0; ix<ixmin; ix++){
-                for (int iz=0; iz<Z.n; iz++) pw[ix][iz] += 1;
+            for (int ix=v[0]; ix<ixmin; ix++){
+                for (int iz=v[2]; iz<v[3]; iz++) pw[ix][iz] += 1;
             }
-            for (int ix=ixmax; ix<X.n; ix++){
-                for (int iz=0; iz<Z.n; iz++) pw[ix][iz] += 1;
+            for (int ix=ixmax; ix<v[1]; ix++){
+                for (int iz=v[2]; iz<v[3]; iz++) pw[ix][iz] += 1;
             }
             for (int ix=ixmin; ix<ixmax; ix++){
-                for (int iz=0; iz<izmin; iz++) pw[ix][iz] += 1;
-                for (int iz=izmax; iz<Z.n; iz++) pw[ix][iz] += 1;
+                for (int iz=v[2]; iz<izmin; iz++) pw[ix][iz] += 1;
+                for (int iz=izmax; iz<v[3]; iz++) pw[ix][iz] += 1;
             }
         }
     }
 
     sWeighting * clone() const {
-        sWeighting * op = new sWeighting(_domain, _sxz, _dwidthx, _dwidthz, _dpower);
+        //sWeighting * op = new sWeighting(_domain, _sxz, _dwidthx, _dwidthz, _dpower, _xextension, _zextension);
+        sWeighting * op = new sWeighting();
+        op->_domain=_domain;
+        op->_range=_range;
+        op->_dpower=_dpower;
+        op->_dwidthx=_dwidthx;
+        op->_dwidthz=_dwidthz;
+        op->_sxz=_sxz;
+        op->_box=_box;
+        op->_nW = _nW->clone();
         return op;
     }    
+    int getNs(){return _sxz.size();}
     void apply_forward(bool add, const data_t * pmod, data_t * pdat){
 
         if (!add) memset(pdat,0,_range.getN123()*sizeof(data_t));
@@ -97,12 +193,65 @@ public:
         data_t (*pd) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) pdat;
         const data_t (*pw) [Z.n] = (const data_t (*)[Z.n]) _nW->getVals();
 
+        data_t val0 = pow(cos(_dpower*0.5*M_PI),2);
+
         for (int s=0; s<ns; s++){
+            
             int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
             int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
             int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
             int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
+            ixmin=std::max(0,ixmin);
+            ixmax=std::min(X.n,ixmax);
+            izmin=std::max(0,izmin);
+            izmax=std::min(Z.n,izmax);
+
+            std::vector<int> v = _box[s];
+            int ixw=ceil(_dwidthx/X.d);
+            int izw=ceil(_dwidthz/Z.d);
+            
             for (int c=0; c<C.n; c++){
+
+                for (int ix=0; ix<v[0]-ixw; ix++){
+                    data_t val0x=val0;
+                    for (int iz=0; iz<v[2]-izw; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[2]; iz<v[3]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+                for (int ix=std::max(v[0]-ixw,0); ix<v[0]; ix++){
+                    data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[0]-ix)/ixw),2);
+                    for (int iz=0; iz<v[2]-izw; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[2]; iz<v[3]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+                for (int ix=v[0]; ix<v[1]; ix++){
+                    data_t val0x=1;
+                    for (int iz=0; iz<v[2]-izw; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+                for (int ix=v[1]; ix<std::min(v[1]+ixw,X.n); ix++){
+                    data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[1]-ix)/ixw),2);
+                    for (int iz=0; iz<v[2]-izw; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[2]; iz<v[3]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+                for (int ix=v[1]+ixw; ix<X.n; ix++){
+                    data_t val0x=val0;
+                    for (int iz=0; iz<v[2]-izw; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[2]; iz<v[3]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+
                 #pragma omp parallel for
                 for (int ix=ixmin; ix<ixmax; ix++){
                     data_t x = X.o + ix*X.d;
@@ -120,17 +269,17 @@ public:
                 }
 
                 #pragma omp parallel for
-                for (int ix=0; ix<ixmin; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
+                for (int ix=v[0]; ix<ixmin; ix++){
+                    for (int iz=v[2]; iz<v[3]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
                 }
                 #pragma omp parallel for
-                for (int ix=ixmax; ix<X.n; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
+                for (int ix=ixmax; ix<v[1]; ix++){
+                    for (int iz=v[2]; iz<v[3]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
                 }
                 #pragma omp parallel for
                 for (int ix=ixmin; ix<ixmax; ix++){
-                    for (int iz=0; iz<izmin; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
-                    for (int iz=izmax; iz<Z.n; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
+                    for (int iz=v[2]; iz<izmin; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
+                    for (int iz=izmax; iz<v[3]; iz++) pd[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
                 }
             }            
         }
@@ -146,12 +295,64 @@ public:
         const data_t (*pd) [X.n][Z.n] = (const data_t (*)[X.n][Z.n]) pdat;
         const data_t (*pw) [Z.n] = (const data_t (*)[Z.n]) _nW->getVals();
 
+        data_t val0 = pow(cos(_dpower*0.5*M_PI),2);
+
         for (int s=0; s<ns; s++){
             int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
             int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
             int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
             int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
+            ixmin=std::max(0,ixmin);
+            ixmax=std::min(X.n,ixmax);
+            izmin=std::max(0,izmin);
+            izmax=std::min(Z.n,izmax);
+
+            std::vector<int> v = _box[s];
+            int ixw=ceil(_dwidthx/X.d);
+            int izw=ceil(_dwidthz/Z.d);
+
             for (int c=0; c<C.n; c++){
+
+                for (int ix=0; ix<v[0]-ixw; ix++){
+                    data_t val0x=val0;
+                    for (int iz=0; iz<v[2]-izw; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[2]; iz<v[3]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+                for (int ix=std::max(v[0]-ixw,0); ix<v[0]; ix++){
+                    data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[0]-ix)/ixw),2);
+                    for (int iz=0; iz<v[2]-izw; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[2]; iz<v[3]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+                for (int ix=v[0]; ix<v[1]; ix++){
+                    data_t val0x=1;
+                    for (int iz=0; iz<v[2]-izw; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+                for (int ix=v[1]; ix<std::min(v[1]+ixw,X.n); ix++){
+                    data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[1]-ix)/ixw),2);
+                    for (int iz=0; iz<v[2]-izw; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[2]; iz<v[3]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+                for (int ix=v[1]+ixw; ix<X.n; ix++){
+                    data_t val0x=val0;
+                    for (int iz=0; iz<v[2]-izw; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                    for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[2]; iz<v[3]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x/pw[ix][iz];
+                    for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2)/pw[ix][iz];
+                    for (int iz=v[3]+izw; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val0x*val0/pw[ix][iz];
+                }
+
                 for (int ix=ixmin; ix<ixmax; ix++){
                     data_t x = X.o + ix*X.d;
                     data_t rx = (x-_sxz[s][0])/_dwidthx;
@@ -166,16 +367,15 @@ public:
                         pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]*val*val/pw[ix][iz];
                     }
                 }
-
-                for (int ix=0; ix<ixmin; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]/pw[ix][iz];
+                for (int ix=v[0]; ix<ixmin; ix++){
+                    for (int iz=v[2]; iz<v[3]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]/pw[ix][iz];
                 }
-                for (int ix=ixmax; ix<X.n; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]/pw[ix][iz];
+                for (int ix=ixmax; ix<v[1]; ix++){
+                    for (int iz=v[2]; iz<v[3]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]/pw[ix][iz];
                 }
                 for (int ix=ixmin; ix<ixmax; ix++){
-                    for (int iz=0; iz<izmin; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]/pw[ix][iz];
-                    for (int iz=izmax; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]/pw[ix][iz];
+                    for (int iz=v[2]; iz<izmin; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]/pw[ix][iz];
+                    for (int iz=izmax; iz<v[3]; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[c][ix][iz]/pw[ix][iz];
                 }
             }
         }
@@ -186,129 +386,36 @@ public:
 // Op = (I-S.W).ms where ms is the extended model across sources, 'W' is the row operator of normalized cosine squared weighting operator for each source 's', 'S' is a spraying operator
 class model_extension : public loper {
 protected:
-    data_t _dpower; // damping strength for cosine^2
-    data_t _dwidthx; // damping width
-    data_t _dwidthz;
-    std::shared_ptr<vec> _nW; // normalization for the weighting (sum of all weighting operators)
-    std::vector<std::vector<data_t> > _sxz; // sources location
+    sWeighting * _sW;
 
 public:
     model_extension(){}
-    ~model_extension(){}
-    model_extension(const hypercube<data_t> &domain,const std::vector<std::vector<data_t> > &sxz, const data_t dwidthx, const data_t dwidthz, const data_t dpower){
-        std::vector<ax > axes = domain.getAxes();
-        successCheck(axes.size()>=3,__FILE__,__LINE__,"The domain must contain at least 3 axes\n");
-        int ns=domain.getN123()/(axes[0].n*axes[1].n*axes[2].n);
-        ax S(ns,0,1);
-        successCheck(ns==sxz.size(),__FILE__,__LINE__,"The domain size must be consistent with the number of sources\n");
-        
-        _domain = hyper(axes[0],axes[1],axes[2],S);
+    ~model_extension(){delete _sW;}
+    model_extension(sWeighting * sW){
+        _sW = sW->clone();
+        _domain = *sW->getDomain();
         _range = _domain;
-        _dwidthx = dwidthx;
-        _dwidthz = dwidthz;
-        _dpower = dpower;
-        _sxz=sxz;
-
-        // build the normalization weights
-        ax Z = _range.getAxis(1);
-        ax X = _range.getAxis(2);
-        ax C = _range.getAxis(3);
-        _nW = std::make_shared<vec> (vec(hyper(Z,X)));
-        _nW->zero();
-        data_t (*pw) [Z.n] = (data_t (*)[Z.n]) _nW->getVals();
-
-        for (int s=0; s<ns; s++){
-
-            // normalization weight
-            int ixmin = ceil((sxz[s][0]-dwidthx-X.o)/X.d);
-            int ixmax = ceil((sxz[s][0]+dwidthx-X.o)/X.d);
-            int izmin = ceil((sxz[s][1]-dwidthz-Z.o)/Z.d);
-            int izmax = ceil((sxz[s][1]+dwidthz-Z.o)/Z.d);
-
-            for (int ix=ixmin; ix<ixmax; ix++){
-                data_t x = X.o + ix*X.d;
-                data_t rx = (x-_sxz[s][0])/_dwidthx;
-                rx*=rx;
-                for (int iz=izmin; iz<izmax; iz++){
-                    data_t z = Z.o + iz*Z.d;
-                    data_t rz = (z-_sxz[s][1])/_dwidthz;
-                    rz*=rz;
-                    data_t d = sqrt(rx+rz);
-                    data_t val = 1;
-                    if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
-                    pw[ix][iz] += val*val;
-                }
-            }
-
-            for (int ix=0; ix<ixmin; ix++){
-                for (int iz=0; iz<Z.n; iz++) pw[ix][iz] += 1;
-            }
-            for (int ix=ixmax; ix<X.n; ix++){
-                for (int iz=0; iz<Z.n; iz++) pw[ix][iz] += 1;
-            }
-            for (int ix=ixmin; ix<ixmax; ix++){
-                for (int iz=0; iz<izmin; iz++) pw[ix][iz] += 1;
-                for (int iz=izmax; iz<Z.n; iz++) pw[ix][iz] += 1;
-            }
-        }
     }
-
     model_extension * clone() const {
-        model_extension * op = new model_extension(_domain, _sxz, _dwidthx, _dwidthz, _dpower);
+        model_extension * op = new model_extension(_sW);
         return op;
-    }    
+    }
+    sWeighting * getsW(){return _sW;}
     void apply_forward(bool add, const data_t * pmod, data_t * pdat){
 
         ax Z = _range.getAxis(1);
         ax X = _range.getAxis(2);
         ax C = _range.getAxis(3);
-        int ns = _sxz.size();
+        int ns = _sW->getNs();
         const data_t (*pm) [C.n][X.n][Z.n] = (const data_t (*)[C.n][X.n][Z.n]) pmod;
         data_t (*pd) [C.n][X.n][Z.n] = (data_t (*)[C.n][X.n][Z.n]) pdat;
-        const data_t (*pw) [Z.n] = (const data_t (*)[Z.n]) _nW->getVals();
 
         data_t * vec = new data_t[C.n*X.n*Z.n];
         memset(vec, 0, C.n*X.n*Z.n*sizeof(data_t));
         data_t (*pv) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) vec;
 
         // W.m
-        for (int s=0; s<ns; s++){
-            int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
-            int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
-            int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
-            int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
-            for (int c=0; c<C.n; c++){
-                #pragma omp parallel for
-                for (int ix=ixmin; ix<ixmax; ix++){
-                    data_t x = X.o + ix*X.d;
-                    data_t rx = (x-_sxz[s][0])/_dwidthx;
-                    rx*=rx;
-                    for (int iz=izmin; iz<izmax; iz++){
-                        data_t z = Z.o + iz*Z.d;
-                        data_t rz = (z-_sxz[s][1])/_dwidthz;
-                        rz*=rz;
-                        data_t d = sqrt(rx+rz);
-                        data_t val = 1;
-                        if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
-                        pv[c][ix][iz] += pm[s][c][ix][iz]*val*val/pw[ix][iz];
-                    }
-                }
-
-                #pragma omp parallel for
-                for (int ix=0; ix<ixmin; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pv[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
-                }
-                #pragma omp parallel for
-                for (int ix=ixmax; ix<X.n; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pv[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
-                }
-                #pragma omp parallel for
-                for (int ix=ixmin; ix<ixmax; ix++){
-                    for (int iz=0; iz<izmin; iz++) pv[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
-                    for (int iz=izmax; iz<Z.n; iz++) pv[c][ix][iz] += pm[s][c][ix][iz]/pw[ix][iz];
-                }
-            }            
-        }
+        _sW->apply_forward(false,pmod,vec);
 
         // (I-S.W).m
         for (int s=0; s<ns; s++){
@@ -319,7 +426,6 @@ public:
                 }
             }
         }
-
         delete [] vec;
     }
 
@@ -328,59 +434,29 @@ public:
         ax Z = _range.getAxis(1);
         ax X = _range.getAxis(2);
         ax C = _range.getAxis(3);
-        int ns = _sxz.size();
+        int ns = _sW->getNs();
         data_t (*pm) [C.n][X.n][Z.n] = (data_t (*)[C.n][X.n][Z.n]) pmod;
         const data_t (*pd) [C.n][X.n][Z.n] = (const data_t (*)[C.n][X.n][Z.n]) pdat;
-        const data_t (*pw) [Z.n] = (const data_t (*)[Z.n]) _nW->getVals();
 
         data_t * vec = new data_t[C.n*X.n*Z.n];
         memset(vec, 0, C.n*X.n*Z.n*sizeof(data_t));
         data_t (*pv) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) vec;
 
-        // S'.d
+        // -S'.d and I.d
         for (int s=0; s<ns; s++){
             for (int c=0; c<C.n; c++){
                 #pragma omp parallel for
                 for (int ix=0; ix<X.n;ix++){
-                    for (int iz=0; iz<Z.n;iz++) pv[c][ix][iz] += pd[s][c][ix][iz];
+                    for (int iz=0; iz<Z.n;iz++) {
+                        pv[c][ix][iz] -= pd[s][c][ix][iz];
+                        pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[s][c][ix][iz];
+                    }
                 }
             }
         }
 
         // (I-W'.S').d
-        for (int s=0; s<ns; s++){
-            int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
-            int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
-            int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
-            int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
-            for (int c=0; c<C.n; c++){
-                for (int ix=ixmin; ix<ixmax; ix++){
-                    data_t x = X.o + ix*X.d;
-                    data_t rx = (x-_sxz[s][0])/_dwidthx;
-                    rx*=rx;
-                    for (int iz=izmin; iz<izmax; iz++){
-                        data_t z = Z.o + iz*Z.d;
-                        data_t rz = (z-_sxz[s][1])/_dwidthz;
-                        rz*=rz;
-                        data_t d = sqrt(rx+rz);
-                        data_t val = 1;
-                        if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
-                        pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[s][c][ix][iz] - pv[c][ix][iz]*val*val/pw[ix][iz];
-                    }
-                }
-
-                for (int ix=0; ix<ixmin; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[s][c][ix][iz] - pv[c][ix][iz]/pw[ix][iz];
-                }
-                for (int ix=ixmax; ix<X.n; ix++){
-                    for (int iz=0; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[s][c][ix][iz] - pv[c][ix][iz]/pw[ix][iz];
-                }
-                for (int ix=ixmin; ix<ixmax; ix++){
-                    for (int iz=0; iz<izmin; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[s][c][ix][iz] - pv[c][ix][iz]/pw[ix][iz];
-                    for (int iz=izmax; iz<Z.n; iz++) pm[s][c][ix][iz] = add*pm[s][c][ix][iz] + pd[s][c][ix][iz] - pv[c][ix][iz]/pw[ix][iz];
-                }
-            }
-        }
+        _sW->apply_adjoint(true,pmod,vec);
         delete [] vec;
     }
 };
@@ -448,10 +524,12 @@ int rank=0, size=0;
     readParam<std::string>(argc, argv, "obj_func", obj_func_file);
 
 // Read some parameters
-    data_t dwidthx=0, dwidthz=0, dpower=0;
+    data_t dwidthx=0, dwidthz=0, dpower=0, xextension=-1, zextension=-1;
     readParam<data_t>(argc, argv, "damping_widthx", dwidthx);
     readParam<data_t>(argc, argv, "damping_widthz", dwidthz);
     readParam<data_t>(argc, argv, "damping_power", dpower);
+    readParam<data_t>(argc, argv, "xextension", xextension);
+    readParam<data_t>(argc, argv, "zextension", zextension);
 
     successCheck(source_file!="none",__FILE__,__LINE__,"Source wavelet is not provided\n");
     successCheck(model_file!="none",__FILE__,__LINE__,"Earth model is not provided\n");
@@ -478,7 +556,7 @@ int rank=0, size=0;
     par.sextension=true;
 
 // ----------------------------------------------------------------------------------------//
-// Extend models along sources
+// Extend model along sources, extend mask and inverse Hessian if necessary
 // ----------------------------------------------------------------------------------------//
     std::vector<ax > axes = model->getHyper()->getAxes();
     int n=model->getN123();
@@ -490,17 +568,25 @@ int rank=0, size=0;
     model=tmp->clone();
 }
     if (par.mask_file != "none"){
-        std::shared_ptr<vec> tmp = std::make_shared<vec>(vec(hyper(axes)));
-        for (int s=0; s<par.ns; s++) memcpy(tmp->getVals()+s*n,gmask->getVals(),gmask->getN123()*sizeof(data_t));
-        gmask=tmp;
+        if (gmask->getN123() == n){
+            std::shared_ptr<vec> tmp = std::make_shared<vec>(vec(hyper(axes)));
+            for (int s=0; s<par.ns; s++) memcpy(tmp->getVals()+s*n,gmask->getVals(),gmask->getN123()*sizeof(data_t));
+            gmask=tmp;
+        }
+        else successCheck(gmask->getN123()==n*par.ns,__FILE__,__LINE__,"The extended gradient mask has an incorrect size\n");
     }
     if (par.inverse_diagonal_hessian_file != "none"){
-        std::shared_ptr<vec> tmp = std::make_shared<vec>(vec(hyper(axes)));
-        for (int s=0; s<par.ns; s++) memcpy(tmp->getVals()+s*n,invDiagH->getVals(),invDiagH->getN123()*sizeof(data_t));
-        invDiagH=tmp;
+        if (invDiagH->getN123() == n){
+            std::shared_ptr<vec> tmp = std::make_shared<vec>(vec(hyper(axes)));
+            for (int s=0; s<par.ns; s++) memcpy(tmp->getVals()+s*n,invDiagH->getVals(),invDiagH->getN123()*sizeof(data_t));
+            invDiagH=tmp;
+        }
+        else successCheck(gmask->getN123()==n*par.ns,__FILE__,__LINE__,"The extended inverse Hessian has an incorrect size\n");
     }
 
-    loper * E = new model_extension(*model->getHyper(), par.sxz, dwidthx, dwidthz, dpower);
+    sWeighting * sW = new sWeighting(*model->getHyper(), par.sxz, par.rxz, dwidthx, dwidthz, dpower, xextension, zextension);
+    model_extension * E = new model_extension(sW);
+    delete sW;
   
 // ----------------------------------------------------------------------------------------//
 // Build model precon for model extension along sources with B-splines included
@@ -581,7 +667,6 @@ if (par.bsplines)
     
     if (op==nullptr) D = E->clone();
     else D = new chainNLOper(E, op);
-    delete E;
 
     nlls_fwi_reg * prob = new nlls_fwi_reg(L, D, bsmodel, data, par.lambda, bsprior, op, bsmask, w);
 
@@ -605,10 +690,9 @@ if (par.bsplines)
         delete op;
     }
     
-    sWeighting sW(*model->getHyper(), par.sxz, dwidthx, dwidthz, dpower);
-    std::shared_ptr<vec> fmodel = std::make_shared<vec>(vec(*sW.getRange()));
+    std::shared_ptr<vec> fmodel = std::make_shared<vec>(vec(*E->getsW()->getRange()));
     fmodel->zero();
-    sW.forward(false,model,fmodel);
+    E->getsW()->forward(false,model,fmodel);
 
     if (rank==0 && output_file!="none") {
         write<data_t>(fmodel, output_file, par.format, par.datapath);
@@ -628,6 +712,7 @@ if (par.bsplines)
         }
     }
 
+    delete E;
     delete L;
     delete prob;
 
