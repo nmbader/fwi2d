@@ -1522,6 +1522,11 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         tmp = new data_t[4*nx*nz];
         memset(tmp, 0, 4*nx*nz*sizeof(data_t));
     }
+    else if (par.version==2)
+    {
+        tmp = new data_t[nx*nz];
+        memset(tmp, 0, nx*nz*sizeof(data_t));
+    }
 	const data_t* mod[5] = {model, model+nx*nz, model+2*nx*nz, model+3*nx*nz, model+4*nx*nz};
     data_t * mod_bis;
     if (par.version==2)
@@ -1611,12 +1616,24 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         
         if (par.version==2)
         {
-            mult_Dx(true, u_x[0], next[0], nx, nz, dx, 0, nx, 0, nz, mod6[0], 1.0);
-            mult_Dz(true, u_z[1], next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
+            #pragma omp parallel for
+            for (int i=0; i<nx*nz; i++)
+            {
+                tmp[i] = mod_bis[i]*u_x[0][i] + mod[3][i]*u_z[1][i]; // (1+2.eps).lambda*ux_x + c13*uz_z
+            }
+            Dx(true, tmp, next[0], nx, nz, dx, 0, nx, 0, nz);
+            #pragma omp parallel for
+            for (int i=0; i<nx*nz; i++)
+            {
+                tmp[i] = mod[0][i]*u_z[1][i] + mod[3][i]*u_x[0][i]; // lambda*uz_z + c13*ux_x
+            }
+            Dz(true, tmp, next[1], nx, nz, dz, 0, nx, 0, nz);
         }
-        
-        mult_Dx(true, u_z[1], next[0], nx, nz, dx, 0, nx, 0, nz, mod[3], 1.0);
-        mult_Dz(true, u_x[0], next[1], nx, nz, dz, 0, nx, 0, nz, mod[3], 1.0);
+        else
+        {
+            mult_Dx(true, u_z[1], next[0], nx, nz, dx, 0, nx, 0, nz, mod[3], 1.0);
+            mult_Dz(true, u_x[0], next[1], nx, nz, dz, 0, nx, 0, nz, mod[3], 1.0);
+        }
 
         Dx(false, curr[1], u_x[1], nx, nz, dx, 0, nx, 0, nz);
         Dz(false, curr[0], u_z[0], nx, nz, dz, 0, nx, 0, nz);
@@ -1781,7 +1798,7 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
     delete [] dux;
     delete [] duz;
     if (par.version==2) delete [] mod_bis;
-    if (grad != nullptr) delete [] tmp;
+    if (grad != nullptr || par.version==2) delete [] tmp;
 }
 
 void nl_we_op_a::convert_model(data_t * m, int n, bool forward) const
