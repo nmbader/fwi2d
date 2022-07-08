@@ -17,10 +17,6 @@ Key features include:
 * **_MPI_** support for parallelization over shots
 * **_GPU_** acceleration with **_CUDA_** (currently for the elastic isotropic and VTI configurations only)
 
-## Prerequisites
-
-The **fwi2d** library is written almost entirely in **_C++_** and **_CUDA_** and has been built on Linux environments (**centos 7**) using **_CMAKE_**. The **_FFTW3_** library is required. A portion of the code is compiled using **_ISPC_** which needs to be installed *a priori*. Downloading the binary directly from [here](https://ispc.github.io/) should suffice. Moreover, **_Python_** and **_Jupyter_** are only required for data format conversion and examples generation.
-
 ## Installation using Docker
 
 Build the docker image (it should take a few minutes)
@@ -44,6 +40,12 @@ Open the browser at *localhost:8080/​* and use the printed token above to auth
 The image will build the **fwi2d** library in single precision with **_CUDA_** and **_MPI_** disabled.
 
 ## Installation without a Docker
+
+### Prerequisites
+
+The **fwi2d** library is written almost entirely in **_C++_** and **_CUDA_** and has been built on Linux environments (**centos 7**) using **_CMAKE_**. The **_FFTW3_** library is required. A portion of the code is compiled using **_ISPC_** which needs to be installed *a priori*. Downloading the binary directly from [here](https://ispc.github.io/) should suffice. Moreover, **_Python_** and **_Jupyter_** are only required for data format conversion and examples generation.
+
+### Installation
 
 Start by downloading **_ISPC_** binary (or building it from source code) and copying it to the desired location `path_to_ispc_binary`
 ```
