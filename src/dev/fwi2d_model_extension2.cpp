@@ -96,8 +96,6 @@ public:
             int ixw=ceil(dwidthx/X.d);
             int izw=ceil(dwidthz/Z.d);
 
-fprintf(stderr,"s=%d ixmin=%d ixmax=%d izmin=%d izmax=%d\n",s,v[0],v[1],v[2],v[3]);
-
             // normalization weight
             for (int ix=0; ix<v[0]-ixw; ix++){
                 data_t val0x=val0;
