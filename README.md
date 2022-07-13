@@ -19,6 +19,12 @@ Key features include:
 
 ## Installation using Docker
 
+Start by cloning the current repository
+```
+git clone https://github.com/nmbader/fwi2d.git
+cd fwi2d
+```
+
 Build the docker image (it should take a few minutes)
 ```
 docker build -f Dockerfile -t fwi2d .

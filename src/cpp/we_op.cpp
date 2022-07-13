@@ -26,7 +26,7 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
         fprintf(stderr,"zmin=%.5f km, zmax=%.5f km, dz=%0.5f km, nz=%d\n",Z.o,(Z.n-1)*Z.d+Z.o,Z.d,Z.n);
     }
     if (par.acoustic_elastic) {
-        successCheck(Z.o>0 && Z.o/Z.d==floor(Z.o/Z.d),__FILE__,__LINE__,"For acoustic-elastic option, the z-origin must be positive multiple of the sampling\n");
+        successCheck(Z.o>0 && std::abs(Z.o/Z.d-round(Z.o/Z.d))<Z.d/100.,__FILE__,__LINE__,"For acoustic-elastic option, the z-origin must be positive multiple of the sampling\n");
         par.nza = floor(Z.o/Z.d) + 1;
         if (verbose) fprintf(stderr,"A fluid layer is implicitly added on top of the model, all the way up to z=0 km with nz=%d samples v=%.2f km/s and rho=%.2f g/cc\n",par.nza,par.water_velocity,par.water_density);
     }
