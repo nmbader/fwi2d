@@ -988,8 +988,8 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     if (_par.gl>0) 
     {
         //fprintf(stderr,"Convert 2-components dipole data to strain\n");
-        if (!_par.acoustic_elastic) dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
-        else dipole_to_strain(false, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        if (!_par.acoustic_elastic) dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
+        else dipole_to_strain(false, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
     }
 
     // convert to particle velocity or strain rate or pressure when relevant: forward  mode
@@ -1086,8 +1086,8 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     // convert from DAS (strain) to dipole data when relevant
     if (_par.gl>0) 
     {
-        if (!_par.acoustic_elastic) dipole_to_strain(true, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
-        else dipole_to_strain(true, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        if (!_par.acoustic_elastic) dipole_to_strain(true, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
+        else dipole_to_strain(true, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
     }
 
     int size=1, rank=0, rank0=0;
@@ -1270,8 +1270,8 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     // convert to DAS (strain) data when relevant
     if (_par.gl>0) 
     {
-        if (!_par.acoustic_elastic) dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
-        else dipole_to_strain(false, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        if (!_par.acoustic_elastic) dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
+        else dipole_to_strain(false, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
     }
 
     // convert to particle velocity or strain rate or pressure when relevant: forward  mode
@@ -1349,8 +1349,8 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     // convert from DAS (strain) to dipole data when relevant
     if (_par.gl>0) 
     {
-        if (!_par.acoustic_elastic) dipole_to_strain(true, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
-        else dipole_to_strain(true, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n);
+        if (!_par.acoustic_elastic) dipole_to_strain(true, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
+        else dipole_to_strain(true, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
     }
 
     // loop over shots

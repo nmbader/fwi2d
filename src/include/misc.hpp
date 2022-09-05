@@ -12,7 +12,7 @@ data_t getHcoef(data_t * coef, int size, int n, int i);
 // the adjoint performs the opposite transformation
 // forward: xout = cos(dip).xin + sin(dip).zin  ; zout=0
 // adjoint: xout = cos(dip).xin ; zout = sin(dip).xin
-void dipole_to_strain(bool adj, data_t * in, const data_t * dip, int ntr, int nt, int itrmin, int itrmax);
+void dipole_to_strain(bool adj, data_t * in, const data_t * dip, int ntr, int nt, int itrmin, int itrmax, data_t gl);
 
 // trapezoidal time quadrature operator Ht (or its inverse)
 void applyHt(bool inv, bool add, const data_t * in, data_t * out, int nx, int nt, data_t dt, int ixmin, int ixmax);
