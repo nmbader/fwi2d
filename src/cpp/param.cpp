@@ -238,7 +238,6 @@ void readParameters(int argc, char **argv, param &par){
 void analyzeNLInversion(param &par)
 {
     par.isave=std::max(1,par.isave);
-    par.model_parameterization=std::max(1,par.model_parameterization);
     if (par.verbose>0)
     {
         fprintf(stderr,"\n==========================\n Inversion parameters\n==========================\n");

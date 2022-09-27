@@ -286,18 +286,37 @@ public:
     void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
 };
 
-// Elastic model parameterization using P-impedance, S-impedance, density, then anisotropy if applicable
-class pi_si_rho : public nloper {
+// Elastic model parameterization using lambda, mu, density, then anisotropy if applicable
+class lam_mu_rho : public nloper {
 public:
-    pi_si_rho(){}
-    ~pi_si_rho(){}
-    pi_si_rho(const hypercube<data_t> &domain){
+    lam_mu_rho(){}
+    ~lam_mu_rho(){}
+    lam_mu_rho(const hypercube<data_t> &domain){
         successCheck((domain.getNdim()>=2) && (domain.getAxis(domain.getNdim()).n>=3),__FILE__,__LINE__,"The domain must be at least 2D with the last dimension containing at least 3 fields\n");
         _domain = domain;
         _range = domain;
     }
-    pi_si_rho * clone() const {
-        pi_si_rho * op = new pi_si_rho(_domain);
+    lam_mu_rho * clone() const {
+        lam_mu_rho * op = new lam_mu_rho(_domain);
+        return op;
+    }   
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+    void apply_inverse(bool add, data_t * pmod, const data_t * pdat);
+};
+
+// Elastic model parameterization using P-impedance, S-impedance, density, then anisotropy if applicable
+class ip_is_rho : public nloper {
+public:
+    ip_is_rho(){}
+    ~ip_is_rho(){}
+    ip_is_rho(const hypercube<data_t> &domain){
+        successCheck((domain.getNdim()>=2) && (domain.getAxis(domain.getNdim()).n>=3),__FILE__,__LINE__,"The domain must be at least 2D with the last dimension containing at least 3 fields\n");
+        _domain = domain;
+        _range = domain;
+    }
+    ip_is_rho * clone() const {
+        ip_is_rho * op = new ip_is_rho(_domain);
         return op;
     }   
     void apply_forward(bool add, const data_t * pmod, data_t * pdat);

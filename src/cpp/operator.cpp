@@ -251,7 +251,59 @@ void emodelSoftClip::apply_jacobianT(bool add, data_t * pmod, const data_t * pmo
     delete [] m0;
 }
 
-void pi_si_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+void lam_mu_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+    
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
+    data_t (* __restrict pd) [n] = (data_t (*) [n]) pdat;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pd[0][i] = add*pd[0][i] + sqrt((pm[0][i]+2*pm[1][i])/pm[2][i]);
+        pd[1][i] = add*pd[1][i] + sqrt(pm[1][i]/pm[2][i]);
+        for (int ic=2; ic<ncomp; ic++) pd[ic][i] = add*pd[ic][i] + pm[ic][i];
+    }
+
+}
+
+void lam_mu_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
+    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
+    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pm[0][i] = add*pm[0][i] + 0.5/sqrt(pm0[2][i]*(pm0[0][i]+2*pm0[1][i]))*pd[0][i];
+        pm[1][i] = add*pm[1][i] + 1.0/sqrt(pm0[2][i]*(pm0[0][i]+2*pm0[1][i]))*pd[0][i]
+                                + 0.5/sqrt(pm0[2][i]*pm0[1][i])*pd[1][i];
+        pm[2][i] = add*pm[2][i] - 0.5/sqrt(pm0[2][i]*pm0[2][i]*pm0[2][i])*(sqrt(pm0[0][i]+2*pm0[1][i])*pd[0][i] + sqrt(pm0[1][i])*pd[1][i]) + pd[2][i];
+        for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    }
+}
+
+void lam_mu_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
+
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
+    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pm[0][i] = add*pm[0][i] + pd[2][i]*(pd[0][i]*pd[0][i] - 2*pd[1][i]*pd[1][i]);
+        pm[1][i] = add*pm[1][i] + pd[2][i]*pd[1][i]*pd[1][i];
+        for (int ic=2; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    }
+}
+
+void ip_is_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
     
     int ncomp = _domain.getAxis(_domain.getNdim()).n;
     int n = _domain.getN123()/ncomp;
@@ -268,7 +320,7 @@ void pi_si_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
 
 }
 
-void pi_si_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+void ip_is_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
 
     int ncomp = _domain.getAxis(_domain.getNdim()).n;
     int n = _domain.getN123()/ncomp;
@@ -286,7 +338,7 @@ void pi_si_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, c
     }
 }
 
-void pi_si_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
+void ip_is_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
 
     int ncomp = _domain.getAxis(_domain.getNdim()).n;
     int n = _domain.getN123()/ncomp;

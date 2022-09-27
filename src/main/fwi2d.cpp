@@ -116,7 +116,8 @@ if (par.inversion1d)
     std::shared_ptr<vec> prior_temp = prior1d;
 
     nloper * P = nullptr;
-    if (par.model_parameterization==2) P = new pi_si_rho(*model1d->getHyper());
+    if (par.model_parameterization==0) P = new lam_mu_rho(*model1d->getHyper());
+    else if (par.model_parameterization==2) P = new ip_is_rho(*model1d->getHyper());
     else if (par.model_parameterization==3) {
         int n = model1d->getN123()/par.nmodels;
         data_t vs0 = model1d->sum(n, 2*n);
