@@ -576,7 +576,7 @@ public:
         }
     }
 
-    void compute_res_and_grad(data_t * r, std::shared_ptr<vecReg<data_t> > g){       
+    void compute_res_and_grad(data_t * r){       
 
         _g->zero();
 
@@ -890,7 +890,7 @@ public:
 
     virtual void res(){
         _r->zero();
-        compute_res_and_grad(_r->getVals(), _g); _flag = true;
+        compute_res_and_grad(_r->getVals()); _flag = true;
 #ifdef ENABLE_MPI
         // gather all residual
         data_t * temp = new data_t[_r->getN123()];
@@ -1065,7 +1065,7 @@ public:
         data_t * pr = _r->getVals();
         const data_t * pd = _d->getCVals();
         const data_t * pdmp = _Dmp->getCVals();
-        compute_res_and_grad(_r->getVals(), _g);
+        compute_res_and_grad(_r->getVals());
 #ifdef ENABLE_MPI
         // gather all residual
         data_t * temp = new data_t[_d->getN123()];

@@ -148,6 +148,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "p", par.p);
     readParam<int>(argc, argv, "sinc_half_length", par.sinc_half_length);
     readParam<int>(argc, argv, "sub", par.sub);
+    readParam<int>(argc, argv, "model_parameterization", par.model_parameterization);
     readParam<int>(argc, argv, "bs_nx", par.bs_nx);
     readParam<int>(argc, argv, "bs_nz", par.bs_nz);
     readParam<int>(argc, argv, "lbfgs_m", par.lbfgs_m);
@@ -237,6 +238,7 @@ void readParameters(int argc, char **argv, param &par){
 void analyzeNLInversion(param &par)
 {
     par.isave=std::max(1,par.isave);
+    par.model_parameterization=std::max(1,par.model_parameterization);
     if (par.verbose>0)
     {
         fprintf(stderr,"\n==========================\n Inversion parameters\n==========================\n");
@@ -246,6 +248,9 @@ void analyzeNLInversion(param &par)
         fprintf(stderr,"Maximum number of trials per iteration = %d\n",par.max_trial);
         fprintf(stderr,"Threshold to stop the inversion = %f\n",par.threshold);
     }
+    std::string parameterization[4] = {"lambda, mu, rho, aniso","Vp, Vs, rho, aniso","IP, IS, rho, aniso","log(Vs/Vs0), log(Vp/Vs-sqrt(2)),log(rho/rho0),aniso"};
+    if (par.nmodels>=3 && par.verbose>0) fprintf(stderr,"The model parameterization used in the elastic inversion is %s\n",parameterization[par.model_parameterization].c_str());
+    if (par.soft_clip && par.verbose>0) fprintf(stderr,"Soft clipping is added to the inversion. It overrides the hard clipping\n");
     if (par.inversion1d && par.verbose>0) fprintf(stderr,"A 1D inversion will be performed in the z-dimension. If \"horizon\" is not provided, the extrapolation will be flat in the x-dimension where any possible B-splines will be ignored\n");
     if (par.mask_file != "none" && par.verbose>0) fprintf(stderr,"A gradient mask file is expected and will be applied at each trial\n");
     if (par.weights_file != "none" && par.verbose>0) fprintf(stderr,"A data weights file is expected and will be applied to modeled and observed data\n");

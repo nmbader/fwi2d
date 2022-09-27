@@ -14,6 +14,7 @@ void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
         par.gl=0;
         par.free_surface_stiffness=std::max(par.free_surface_stiffness,(data_t)1.0);
         par.soft_clip=0;
+        par.model_parameterization=1;
         par.pml=false;
     }
     if (par.acoustic_elastic && par.acoustic_source) par.mt=false;

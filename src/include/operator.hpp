@@ -286,6 +286,50 @@ public:
     void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
 };
 
+// Elastic model parameterization using P-impedance, S-impedance, density, then anisotropy if applicable
+class pi_si_rho : public nloper {
+public:
+    pi_si_rho(){}
+    ~pi_si_rho(){}
+    pi_si_rho(const hypercube<data_t> &domain){
+        successCheck((domain.getNdim()>=2) && (domain.getAxis(domain.getNdim()).n>=3),__FILE__,__LINE__,"The domain must be at least 2D with the last dimension containing at least 3 fields\n");
+        _domain = domain;
+        _range = domain;
+    }
+    pi_si_rho * clone() const {
+        pi_si_rho * op = new pi_si_rho(_domain);
+        return op;
+    }   
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+    void apply_inverse(bool add, data_t * pmod, const data_t * pdat);
+};
+
+// Elastic model parameterization using log(Vs/Vs0), log(Vp/Vs - sqrt(2)), log(rho/rho0), then anisotropy if applicable
+// Vs0 and rho0 are some fixed reference values
+class vs_vpvs_rho : public nloper {
+protected:
+    data_t _vs0;
+    data_t _rho0;
+public:
+    vs_vpvs_rho(){}
+    ~vs_vpvs_rho(){}
+    vs_vpvs_rho(const hypercube<data_t> &domain, data_t vs0=1.0, data_t rho0=1.0){
+        successCheck((domain.getNdim()>=2) && (domain.getAxis(domain.getNdim()).n>=3),__FILE__,__LINE__,"The domain must be at least 2D with the last dimension containing at least 3 fields\n");
+        _domain = domain;
+        _range = domain;
+        _vs0=vs0;
+        _rho0=rho0;
+    }
+    vs_vpvs_rho * clone() const {
+        vs_vpvs_rho * op = new vs_vpvs_rho(_domain,_vs0,_rho0);
+        return op;
+    }   
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+    void apply_inverse(bool add, data_t * pmod, const data_t * pdat);
+};
+
 // class to transform from x+iy to r.exp(theta) (all with real numbers)
 class polar : public nloper {
 public:

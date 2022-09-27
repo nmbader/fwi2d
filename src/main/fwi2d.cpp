@@ -110,6 +110,33 @@ if (par.inversion1d)
 }
 // ----------------------------------------------------------------------------------------//
 
+// Build model parameterization precon
+// ----------------------------------------------------------------------------------------//
+    std::shared_ptr<vec> model_temp = model1d;
+    std::shared_ptr<vec> prior_temp = prior1d;
+
+    nloper * P = nullptr;
+    if (par.model_parameterization==2) P = new pi_si_rho(*model1d->getHyper());
+    else if (par.model_parameterization==3) {
+        int n = model1d->getN123()/par.nmodels;
+        data_t vs0 = model1d->sum(n, 2*n);
+        data_t rho0 = model1d->sum(2*n, 3*n);
+        P = new vs_vpvs_rho(*model1d->getHyper(), vs0/n, rho0/n);
+    }
+    if (P != nullptr){
+        model_temp = std::make_shared<vec>(*model1d->getHyper());
+        model_temp->zero();
+        P->inverse(false,model_temp,model1d);
+        if (par.prior_file != "none") {
+            prior_temp = std::make_shared<vec>(*model1d->getHyper());
+            prior_temp->zero();
+            P->inverse(false,prior_temp,prior1d);
+        }
+    }
+    model1d = model_temp;
+    prior1d = prior_temp;
+// ----------------------------------------------------------------------------------------//
+
 // Build model precon if B-splines are activated
 // ----------------------------------------------------------------------------------------//
     std::shared_ptr<vec> bsmodel = model1d;
@@ -130,21 +157,21 @@ if (par.bsplines)
     if (par.inversion1d) axes.erase(axes.begin()+1);
     bsmodel = std::make_shared<vec>(vec(hyper(axes)));
     if (par.inversion1d) fillin1d(bsmodel,model1d,par.bs_controlz);
-    else fillin(bsmodel,model,par.bs_controlx,par.bs_controlz);
+    else fillin(bsmodel,model1d,par.bs_controlx,par.bs_controlz);
     if (par.mask_file != "none"){
         bsmask = std::make_shared<vec>(vec(hyper(axes)));
         if (par.inversion1d) fillin1d(bsmask,gmask1d,par.bs_controlz);
-        else fillin(bsmask,gmask,par.bs_controlx,par.bs_controlz);
+        else fillin(bsmask,gmask1d,par.bs_controlx,par.bs_controlz);
     }
     if (par.inverse_diagonal_hessian_file != "none"){
         bsinvDiagH = std::make_shared<vec>(vec(hyper(axes)));
         if (par.inversion1d) fillin1d(bsinvDiagH,invDiagH1d,par.bs_controlz);
-        else fillin(bsinvDiagH,invDiagH,par.bs_controlx,par.bs_controlz);
+        else fillin(bsinvDiagH,invDiagH1d,par.bs_controlx,par.bs_controlz);
     }
     if (par.prior_file != "none"){
         bsprior = std::make_shared<vec>(vec(hyper(axes)));
         if (par.inversion1d) fillin1d(bsprior,prior1d,par.bs_controlz);
-        else fillin(bsprior,prior,par.bs_controlx,par.bs_controlz);
+        else fillin(bsprior,prior1d,par.bs_controlx,par.bs_controlz);
     }
 
     if (par.inversion1d){
@@ -154,7 +181,7 @@ if (par.bsplines)
     }
     else{
         duplicate D(*bsmodel->getHyper(),par.bs_mx,par.bs_mz);
-        bsplines3 B(*D.getRange(),*model->getHyper(),kx,kz);
+        bsplines3 B(*D.getRange(),*model1d->getHyper(),kx,kz);
         BD = new chainLOper(&B,&D);
     }
 }    
@@ -165,7 +192,6 @@ if (par.bsplines)
     emodelSoftClip * S;
     if (par.soft_clip) {
         S = new emodelSoftClip(*model->getHyper(), par.vpmin, par.vpmax, par.vsmin, par.vsmax, par.rhomin, par.rhomax, 1/sqrt(2.00001), 9, 9);
-        if (par.verbose>0) fprintf(stderr,"Soft clipping is added to the inversion. It overrides the hard clipping\n");
     }
 // ----------------------------------------------------------------------------------------//
 
@@ -181,29 +207,81 @@ if (par.bsplines)
 
     if (par.bsplines)
     {
-        if (par.soft_clip)
+        if (P != nullptr)
         {
-            if (par.inversion1d) {
-                chainLOper EBD(ext1d,BD);
-                op = new chainNLOper(S,&EBD);
+            if (par.inversion1d)
+            {
+                if (par.soft_clip)
+                {
+                    chainNLOper PBD(P,BD);
+                    chainNLOper EPBD(ext1d,&PBD);
+                    op = new chainNLOper(S,&EPBD);
+                }
+                else
+                {
+                    chainNLOper PBD(P,BD);
+                    op = new chainNLOper(ext1d,&PBD);
+                }
             }
-            else op  = new chainNLOper(S,BD);
+            else
+            {
+                if (par.soft_clip)
+                {
+                    chainNLOper PBD(P,BD);
+                    op = new chainNLOper(S,&PBD);
+                }
+                else op = new chainNLOper(P,BD);
+            }
         }
-        else{
-            if (par.inversion1d) op = new chainLOper(ext1d,BD);
-            else op  = BD->clone();
+        else
+        {
+            if (par.inversion1d)
+            {
+                if (par.soft_clip)
+                {
+                    chainLOper EBD(ext1d,BD);
+                    op = new chainNLOper(S,&EBD);
+                }
+                else op = new chainNLOper(ext1d,BD);
+            }
+            else
+            {
+                if (par.soft_clip) op = new chainNLOper(S,BD);
+                else op  = BD->clone();
+            }
         }
     }
     else
     {
-        if (par.soft_clip)
+        if (P != nullptr)
         {
-            if (par.inversion1d) op = new chainNLOper(S,ext1d);
-            else op  = S->clone();
+            if (par.inversion1d)
+            {
+                if (par.soft_clip)
+                {
+                    chainNLOper EP(ext1d,P);
+                    op = new chainNLOper(S,&EP);
+                }
+                else op = new chainNLOper(ext1d,P);
+            }
+            else
+            {
+                if (par.soft_clip) op = new chainNLOper(S,P);
+                else op = P->clone();
+            }
         }
-        else if (par.inversion1d) op = ext1d->clone();
+        else
+        {
+            if (par.inversion1d)
+            {
+                if (par.soft_clip) op = new chainNLOper(S,ext1d);
+                else op = ext1d->clone();
+            }
+            else if (par.soft_clip) op = S->clone();
+        }
     }
     if (par.bsplines) delete BD;
+    if (P != nullptr) delete P;
     if (par.inversion1d) delete ext1d;
     if (par.soft_clip) delete S;
 

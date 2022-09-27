@@ -1,6 +1,8 @@
 #include "operator.hpp"
 #include "fftw3.h"
 
+#define EPS 0.0001
+
 void nloper::dotProduct(){
 
     std::shared_ptr<vecReg<data_t> > m (new vecReg<data_t>(_domain));
@@ -247,6 +249,110 @@ void emodelSoftClip::apply_jacobianT(bool add, data_t * pmod, const data_t * pmo
     delete [] v0;
     delete [] v1;
     delete [] m0;
+}
+
+void pi_si_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+    
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
+    data_t (* __restrict pd) [n] = (data_t (*) [n]) pdat;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pd[0][i] = add*pd[0][i] + pm[0][i]/pm[2][i];
+        pd[1][i] = add*pd[1][i] + pm[1][i]/pm[2][i];
+        for (int ic=2; ic<ncomp; ic++) pd[ic][i] = add*pd[ic][i] + pm[ic][i];
+    }
+
+}
+
+void pi_si_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
+    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
+    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pm[0][i] = add*pm[0][i] + pd[0][i]/pm0[2][i];
+        pm[1][i] = add*pm[1][i] + pd[1][i]/pm0[2][i];
+        pm[2][i] = add*pm[2][i] - 1.0/(pm0[2][i]*pm0[2][i])*(pm0[0][i]*pd[0][i] + pm0[1][i]*pd[1][i]) + pd[2][i];
+        for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    }
+}
+
+void pi_si_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
+
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
+    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pm[0][i] = add*pm[0][i] + pd[0][i]*pd[2][i];
+        pm[1][i] = add*pm[1][i] + pd[1][i]*pd[2][i];
+        for (int ic=2; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    }
+}
+
+void vs_vpvs_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+    
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
+    data_t (* __restrict pd) [n] = (data_t (*) [n]) pdat;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pd[0][i] = add*pd[0][i] + _vs0*exp(pm[0][i])*(exp(pm[1][i]) + sqrt(2.0));
+        pd[1][i] = add*pd[1][i] + _vs0*exp(pm[0][i]);
+        pd[2][i] = add*pd[2][i] + _rho0*exp(pm[2][i]);
+        for (int ic=3; ic<ncomp; ic++) pd[ic][i] = add*pd[ic][i] + pm[ic][i];
+    }
+
+}
+
+void vs_vpvs_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
+    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
+    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pm[0][i] = add*pm[0][i] + _vs0*exp(pm0[0][i])*( (exp(pm0[1][i]) + sqrt(2.0))*pd[0][i] + pd[1][i] );
+        pm[1][i] = add*pm[1][i] + _vs0*exp(pm0[0][i]+pm0[1][i])*pd[0][i];
+        pm[2][i] = add*pm[2][i] + _rho0*exp(pm0[2][i])*pd[2][i];
+        for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    }
+}
+
+void vs_vpvs_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
+
+    int ncomp = _domain.getAxis(_domain.getNdim()).n;
+    int n = _domain.getN123()/ncomp;
+
+    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
+    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+
+    #pragma omp parallel for
+    for (int i=0; i<n; i++){
+        pm[0][i] = add*pm[0][i] + log(pd[1][i]/_vs0);
+        pm[1][i] = add*pm[1][i] + log(std::max( (data_t)EPS, (data_t)(pd[0][i]/pd[1][i] - sqrt(2.0)) ) );
+        pm[2][i] = add*pm[2][i] + log(pd[2][i]/_rho0 );
+        for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    }
 }
 
 void polar::apply_forward(bool add, const data_t * pmod, data_t * pdat){
@@ -2009,3 +2115,5 @@ std::shared_ptr<vecReg<data_t> > minimum_phase(const std::shared_ptr<vecReg<data
     
     return vec0;
 }
+
+#undef EPS

@@ -47,6 +47,7 @@ struct param{
 
     // model parameterization
     int nmodels=3;
+    int model_parameterization=1; // 1 : Vp, Vs, rho, aniso ; 2 : IP, IS, rho, aniso ; 3 : log(Vs/Vs0), log(Vp/Vs - sqrt(2)), log(rho/rho0), aniso
     bool bsplines=false, soft_clip=false, inversion1d=false;
     int bs_nx=3, bs_nz=3;
     std::vector<int> bs_mx, bs_mz;
