@@ -349,6 +349,27 @@ public:
     void apply_inverse(bool add, data_t * pmod, const data_t * pdat);
 };
 
+// cross gradient operator between the first two components (3rd axis) of the model
+// often used for elastic model regularization D(m)=grad(Vp)xgrad(Vs)
+// the boundary gradients are discarded
+class cross_gradient : public nloper {
+public:
+    cross_gradient(){}
+    ~cross_gradient(){}
+    cross_gradient(const hypercube<data_t> &domain){
+        successCheck((domain.getNdim()==3) && (domain.getAxis(3).n>=2),__FILE__,__LINE__,"The domain must be 3D with 3rd dimension containing at least 2 fields\n");
+        _domain = domain;
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        _range = hypercube<data_t>(axes[0],axes[1]);
+    }
+    cross_gradient * clone() const {
+        cross_gradient * op = new cross_gradient(_domain);
+        return op;
+    }   
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
+};
+
 // class to transform from x+iy to r.exp(theta) (all with real numbers)
 class polar : public nloper {
 public:

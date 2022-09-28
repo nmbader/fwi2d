@@ -34,7 +34,7 @@ void nloper::dotProduct(){
     fprintf(stderr,"Dot product with eps = %f:\n",eps);
     fprintf(stderr,"sum1 = %f\nsum2 = %f\ndiff (x1000) = %f\n",sum1,sum2,1000*(sum1 - sum2));
 
-    eps = 0.01;
+    eps /= 10;
 
     m1 = dm->clone();
     m1->scaleAdd(m,eps,1); // m + eps.dm
@@ -49,7 +49,7 @@ void nloper::dotProduct(){
     fprintf(stderr,"Dot product with eps = %f:\n",eps);
     fprintf(stderr,"sum1 = %f\nsum2 = %f\ndiff (x1000) = %f\n",sum1,sum2,1000*(sum1 - sum2));
 
-    eps = 0.0001;
+    eps /= 10;
     
     m1 = dm->clone();
     m1->scaleAdd(m,eps,1); // m + eps.dm
@@ -257,7 +257,7 @@ void lam_mu_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
     int n = _domain.getN123()/ncomp;
 
     const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
-    data_t (* __restrict pd) [n] = (data_t (*) [n]) pdat;
+    data_t (*  pd) [n] = (data_t (*) [n]) pdat;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -275,7 +275,7 @@ void lam_mu_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
 
     const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
     const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -293,7 +293,7 @@ void lam_mu_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
     int n = _domain.getN123()/ncomp;
 
     const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -309,7 +309,7 @@ void ip_is_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
     int n = _domain.getN123()/ncomp;
 
     const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
-    data_t (* __restrict pd) [n] = (data_t (*) [n]) pdat;
+    data_t (*  pd) [n] = (data_t (*) [n]) pdat;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -327,7 +327,7 @@ void ip_is_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, c
 
     const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
     const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -344,7 +344,7 @@ void ip_is_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
     int n = _domain.getN123()/ncomp;
 
     const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -360,7 +360,7 @@ void vs_vpvs_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
     int n = _domain.getN123()/ncomp;
 
     const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
-    data_t (* __restrict pd) [n] = (data_t (*) [n]) pdat;
+    data_t (*  pd) [n] = (data_t (*) [n]) pdat;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -379,7 +379,7 @@ void vs_vpvs_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0,
 
     const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
     const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -396,7 +396,7 @@ void vs_vpvs_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
     int n = _domain.getN123()/ncomp;
 
     const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (* __restrict pm) [n] = (data_t (*) [n]) pmod;
+    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
 
     #pragma omp parallel for
     for (int i=0; i<n; i++){
@@ -404,6 +404,60 @@ void vs_vpvs_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
         pm[1][i] = add*pm[1][i] + log(std::max( (data_t)EPS, (data_t)(pd[0][i]/pd[1][i] - sqrt(2.0)) ) );
         pm[2][i] = add*pm[2][i] + log(pd[2][i]/_rho0 );
         for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    }
+}
+
+void cross_gradient::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    if (!add) memset(pdat,0,_range.getN123()*sizeof(data_t));
+
+    int nz = _domain.getAxis(1).n;
+    int nx = _domain.getAxis(2).n;
+    data_t dz = 2*_domain.getAxis(1).d;
+    data_t dx = 2*_domain.getAxis(2).d;
+
+    const data_t (* pm)[nx][nz] = (const data_t (*) [nx][nz]) pmod;
+    data_t (*  pd)[nz] = (data_t (*) [nz]) pdat;
+
+    #pragma omp parallel for
+    for (int ix=1; ix<nx-1; ix++){
+        for (int iz=1; iz<nz-1; iz++){
+            pd[ix][iz] += ( (pm[0][ix+1][iz] - pm[0][ix-1][iz])*(pm[1][ix][iz+1] - pm[1][ix][iz-1])
+                          - (pm[0][ix][iz+1] - pm[0][ix][iz-1])*(pm[1][ix+1][iz] - pm[1][ix-1][iz]) )/(dx*dz);
+        }
+    }
+}
+
+void cross_gradient::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
+
+    if (!add) memset(pmod,0,_domain.getN123()*sizeof(data_t));
+
+    int nz = _domain.getAxis(1).n;
+    int nx = _domain.getAxis(2).n;
+    data_t dz = 2*_domain.getAxis(1).d;
+    data_t dx = 2*_domain.getAxis(2).d;
+
+    const data_t (* pm0)[nx][nz] = (const data_t (*) [nx][nz]) pmod0;
+    data_t (* pm)[nx][nz] = (data_t (*) [nx][nz]) pmod;
+    const data_t (* pd) [nz] = (const data_t (*) [nz]) pdat;
+
+    for (int ix=1; ix<nx-1; ix++){
+        for (int iz=1; iz<nz-1; iz++){
+            data_t g1x = (pm0[0][ix+1][iz] - pm0[0][ix-1][iz]) / dx * pd[ix][iz];
+            data_t g1z = (pm0[0][ix][iz+1] - pm0[0][ix][iz-1]) / dz * pd[ix][iz];
+            data_t g2x = (pm0[1][ix+1][iz] - pm0[1][ix-1][iz]) / dx * pd[ix][iz];
+            data_t g2z = (pm0[1][ix][iz+1] - pm0[1][ix][iz-1]) / dz * pd[ix][iz];
+
+            pm[0][ix+1][iz] += g2z / dx;
+            pm[0][ix-1][iz] -= g2z / dx;
+            pm[0][ix][iz+1] -= g2x / dz;
+            pm[0][ix][iz-1] += g2x / dz;
+
+            pm[1][ix+1][iz] -= g1z / dx;
+            pm[1][ix-1][iz] += g1z / dx;
+            pm[1][ix][iz+1] += g1x / dz;
+            pm[1][ix][iz-1] -= g1x / dz;
+        }
     }
 }
 

@@ -254,7 +254,8 @@ void analyzeNLInversion(param &par)
     if (par.mask_file != "none" && par.verbose>0) fprintf(stderr,"A gradient mask file is expected and will be applied at each trial\n");
     if (par.weights_file != "none" && par.verbose>0) fprintf(stderr,"A data weights file is expected and will be applied to modeled and observed data\n");
     if (par.prior_file != "none" && par.verbose>0) fprintf(stderr,"A prior model file is expected and will be used in the regularization if any\n");
-    if (par.regularization>-1 && par.verbose>0) fprintf(stderr,"A Tikhonov regularization will be used, of order=%d and damping=%f\n",par.regularization,par.lambda);
+    if (par.regularization>-1 && par.regularization<3 && par.verbose>0) fprintf(stderr,"A Tikhonov regularization will be used, of order=%d and damping=%f\n",par.regularization,par.lambda);
+    else if (par.regularization==3 && par.verbose>0) fprintf(stderr,"A cross (spatial)-gradient regularization will be used between the first two model parameters with damping=%f\n",par.lambda);
     else if (par.verbose>0) fprintf(stderr,"No regularization will be used\n");
     if (par.scale_source_times>0 ) {
         par.normalize=0;

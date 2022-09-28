@@ -287,10 +287,11 @@ if (par.bsplines)
     if (par.soft_clip) delete S;
 
     nloper * D = nullptr;
-    loper * R;
+    nloper * R;
     if (par.regularization==0) R = new identity (*model->getHyper());
     else if (par.regularization==1) R = new gradient2d(*model->getHyper(),par.reg_xweight,par.reg_zweight);
     else if (par.regularization==2) R = new laplacian2d(*model->getHyper(),par.reg_xweight,par.reg_zweight);
+    else if (par.regularization==3) R = new cross_gradient(*model->getHyper());
     else R = nullptr;
     if (R!=nullptr){
         if (op==nullptr) D = R->clone();
