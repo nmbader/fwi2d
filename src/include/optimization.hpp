@@ -489,6 +489,7 @@ public:
         _filter = filter;
         _f = 0;
         _flag = true;
+        _d->setHyper(*L->getRange());
        
         if (P!= nullptr){
             _p = std::make_shared<vecReg<data_t> >(*P->getRange());
@@ -501,7 +502,8 @@ public:
             _p = _m;
             _pg = _g;
         }
-        successCheck(L->checkDomainRange(_p,d),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+
+        successCheck(L->checkDomainRange(_p,_d),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
         if (gmask != nullptr) {
             successCheck(m->getN123()==gmask->getN123(),__FILE__,__LINE__,"The gradient mask and model vectors must have the same size\n");
             successCheck(gmask->min()>=0,__FILE__,__LINE__,"Gradient mask must be non-negative\n");
@@ -617,10 +619,10 @@ public:
             par.ns=1;
             par.nr=par.rxz[s].size();
             par.skip_mpi=true;
-            par.verbose=0;
+            //par.verbose=0;
             if (par.gl>0) par.rdip = std::vector<data_t>(_L->_par.rdip.begin()+nr, _L->_par.rdip.begin()+nr+par.nr);
 
-            //if (s>0) par.verbose=0;
+            if (s>0) par.verbose=0;
 
             // extract the time functions for a single shot
             hypercube<data_t> hyper_s = *_L->_allsrc->getHyper();
@@ -946,6 +948,7 @@ public:
         _filter = filter;
         _f = 0;
         _flag = true;
+        _d->setHyper(*L->getRange());
 
         _Dmp = std::make_shared<vecReg<data_t> > (*_D->getRange());
         _Dmp->zero();
@@ -965,7 +968,7 @@ public:
             _p = _m;
             _pg = _g;
         }
-        successCheck(L->checkDomainRange(_p,d),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
+        successCheck(L->checkDomainRange(_p,_d),__FILE__,__LINE__,"Vectors hypercube do not match the operator domain and range\n");
         if (gmask != nullptr) {
             successCheck(m->getN123()==gmask->getN123(),__FILE__,__LINE__,"The gradient mask and model vectors must have the same size\n");
             successCheck(gmask->min()>=0,__FILE__,__LINE__,"Gradient mask must be non-negative\n");

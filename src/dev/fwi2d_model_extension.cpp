@@ -356,9 +356,10 @@ int rank=0, size=0;
     std::shared_ptr<vec> w = nullptr;
     std::shared_ptr<vec> invDiagH = nullptr;
     std::shared_ptr<vec> prior = nullptr;
-    if (par.mask_file!="none") gmask = read<data_t>(par.mask_file, par.format);
-    if (par.weights_file!="none") w = read<data_t>(par.weights_file, par.format);
-    if (par.inverse_diagonal_hessian_file!="none") invDiagH = read<data_t>(par.inverse_diagonal_hessian_file, par.format);
+    if (par.mask_file!="none") {gmask = read<data_t>(par.mask_file, par.format); successCheck(gmask->getN123()==model->getN123(),__FILE__,__LINE__,"Gradient mask must have the same number of samples as the model\n");}
+    if (par.weights_file!="none") {w = read<data_t>(par.weights_file, par.format); successCheck(w->getN123()==data->getN123(),__FILE__,__LINE__,"Data weights must have the same number of samples as the data\n");}
+    if (par.inverse_diagonal_hessian_file!="none") {invDiagH = read<data_t>(par.inverse_diagonal_hessian_file, par.format); successCheck(invDiagH->getN123()==model->getN123(),__FILE__,__LINE__,"Inverse diagonal Hessian must have the same number of samples as the model\n");}
+    if (par.prior_file!="none") {prior = read<data_t>(par.prior_file, par.format); successCheck(prior->getN123()==model->getN123(),__FILE__,__LINE__,"Prior model must have the same number of samples as the model\n");}
 
 // Analyze the inputs and parameters and modify if necessary
     analyzeGeometry(*model->getHyper(),par, par.verbose>0);
@@ -368,16 +369,21 @@ int rank=0, size=0;
     par.sextension=true;
 
 // ----------------------------------------------------------------------------------------//
-// Extend model along sources, extend mask and inverse Hessian if necessary
+// Extend model along sources, extend prior, mask and inverse Hessian if necessary
 // ----------------------------------------------------------------------------------------//
     std::vector<ax > axes = model->getHyper()->getAxes();
     int n=model->getN123();
+    int nxz=n/par.nmodels;
+    data_t vs0 = model->sum(nxz, 2*nxz);
+    data_t rho0 = model->sum(2*nxz, 3*nxz);
+    vs0/=nxz;
+    rho0/=nxz;
 {
     ax S(par.ns,0,1);
     axes.push_back(S);
     std::shared_ptr<vec> tmp = std::make_shared<vec>(vec(hyper(axes)));
     for (int s=0; s<par.ns; s++) memcpy(tmp->getVals()+s*n,model->getVals(),model->getN123()*sizeof(data_t));
-    model=tmp->clone();
+    model=tmp;
 }
     if (par.mask_file != "none"){
         if (gmask->getN123() == n){
@@ -395,10 +401,45 @@ int rank=0, size=0;
         }
         else successCheck(gmask->getN123()==n*par.ns,__FILE__,__LINE__,"The extended inverse Hessian has an incorrect size\n");
     }
+    if (par.prior_file != "none"){
+        if (prior->getN123() == n){
+            std::shared_ptr<vec> tmp = std::make_shared<vec>(vec(hyper(axes)));
+            for (int s=0; s<par.ns; s++) memcpy(tmp->getVals()+s*n,prior->getVals(),prior->getN123()*sizeof(data_t));
+            prior=tmp;
+        }
+        else successCheck(prior->getN123()==n*par.ns,__FILE__,__LINE__,"The prior model has an incorrect size\n");
+    }
 
     sWeighting * sW = new sWeighting(*model->getHyper(), par.sxz, dwidthx, dwidthz, dpower);
     model_extension * E = new model_extension(sW);
     delete sW;
+// ----------------------------------------------------------------------------------------//
+
+// Build model parameterization precon
+// ----------------------------------------------------------------------------------------//
+    std::shared_ptr<vec> model_temp = model;
+    std::shared_ptr<vec> prior_temp = prior;
+
+    nloper * P = nullptr;
+    if (par.model_parameterization==0) P = new lam_mu_rho(*model->getHyper());
+    else if (par.model_parameterization==2) P = new ip_is_rho(*model->getHyper());
+    else if (par.model_parameterization==3) {
+        P = new vs_vpvs_rho(*model->getHyper(), vs0, rho0);
+        if (par.verbose>0) fprintf(stderr,"Average Vs and rho used in model parameterization are %.3f and %.3f\n",vs0/nxz, rho0/nxz);
+    }
+    if (P != nullptr){
+        model_temp = std::make_shared<vec>(*model->getHyper());
+        model_temp->zero();
+        P->inverse(false,model_temp,model);
+        if (par.prior_file != "none") {
+            prior_temp = std::make_shared<vec>(*model->getHyper());
+            prior_temp->zero();
+            P->inverse(false,prior_temp,prior);
+        }
+    }
+    model = model_temp;
+    prior = prior_temp;
+// ----------------------------------------------------------------------------------------//
   
 // ----------------------------------------------------------------------------------------//
 // Build model precon for model extension along sources with B-splines included
@@ -445,13 +486,35 @@ if (par.bsplines)
 // Build model precon if soft clipping is activated
 // ----------------------------------------------------------------------------------------//
     emodelSoftClipExt * S;
-    if (par.soft_clip) {
-        emodelSoftClip S0(hyp0, par.vpmin, par.vpmax, par.vsmin, par.vsmax, par.rhomin, par.rhomax, 1/sqrt(2.00001), 9, 9);
-        S = new emodelSoftClipExt(*model->getHyper(), &S0);
-        if (par.verbose>0) fprintf(stderr,"Soft clipping is added to the inversion. It overrides the hard clipping\n");
+    if (par.soft_clip) 
+    {
+        if (par.model_parameterization==0) {
+            data_t mu_min = par.rhomin*par.vsmin*par.vsmin;
+            data_t mu_max = par.rhomax*par.vsmax*par.vsmax;
+            data_t lam_min = par.rhomin*(par.vpmin*par.vpmin - 2*par.vsmax*par.vsmax);
+            data_t lam_max = par.rhomax*(par.vpmax*par.vpmax - 2*par.vsmin*par.vsmin);
+            lam_min = std::max((data_t)0.0 , lam_min);
+            emodelSoftClip S0(hyp0, lam_min, lam_max, mu_min, mu_max, par.rhomin, par.rhomax, 1, 9, 9);
+            S = new emodelSoftClipExt(*model->getHyper(), &S0);
+        }
+        else if (par.model_parameterization==2){
+            data_t ip_min = par.rhomin*par.vpmin;
+            data_t ip_max = par.rhomax*par.vpmax;
+            data_t is_min = par.rhomin*par.vsmin;
+            data_t is_max = par.rhomax*par.vsmax;
+            emodelSoftClip S0(hyp0, ip_min, ip_max, is_min, is_max, par.rhomin, par.rhomax, 1/sqrt(2.00001), 9, 9);
+            S = new emodelSoftClipExt(*model->getHyper(), &S0);
+        }
+        else if (par.model_parameterization==3){
+            emodelSoftClip S0(hyp0, log(par.vsmin/vs0), log(par.vsmax/vs0), -10.0, log(par.vpmax/par.vsmin - sqrt(2)), log(par.rhomin/rho0), log(par.rhomax/rho0), 1, 9, 9);
+            S = new emodelSoftClipExt(*model->getHyper(), &S0);
+        }
+        else {
+            emodelSoftClip S0(hyp0, par.vpmin, par.vpmax, par.vsmin, par.vsmax, par.rhomin, par.rhomax, 1/sqrt(2.00001), 9, 9);
+            S = new emodelSoftClipExt(*model->getHyper(), &S0);
+        }
     }
 // ----------------------------------------------------------------------------------------//
-
 
     if (rank>0) par.verbose=verbose;
     nloper * op = nullptr;
@@ -465,14 +528,32 @@ if (par.bsplines)
 
     if (par.bsplines)
     {
-        if (par.soft_clip) op  = new chainNLOper(S,BD);
-        else op = BD->clone();
+        if (P != nullptr)
+        {
+            if (par.soft_clip) {
+                chainNLOper SBD(S,BD);
+                op  = new chainNLOper(P,&SBD);
+            } 
+            else op = new chainNLOper(P,BD);
+        }
+        else
+        {
+            if (par.soft_clip) op  = new chainNLOper(S,BD);
+            else op = BD->clone();
+        }
     }
     else
     {
-        if (par.soft_clip) op = S->clone();
+        if (P != nullptr){
+            if (par.soft_clip) op = new chainNLOper(P,S);
+            else op = P->clone();
+        }
+        else{
+            if (par.soft_clip) op = S->clone();
+        }
     }
     if (par.bsplines) delete BD;
+    if (P != nullptr) delete P;
     if (par.soft_clip) delete S;
 
     nloper * D = nullptr;
@@ -492,17 +573,21 @@ if (par.bsplines)
     else if (par.nlsolver=="nlcg") solver = new nlcg(par.niter, par.max_trial, par.threshold, ls); 
     else if (par.nlsolver=="bfgs") solver = new bfgs(par.niter, par.max_trial, par.threshold, ls); 
     else solver = new lbfgs(par.niter, par.max_trial, par.threshold, ls, bsinvDiagH, par.lbfgs_m); 
-    
+
     solver->run(prob, par.verbose>0, ioutput_file, par.isave, par.format, par.datapath);
+    model = bsmodel;
     
     if (D != nullptr) delete D;
     if (op != nullptr)
     {
-        op->forward(false, bsmodel, model);
+        std::shared_ptr<vec> tmp = std::make_shared<vec>(*op->getRange());
+        tmp->zero();
+        op->forward(false, model, tmp);
+        model = tmp;
         delete op;
     }
     
-    std::shared_ptr<vec> fmodel = std::make_shared<vec>(vec(*E->getsW()->getRange()));
+    std::shared_ptr<vec> fmodel = std::make_shared<vec>(*E->getsW()->getRange());
     fmodel->zero();
     E->getsW()->forward(false,model,fmodel);
 

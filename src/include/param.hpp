@@ -37,7 +37,7 @@ struct param{
     data_t R = 1e-3; int p=2; 
 
     // model bounds
-    data_t vpmin=0.2, vpmax=8, vsmin=0.1, vsmax=5, rhomin=0, rhomax=8, deltamin=-0.5, deltamax=1, epsilonmin=0, epsilonmax=1;
+    data_t vpmin=0.2, vpmax=8, vsmin=0.1, vsmax=5, rhomin=0.1, rhomax=8, deltamin=-0.5, deltamax=1, epsilonmin=0, epsilonmax=1;
     data_t vmax=8, vmin=0.2;
 
     // for acoustic-elastic coupling

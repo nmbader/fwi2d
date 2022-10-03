@@ -187,6 +187,10 @@ public:
         _L->apply_jacobianT(false, _v->getVals(), _m0->getCVals(), pdat);
         _R->apply_jacobianT(add, pmod, pmod0, _v->getCVals());
     }
+    void apply_inverse(bool add, data_t * pmod, const data_t * pdat) {
+        _L->apply_inverse(false, _v->getVals(), pdat);
+        _R->apply_inverse(add, pmod, _v->getCVals());
+    }
 };
 
 // Chain of two linear operators L.R.m
@@ -218,6 +222,10 @@ public:
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat) {
         _L->apply_adjoint(false, _v->getVals(), pdat);
         _R->apply_adjoint(add, pmod, _v->getCVals());
+    }
+    void apply_inverse(bool add, data_t * pmod, const data_t * pdat) {
+        _L->apply_inverse(false, _v->getVals(), pdat);
+        _R->apply_inverse(add, pmod, _v->getCVals());
     }
 };
 
@@ -256,7 +264,7 @@ public:
     void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
 };
 
-// soft clip of the elastic model and the Vs/Vp ratio
+// soft clip of the elastic model and possibly the Vs/Vp ratio
 class emodelSoftClip : public nloper {
     data_t _vpmin;
     data_t _vpmax;
@@ -271,7 +279,7 @@ public:
     emodelSoftClip(){}
     ~emodelSoftClip(){}
     emodelSoftClip(const hypercube<data_t> &domain, data_t vpmin, data_t vpmax, data_t vsmin, data_t vsmax, data_t rhomin, data_t rhomax, data_t spratio=1/sqrt(2.00001), int p=9, int q=9){
-        successCheck((domain.getNdim()==3) && (domain.getAxis(3).n>=3),__FILE__,__LINE__,"The domain must be 3D with 3rd dimension containing at least 3 fields\n");
+        successCheck((domain.getNdim()>=2) && (domain.getAxis(domain.getNdim()).n>=3),__FILE__,__LINE__,"The domain must be at least 2D with last dimension containing at least 3 fields\n");
         _domain = domain;
         _range = domain;
         _vpmin=vpmin; _vpmax=vpmax; _vsmin=vsmin; _vsmax=vsmax; _rhomin=rhomin; _rhomax=rhomax; _spratio=spratio;
@@ -292,7 +300,11 @@ public:
     lam_mu_rho(){}
     ~lam_mu_rho(){}
     lam_mu_rho(const hypercube<data_t> &domain){
-        successCheck((domain.getNdim()>=2) && (domain.getAxis(domain.getNdim()).n>=3),__FILE__,__LINE__,"The domain must be at least 2D with the last dimension containing at least 3 fields\n");
+        int ans = 0;
+        ans = (domain.getNdim()==2 && (domain.getAxis(2).n==3 || domain.getAxis(2).n==5)); // for 1D elastic models
+        ans += (domain.getNdim()==3 && (domain.getAxis(3).n==3 || domain.getAxis(3).n==5)); // for 2D elastic models
+        ans += (domain.getNdim()==4 && (domain.getAxis(3).n==3 || domain.getAxis(3).n==5)); // for multiple 2D elastic models
+        successCheck(ans>0,__FILE__,__LINE__,"The domain does not satisfy the required dimensions\n");
         _domain = domain;
         _range = domain;
     }
@@ -311,7 +323,11 @@ public:
     ip_is_rho(){}
     ~ip_is_rho(){}
     ip_is_rho(const hypercube<data_t> &domain){
-        successCheck((domain.getNdim()>=2) && (domain.getAxis(domain.getNdim()).n>=3),__FILE__,__LINE__,"The domain must be at least 2D with the last dimension containing at least 3 fields\n");
+        int ans = 0;
+        ans = (domain.getNdim()==2 && (domain.getAxis(2).n==3 || domain.getAxis(2).n==5)); // for 1D elastic models
+        ans += (domain.getNdim()==3 && (domain.getAxis(3).n==3 || domain.getAxis(3).n==5)); // for 2D elastic models
+        ans += (domain.getNdim()==4 && (domain.getAxis(3).n==3 || domain.getAxis(3).n==5)); // for multiple 2D elastic models
+        successCheck(ans>0,__FILE__,__LINE__,"The domain does not satisfy the required dimensions\n");
         _domain = domain;
         _range = domain;
     }
@@ -334,7 +350,11 @@ public:
     vs_vpvs_rho(){}
     ~vs_vpvs_rho(){}
     vs_vpvs_rho(const hypercube<data_t> &domain, data_t vs0=1.0, data_t rho0=1.0){
-        successCheck((domain.getNdim()>=2) && (domain.getAxis(domain.getNdim()).n>=3),__FILE__,__LINE__,"The domain must be at least 2D with the last dimension containing at least 3 fields\n");
+        int ans = 0;
+        ans = (domain.getNdim()==2 && (domain.getAxis(2).n==3 || domain.getAxis(2).n==5)); // for 1D elastic models
+        ans += (domain.getNdim()==3 && (domain.getAxis(3).n==3 || domain.getAxis(3).n==5)); // for 2D elastic models
+        ans += (domain.getNdim()==4 && (domain.getAxis(3).n==3 || domain.getAxis(3).n==5)); // for multiple 2D elastic models
+        successCheck(ans>0,__FILE__,__LINE__,"The domain does not satisfy the required dimensions\n");
         _domain = domain;
         _range = domain;
         _vs0=vs0;

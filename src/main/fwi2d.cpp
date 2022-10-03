@@ -58,6 +58,7 @@ int rank=0, size=0;
     std::shared_ptr<vec> prior = nullptr;
     if (par.mask_file!="none") {gmask = read<data_t>(par.mask_file, par.format); successCheck(gmask->getN123()==model->getN123(),__FILE__,__LINE__,"Gradient mask must have the same number of samples as the model\n");}
     if (par.weights_file!="none") {w = read<data_t>(par.weights_file, par.format); successCheck(w->getN123()==data->getN123(),__FILE__,__LINE__,"Data weights must have the same number of samples as the data\n");}
+    if (par.filter_file!="none") {filter = read<data_t>(par.filter_file, par.format); successCheck(filter->getHyper()->getAxis(1).d==data->getHyper()->getAxis(1).d,__FILE__,__LINE__,"Filter and data must have the same sampling rate\n");}
     if (par.inverse_diagonal_hessian_file!="none") {invDiagH = read<data_t>(par.inverse_diagonal_hessian_file, par.format); successCheck(invDiagH->getN123()==model->getN123(),__FILE__,__LINE__,"Inverse diagonal Hessian must have the same number of samples as the model\n");}
     if (par.prior_file!="none") {prior = read<data_t>(par.prior_file, par.format); successCheck(prior->getN123()==model->getN123(),__FILE__,__LINE__,"Prior model must have the same number of samples as the model\n");}
 
@@ -114,15 +115,18 @@ if (par.inversion1d)
 // ----------------------------------------------------------------------------------------//
     std::shared_ptr<vec> model_temp = model1d;
     std::shared_ptr<vec> prior_temp = prior1d;
+    int n = model1d->getN123()/par.nmodels;
+    data_t vs0 = model1d->sum(n, 2*n);
+    data_t rho0 = model1d->sum(2*n, 3*n);
+    vs0 /= n;
+    rho0 /= n;
 
     nloper * P = nullptr;
     if (par.model_parameterization==0) P = new lam_mu_rho(*model1d->getHyper());
     else if (par.model_parameterization==2) P = new ip_is_rho(*model1d->getHyper());
     else if (par.model_parameterization==3) {
-        int n = model1d->getN123()/par.nmodels;
-        data_t vs0 = model1d->sum(n, 2*n);
-        data_t rho0 = model1d->sum(2*n, 3*n);
-        P = new vs_vpvs_rho(*model1d->getHyper(), vs0/n, rho0/n);
+        P = new vs_vpvs_rho(*model1d->getHyper(), vs0, rho0);
+        if (par.verbose>0) fprintf(stderr,"Average Vs and rho used in model parameterization are %.3f and %.3f\n",vs0/n, rho0/n);
     }
     if (P != nullptr){
         model_temp = std::make_shared<vec>(*model1d->getHyper());
@@ -191,8 +195,25 @@ if (par.bsplines)
 // Build model precon if soft clipping is activated
 // ----------------------------------------------------------------------------------------//
     emodelSoftClip * S;
-    if (par.soft_clip) {
-        S = new emodelSoftClip(*model->getHyper(), par.vpmin, par.vpmax, par.vsmin, par.vsmax, par.rhomin, par.rhomax, 1/sqrt(2.00001), 9, 9);
+    if (par.soft_clip) 
+    {
+        if (par.model_parameterization==0) {
+            data_t mu_min = par.rhomin*par.vsmin*par.vsmin;
+            data_t mu_max = par.rhomax*par.vsmax*par.vsmax;
+            data_t lam_min = par.rhomin*(par.vpmin*par.vpmin - 2*par.vsmax*par.vsmax);
+            data_t lam_max = par.rhomax*(par.vpmax*par.vpmax - 2*par.vsmin*par.vsmin);
+            lam_min = std::max((data_t)0.0 , lam_min);
+            S = new emodelSoftClip(*model1d->getHyper(), lam_min, lam_max, mu_min, mu_max, par.rhomin, par.rhomax, 1, 9, 9);
+        }
+        else if (par.model_parameterization==2){
+            data_t ip_min = par.rhomin*par.vpmin;
+            data_t ip_max = par.rhomax*par.vpmax;
+            data_t is_min = par.rhomin*par.vsmin;
+            data_t is_max = par.rhomax*par.vsmax;
+            S = new emodelSoftClip(*model1d->getHyper(), ip_min, ip_max, is_min, is_max, par.rhomin, par.rhomax, 1/sqrt(2.00001), 9, 9);
+        }
+        else if (par.model_parameterization==3) S = new emodelSoftClip(*model1d->getHyper(), log(par.vsmin/vs0), log(par.vsmax/vs0), -10, log(par.vpmax/par.vsmin - sqrt(2)), log(par.rhomin/rho0), log(par.rhomax/rho0), 1, 9, 9);
+        else S = new emodelSoftClip(*model1d->getHyper(), par.vpmin, par.vpmax, par.vsmin, par.vsmax, par.rhomin, par.rhomax, 1/sqrt(2.00001), 9, 9);
     }
 // ----------------------------------------------------------------------------------------//
 
@@ -214,9 +235,9 @@ if (par.bsplines)
             {
                 if (par.soft_clip)
                 {
-                    chainNLOper PBD(P,BD);
-                    chainNLOper EPBD(ext1d,&PBD);
-                    op = new chainNLOper(S,&EPBD);
+                    chainNLOper SBD(S,BD);
+                    chainNLOper PSBD(P,&SBD);
+                    op = new chainNLOper(ext1d,&PSBD);
                 }
                 else
                 {
@@ -228,8 +249,8 @@ if (par.bsplines)
             {
                 if (par.soft_clip)
                 {
-                    chainNLOper PBD(P,BD);
-                    op = new chainNLOper(S,&PBD);
+                    chainNLOper SBD(S,BD);
+                    op = new chainNLOper(P,&SBD);
                 }
                 else op = new chainNLOper(P,BD);
             }
@@ -240,8 +261,8 @@ if (par.bsplines)
             {
                 if (par.soft_clip)
                 {
-                    chainLOper EBD(ext1d,BD);
-                    op = new chainNLOper(S,&EBD);
+                    chainNLOper SBD(S,BD);
+                    op = new chainNLOper(ext1d,&SBD);
                 }
                 else op = new chainNLOper(ext1d,BD);
             }
@@ -260,14 +281,14 @@ if (par.bsplines)
             {
                 if (par.soft_clip)
                 {
-                    chainNLOper EP(ext1d,P);
-                    op = new chainNLOper(S,&EP);
+                    chainNLOper PS(P,S);
+                    op = new chainNLOper(ext1d,&PS);
                 }
                 else op = new chainNLOper(ext1d,P);
             }
             else
             {
-                if (par.soft_clip) op = new chainNLOper(S,P);
+                if (par.soft_clip) op = new chainNLOper(P,S);
                 else op = P->clone();
             }
         }
@@ -275,12 +296,13 @@ if (par.bsplines)
         {
             if (par.inversion1d)
             {
-                if (par.soft_clip) op = new chainNLOper(S,ext1d);
+                if (par.soft_clip) op = new chainNLOper(ext1d,S);
                 else op = ext1d->clone();
             }
             else if (par.soft_clip) op = S->clone();
         }
     }
+
     if (par.bsplines) delete BD;
     if (P != nullptr) delete P;
     if (par.inversion1d) delete ext1d;
@@ -317,11 +339,15 @@ if (par.bsplines)
     else solver = new lbfgs(par.niter, par.max_trial, par.threshold, ls, bsinvDiagH, par.lbfgs_m); 
     
     solver->run(prob, par.verbose>0, ioutput_file, par.isave, par.format, par.datapath);
+    model = bsmodel;
     
     if (D != nullptr) delete D;
     if (op != nullptr)
     {
-        op->forward(false, bsmodel, model);
+        std::shared_ptr<vec> tmp = std::make_shared<vec>(*op->getRange());
+        tmp->zero();
+        op->forward(false, model, tmp);
+        model = tmp;
         delete op;
     }
 

@@ -138,7 +138,7 @@ void softClip::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, co
 
 void emodelSoftClip::apply_forward(bool add, const data_t * pmod, data_t * pdat){
     
-    hypercube<data_t> hyper(_domain.getAxis(1),_domain.getAxis(2));
+    hypercube<data_t> hyper(_domain.getN123()/_domain.getAxis(_domain.getNdim()).n);
     softClip vpClip(hyper, _vpmin, _vpmax, _p, _q);
     softClip vsClip(hyper, _vsmin, _vsmax, _p, _q);
     softClip rhoClip(hyper, _rhomin, _rhomax, _p, _q);
@@ -160,11 +160,11 @@ void emodelSoftClip::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     vsClip.apply_forward(false, pm[1], pd[1]);
     rhoClip.apply_forward(add, pm[2], pd[2]);
 
-    // vs/vp ratio clip
+    // vs/vp ratio clip (conditional)
     #pragma omp parallel for
     for (int i=0; i<n; i++) pd[1][i] = pd[1][i] / pd[0][i];
 
-    spratioClip.apply_forward(false, pd[1], pd[1]);
+    if (_spratio < 1.0/sqrt(2)) spratioClip.apply_forward(false, pd[1], pd[1]);
     
     #pragma omp parallel for
     for (int i=0; i<n; i++) {
@@ -188,7 +188,7 @@ void emodelSoftClip::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 
 void emodelSoftClip::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
 
-    hypercube<data_t> hyper(_domain.getAxis(1),_domain.getAxis(2));
+    hypercube<data_t> hyper(_domain.getN123()/_domain.getAxis(_domain.getNdim()).n);
     softClip vpClip(hyper, _vpmin, _vpmax, _p, _q);
     softClip vsClip(hyper, _vsmin, _vsmax, _p, _q);
     softClip rhoClip(hyper, _rhomin, _rhomax, _p, _q);
@@ -209,201 +209,298 @@ void emodelSoftClip::apply_jacobianT(bool add, data_t * pmod, const data_t * pmo
         pmod[i] = add*pmod[i] + pdat[i];
     }
 
-    // forward vp,vs clip -> vp,spratio -> spratio clip
-    data_t * v0 = new data_t [2*n];
-    data_t * v1 = new data_t [n];
-    data_t * m0 = new data_t [2*n];
-    memset(v0, 0, sizeof(data_t)*2*n);
-    memset(m0, 0, sizeof(data_t)*2*n);
-    vpClip.apply_forward(false, pmod0, v0);
-    vsClip.apply_forward(false, pmod0+n, v0+n);
+    if (_spratio < 1.0/sqrt(2))
+    {
+        // forward vp,vs clip -> vp,spratio -> spratio clip
+        data_t * v0 = new data_t [2*n];
+        data_t * v1 = new data_t [n];
+        data_t * m0 = new data_t [2*n];
+        memset(v0, 0, sizeof(data_t)*2*n);
+        memset(m0, 0, sizeof(data_t)*2*n);
+        vpClip.apply_forward(false, pmod0, v0);
+        vsClip.apply_forward(false, pmod0+n, v0+n);
 
-    #pragma omp parallel for
-    for (int i=0; i<n; i++) v0[n+i] = v0[n+i] / v0[i];
+        #pragma omp parallel for
+        for (int i=0; i<n; i++) v0[n+i] = v0[n+i] / v0[i];
 
-    memcpy(v1, v0+n, sizeof(data_t)*n);
+        memcpy(v1, v0+n, sizeof(data_t)*n);
 
-    spratioClip.apply_forward(false, v1, v1);
+        spratioClip.apply_forward(false, v1, v1);
 
-    // jacobian of vp,spratio -> vp,vs
-    #pragma omp parallel for
-    for (int i=0; i<n; i++) {
-        m0[i] = pd[0][i] + v1[i]*pd[1][i];
-        m0[n+i] = v0[i]*pd[1][i];
+        // jacobian of vp,spratio -> vp,vs
+        #pragma omp parallel for
+        for (int i=0; i<n; i++) {
+            m0[i] = pd[0][i] + v1[i]*pd[1][i];
+            m0[n+i] = v0[i]*pd[1][i];
+        }
+
+        // jacobian of spratio clip
+        spratioClip.apply_jacobianT(false,m0+n, v0+n, m0+n);
+
+        // jacobian of vp,vs -> vp,spratio
+        #pragma omp parallel for
+        for (int i=0; i<n; i++) {
+            m0[i] = m0[i] - v0[n+i]/v0[i]*m0[n+i];
+            m0[n+i] /= v0[i];
+        }
+
+        // jacobian of vp,vs clip
+        vpClip.apply_jacobianT(add, pm[0], pm0[0], m0);
+        vsClip.apply_jacobianT(add, pm[1], pm0[1], m0+n);
+
+        delete [] v0;
+        delete [] v1;
+        delete [] m0;
     }
-
-    // jacobian of spratio clip
-    spratioClip.apply_jacobianT(false,m0+n, v0+n, m0+n);
-
-    // jacobian of vp,vs -> vp,spratio
-    #pragma omp parallel for
-    for (int i=0; i<n; i++) {
-        m0[i] = m0[i] - v0[n+i]/v0[i]*m0[n+i];
-        m0[n+i] /= v0[i];
+    else{
+        // jacobian of vp,vs
+        vpClip.apply_jacobianT(add, pm[0], pm0[0], pd[0]);
+        vsClip.apply_jacobianT(add, pm[1], pm0[1], pd[1]);
     }
-
-    // jacobian of vp,vs clip
-    vpClip.apply_jacobianT(add, pm[0], pm0[0], m0);
-    vsClip.apply_jacobianT(add, pm[1], pm0[1], m0+n);
-
-    delete [] v0;
-    delete [] v1;
-    delete [] m0;
 }
 
 void lam_mu_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
     
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
-
-    const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
-    data_t (*  pd) [n] = (data_t (*) [n]) pdat;
-
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pd[0][i] = add*pd[0][i] + sqrt((pm[0][i]+2*pm[1][i])/pm[2][i]);
-        pd[1][i] = add*pd[1][i] + sqrt(pm[1][i]/pm[2][i]);
-        for (int ic=2; ic<ncomp; ic++) pd[ic][i] = add*pd[ic][i] + pm[ic][i];
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
     }
 
+    const data_t (* pm) [ncomp][n] = (const data_t (*) [ncomp][n]) pmod;
+    data_t (*  pd) [ncomp][n] = (data_t (*) [ncomp][n]) pdat;
+
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pd[im][0][i] = add*pd[im][0][i] + sqrt((pm[im][0][i]+2*pm[im][1][i])/pm[im][2][i]);
+            pd[im][1][i] = add*pd[im][1][i] + sqrt(pm[im][1][i]/pm[im][2][i]);
+            for (int ic=2; ic<ncomp; ic++) pd[im][ic][i] = add*pd[im][ic][i] + pm[im][ic][i];
+        }
+    }
 }
 
 void lam_mu_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
 
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
+    }
 
-    const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
-    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
+    const data_t (* pm0) [ncomp][n] = (const data_t (*) [ncomp][n]) pmod0;
+    const data_t (* pd) [ncomp][n] = (const data_t (*) [ncomp][n]) pdat;
+    data_t (*  pm) [ncomp][n] = (data_t (*) [ncomp][n]) pmod;
 
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pm[0][i] = add*pm[0][i] + 0.5/sqrt(pm0[2][i]*(pm0[0][i]+2*pm0[1][i]))*pd[0][i];
-        pm[1][i] = add*pm[1][i] + 1.0/sqrt(pm0[2][i]*(pm0[0][i]+2*pm0[1][i]))*pd[0][i]
-                                + 0.5/sqrt(pm0[2][i]*pm0[1][i])*pd[1][i];
-        pm[2][i] = add*pm[2][i] - 0.5/sqrt(pm0[2][i]*pm0[2][i]*pm0[2][i])*(sqrt(pm0[0][i]+2*pm0[1][i])*pd[0][i] + sqrt(pm0[1][i])*pd[1][i]) + pd[2][i];
-        for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pm[im][0][i] = add*pm[im][0][i] + 0.5/sqrt(pm0[im][2][i]*(pm0[im][0][i]+2*pm0[im][1][i]))*pd[im][0][i];
+            pm[im][1][i] = add*pm[im][1][i] + 1.0/sqrt(pm0[im][2][i]*(pm0[im][0][i]+2*pm0[im][1][i]))*pd[im][0][i]
+                                    + 0.5/sqrt(pm0[im][2][i]*pm0[im][1][i])*pd[im][1][i];
+            pm[im][2][i] = add*pm[im][2][i] - 0.5/sqrt(pm0[im][2][i]*pm0[im][2][i]*pm0[im][2][i])
+                            * (sqrt(pm0[im][0][i]+2*pm0[im][1][i])*pd[im][0][i] 
+                            + sqrt(pm0[im][1][i])*pd[im][1][i]) + pd[im][2][i];
+            for (int ic=3; ic<ncomp; ic++) pm[im][ic][i] = add*pm[im][ic][i] + pd[im][ic][i];
+        }
     }
 }
 
 void lam_mu_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
 
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
+    }
 
-    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
+    const data_t (* pd) [ncomp][n] = (const data_t (*) [ncomp][n]) pdat;
+    data_t (*  pm) [ncomp][n] = (data_t (*) [ncomp][n]) pmod;
 
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pm[0][i] = add*pm[0][i] + pd[2][i]*(pd[0][i]*pd[0][i] - 2*pd[1][i]*pd[1][i]);
-        pm[1][i] = add*pm[1][i] + pd[2][i]*pd[1][i]*pd[1][i];
-        for (int ic=2; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pm[im][0][i] = add*pm[im][0][i] + pd[im][2][i]*(pd[im][0][i]*pd[im][0][i] - 2*pd[im][1][i]*pd[im][1][i]);
+            pm[im][1][i] = add*pm[im][1][i] + pd[im][2][i]*pd[im][1][i]*pd[im][1][i];
+            for (int ic=2; ic<ncomp; ic++) pm[im][ic][i] = add*pm[im][ic][i] + pd[im][ic][i];
+        }
     }
 }
 
 void ip_is_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
     
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
-
-    const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
-    data_t (*  pd) [n] = (data_t (*) [n]) pdat;
-
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pd[0][i] = add*pd[0][i] + pm[0][i]/pm[2][i];
-        pd[1][i] = add*pd[1][i] + pm[1][i]/pm[2][i];
-        for (int ic=2; ic<ncomp; ic++) pd[ic][i] = add*pd[ic][i] + pm[ic][i];
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
     }
 
+    const data_t (* pm) [ncomp][n] = (const data_t (*) [ncomp][n]) pmod;
+    data_t (*  pd) [ncomp][n] = (data_t (*) [ncomp][n]) pdat;
+
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pd[im][0][i] = add*pd[im][0][i] + pm[im][0][i]/pm[im][2][i];
+            pd[im][1][i] = add*pd[im][1][i] + pm[im][1][i]/pm[im][2][i];
+            for (int ic=2; ic<ncomp; ic++) pd[im][ic][i] = add*pd[im][ic][i] + pm[im][ic][i];
+        }
+    }
 }
 
 void ip_is_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
 
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
+    }
 
-    const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
-    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
+    const data_t (* pm0) [ncomp][n] = (const data_t (*) [ncomp][n]) pmod0;
+    const data_t (* pd) [ncomp][n] = (const data_t (*) [ncomp][n]) pdat;
+    data_t (*  pm) [ncomp][n] = (data_t (*) [ncomp][n]) pmod;
 
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pm[0][i] = add*pm[0][i] + pd[0][i]/pm0[2][i];
-        pm[1][i] = add*pm[1][i] + pd[1][i]/pm0[2][i];
-        pm[2][i] = add*pm[2][i] - 1.0/(pm0[2][i]*pm0[2][i])*(pm0[0][i]*pd[0][i] + pm0[1][i]*pd[1][i]) + pd[2][i];
-        for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pm[im][0][i] = add*pm[im][0][i] + pd[im][0][i]/pm0[im][2][i];
+            pm[im][1][i] = add*pm[im][1][i] + pd[im][1][i]/pm0[im][2][i];
+            pm[im][2][i] = add*pm[im][2][i] - 1.0/(pm0[im][2][i]*pm0[im][2][i])*(pm0[im][0][i]*pd[im][0][i] + pm0[im][1][i]*pd[im][1][i]) + pd[im][2][i];
+            for (int ic=3; ic<ncomp; ic++) pm[im][ic][i] = add*pm[im][ic][i] + pd[im][ic][i];
+        }
     }
 }
 
 void ip_is_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
 
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
+    }
 
-    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
+    const data_t (* pd) [ncomp][n] = (const data_t (*) [ncomp][n]) pdat;
+    data_t (*  pm) [ncomp][n] = (data_t (*) [ncomp][n]) pmod;
 
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pm[0][i] = add*pm[0][i] + pd[0][i]*pd[2][i];
-        pm[1][i] = add*pm[1][i] + pd[1][i]*pd[2][i];
-        for (int ic=2; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pm[im][0][i] = add*pm[im][0][i] + pd[im][0][i]*pd[im][2][i];
+            pm[im][1][i] = add*pm[im][1][i] + pd[im][1][i]*pd[im][2][i];
+            for (int ic=2; ic<ncomp; ic++) pm[im][ic][i] = add*pm[im][ic][i] + pd[im][ic][i];
+        }
     }
 }
 
 void vs_vpvs_rho::apply_forward(bool add, const data_t * pmod, data_t * pdat){
     
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
-
-    const data_t (* pm) [n] = (const data_t (*) [n]) pmod;
-    data_t (*  pd) [n] = (data_t (*) [n]) pdat;
-
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pd[0][i] = add*pd[0][i] + _vs0*exp(pm[0][i])*(exp(pm[1][i]) + sqrt(2.0));
-        pd[1][i] = add*pd[1][i] + _vs0*exp(pm[0][i]);
-        pd[2][i] = add*pd[2][i] + _rho0*exp(pm[2][i]);
-        for (int ic=3; ic<ncomp; ic++) pd[ic][i] = add*pd[ic][i] + pm[ic][i];
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
     }
 
+    const data_t (* pm) [ncomp][n] = (const data_t (*) [ncomp][n]) pmod;
+    data_t (*  pd) [ncomp][n] = (data_t (*) [ncomp][n]) pdat;
+
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pd[im][0][i] = add*pd[im][0][i] + _vs0*exp(pm[im][0][i])*(exp(pm[im][1][i]) + sqrt(2.0));
+            pd[im][1][i] = add*pd[im][1][i] + _vs0*exp(pm[im][0][i]);
+            pd[im][2][i] = add*pd[im][2][i] + _rho0*exp(pm[im][2][i]);
+            for (int ic=3; ic<ncomp; ic++) pd[im][ic][i] = add*pd[im][ic][i] + pm[im][ic][i];
+        }
+    }
 }
 
 void vs_vpvs_rho::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){
 
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
+    }
 
-    const data_t (* pm0) [n] = (const data_t (*) [n]) pmod0;
-    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
+    const data_t (* pm0) [ncomp][n] = (const data_t (*) [ncomp][n]) pmod0;
+    const data_t (* pd) [ncomp][n] = (const data_t (*) [ncomp][n]) pdat;
+    data_t (*  pm) [ncomp][n] = (data_t (*) [ncomp][n]) pmod;
 
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pm[0][i] = add*pm[0][i] + _vs0*exp(pm0[0][i])*( (exp(pm0[1][i]) + sqrt(2.0))*pd[0][i] + pd[1][i] );
-        pm[1][i] = add*pm[1][i] + _vs0*exp(pm0[0][i]+pm0[1][i])*pd[0][i];
-        pm[2][i] = add*pm[2][i] + _rho0*exp(pm0[2][i])*pd[2][i];
-        for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pm[im][0][i] = add*pm[im][0][i] + _vs0*exp(pm0[im][0][i])*( (exp(pm0[im][1][i]) + sqrt(2.0))*pd[im][0][i] + pd[im][1][i] );
+            pm[im][1][i] = add*pm[im][1][i] + _vs0*exp(pm0[im][0][i]+pm0[im][1][i])*pd[im][0][i];
+            pm[im][2][i] = add*pm[im][2][i] + _rho0*exp(pm0[im][2][i])*pd[im][2][i];
+            for (int ic=3; ic<ncomp; ic++) pm[im][ic][i] = add*pm[im][ic][i] + pd[im][ic][i];
+        }
     }
 }
 
 void vs_vpvs_rho::apply_inverse(bool add, data_t * pmod, const data_t * pdat){
 
-    int ncomp = _domain.getAxis(_domain.getNdim()).n;
-    int n = _domain.getN123()/ncomp;
+    int ncomp=1, n=1, nm=1;
+    if (_domain.getNdim()==2) {
+        ncomp=_domain.getAxis(2).n;
+        n = _domain.getAxis(1).n;
+    }
+    else {
+        ncomp=_domain.getAxis(3).n;
+        n = _domain.getAxis(1).n*_domain.getAxis(2).n;
+        if (_domain.getNdim()==4) nm = _domain.getAxis(4).n;
+    }
 
-    const data_t (* pd) [n] = (const data_t (*) [n]) pdat;
-    data_t (*  pm) [n] = (data_t (*) [n]) pmod;
+    const data_t (* pd) [ncomp][n] = (const data_t (*) [ncomp][n]) pdat;
+    data_t (*  pm) [ncomp][n] = (data_t (*) [ncomp][n]) pmod;
 
-    #pragma omp parallel for
-    for (int i=0; i<n; i++){
-        pm[0][i] = add*pm[0][i] + log(pd[1][i]/_vs0);
-        pm[1][i] = add*pm[1][i] + log(std::max( (data_t)EPS, (data_t)(pd[0][i]/pd[1][i] - sqrt(2.0)) ) );
-        pm[2][i] = add*pm[2][i] + log(pd[2][i]/_rho0 );
-        for (int ic=3; ic<ncomp; ic++) pm[ic][i] = add*pm[ic][i] + pd[ic][i];
+    for (int im=0; im<nm; im++){
+        #pragma omp parallel for
+        for (int i=0; i<n; i++){
+            pm[im][0][i] = add*pm[im][0][i] + log(pd[im][1][i]/_vs0);
+            pm[im][1][i] = add*pm[im][1][i] + log(std::max( (data_t)EPS, (data_t)(pd[im][0][i]/pd[im][1][i] - sqrt(2.0)) ) );
+            pm[im][2][i] = add*pm[im][2][i] + log(pd[im][2][i]/_rho0 );
+            for (int ic=3; ic<ncomp; ic++) pm[im][ic][i] = add*pm[im][ic][i] + pd[im][ic][i];
+        }
     }
 }
 
