@@ -54,6 +54,7 @@ int rank=0, size=0;
     std::shared_ptr<vec> hrz = nullptr;
     std::shared_ptr<vec> gmask = nullptr;
     std::shared_ptr<vec> w = nullptr;
+    std::shared_ptr<vec> filter = nullptr;
     std::shared_ptr<vec> invDiagH = nullptr;
     std::shared_ptr<vec> prior = nullptr;
     if (par.mask_file!="none") {gmask = read<data_t>(par.mask_file, par.format); successCheck(gmask->getN123()==model->getN123(),__FILE__,__LINE__,"Gradient mask must have the same number of samples as the model\n");}
@@ -323,9 +324,9 @@ if (par.bsplines)
 
     nlls_fwi_eco * prob;
     if (D != nullptr) {
-        prob = new nlls_fwi_reg(L, D, bsmodel, data, par.lambda, bsprior, op, bsmask, w);
+        prob = new nlls_fwi_reg(L, D, bsmodel, data, par.lambda, bsprior, op, bsmask, w, filter);
     }
-    else prob = new nlls_fwi_eco(L, bsmodel, data, op, bsmask, w);
+    else prob = new nlls_fwi_eco(L, bsmodel, data, op, bsmask, w, filter);
 
     lsearch * ls;
     if (par.lsearch=="weak_wolfe") ls = new weak_wolfe(par.ls_c1, par.ls_a0, par.ls_a1, par.ls_version);
