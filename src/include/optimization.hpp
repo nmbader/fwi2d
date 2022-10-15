@@ -602,7 +602,7 @@ public:
     MPI_Barrier(MPI_COMM_WORLD);
 #endif
         time_t t = time(NULL);
-        if (_L->_par.verbose>0 && rank==0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t));
+        if (_L->_par.verbose>1 && rank==0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t));
 
         for (int s=rank; s<ns; s+=size)
         {
@@ -1085,6 +1085,13 @@ public:
     }
 
     data_t getFunc(){
+        
+        int size=1, rank=0;
+#ifdef ENABLE_MPI
+        MPI_Comm_size(MPI_COMM_WORLD,&size);
+        MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+        MPI_Barrier(MPI_COMM_WORLD);
+#endif
         if (_flag)
         {
             int n123 = _d->getN123();
@@ -1100,7 +1107,7 @@ public:
             _f = fd+fm;
             _flag = false;
             
-            if (_L->_par.verbose>0) fprintf(stderr,"Data functional = %f; Model functional = %f\n",fd,fm);
+            if (_L->_par.verbose>0 && rank==0) fprintf(stderr,"Data functional = %f; Model functional = %f\n",fd,fm);
             _dfunc.push_back(fd);
             _mfunc.push_back(fm);
         }

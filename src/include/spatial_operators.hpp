@@ -23,6 +23,10 @@ extern "C" void mult_Dz_ispc(int add, const data_t* pmod, data_t* out, data_t sc
 void mult_Dx(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int ixmin, int ixmax, int izmin, int izmax, const data_t * par, data_t a);
 extern "C" void mult_Dx_ispc(int add, const data_t* pmod, data_t* out, data_t scale, int i1, int nz, int izmin, int izmax, const data_t * par);
 
+// second derivative operators
+void Dzz(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int ixmin, int ixmax, int izmin, int izmax);
+void Dxx(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int ixmin, int ixmax, int izmin, int izmax);
+
 // second derivative operators with variable parameters, defined as template function to accomodate different expressions of parameters
 template<expr f>
 void Dzz_var(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int ixmin, int ixmax, int izmin, int izmax, const data_t ** par, data_t a){

@@ -393,3 +393,48 @@ public:
         l_we_op_e::apply_adjoint(add, pmod, pdat);
     }
 };
+
+
+
+// Acooustic (constant density) Born operator, taking reflectivity (slowness squared) and generating data
+class born_op_a : virtual public loper {
+public:
+    param _par;
+    std::shared_ptr<vecReg<data_t> > _allsrc;
+    std::shared_ptr<vecReg<data_t> > _full_wfld;
+    std::shared_ptr<vecReg<data_t> > _model; // background model
+
+    born_op_a(){}
+    virtual ~born_op_a(){}
+    born_op_a(const std::shared_ptr<vecReg<data_t> > model, const std::shared_ptr<vecReg<data_t> > allsrc, const param &par){
+        _model = model;
+        _allsrc = allsrc;
+        _par = par;
+        _domain = hypercube<data_t>(model->getHyper()->getAxis(1),model->getHyper()->getAxis(2));
+        axis<data_t> X(par.nr,0,1);
+        axis<data_t> C(1,0,1);
+        _range = hypercube<data_t>(allsrc->getHyper()->getAxis(1),X,C);
+    }
+    void setDomainRange(const hypercube<data_t> &domain, const hypercube<data_t> &range){
+        
+        successCheck( domain.isCompatible(_domain),__FILE__,__LINE__,"New domain must be compatible with the original\n");
+        successCheck( range.getAxis(1) == _range.getAxis(1),__FILE__,__LINE__,"New range must have the same time axis as the original\n");
+        successCheck( range.getN123()/range.getAxis(1).n == _range.getN123()/_range.getAxis(1).n, __FILE__,__LINE__, "New range must have the same number of traces as the original\n");
+
+        _domain=domain;
+        _range=range;
+    }
+    bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > dat) const {
+        if ( (!_domain.isCompatible(*mod->getHyper())) || ( dat->getHyper()->getAxis(1) != _range.getAxis(1)) || ( dat->getN123()/dat->getHyper()->getAxis(1).n != _range.getN123()/_range.getAxis(1).n) ) return false;
+        else return true;
+    }
+    born_op_a * clone() const {
+        born_op_a * op = new born_op_a(_model,_allsrc,_par);
+        return op;
+    }
+    void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const;
+    void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const;
+
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};

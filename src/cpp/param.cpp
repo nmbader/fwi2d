@@ -84,6 +84,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<std::string>(argc, argv, "lsearch", par.lsearch);
     readParam<std::string>(argc, argv, "mask", par.mask_file);
     readParam<std::string>(argc, argv, "weights", par.weights_file);
+    readParam<std::string>(argc, argv, "filter", par.filter_file);
     readParam<std::string>(argc, argv, "inverse_diagonal_hessian", par.inverse_diagonal_hessian_file);
     readParam<std::string>(argc, argv, "prior", par.prior_file);
     readParam<std::string>(argc, argv, "datapath", par.datapath);
@@ -253,6 +254,8 @@ void analyzeNLInversion(param &par)
     if (par.inversion1d && par.verbose>0) fprintf(stderr,"A 1D inversion will be performed in the z-dimension. If \"horizon\" is not provided, the extrapolation will be flat in the x-dimension where any possible B-splines will be ignored\n");
     if (par.mask_file != "none" && par.verbose>0) fprintf(stderr,"A gradient mask file is expected and will be applied at each trial\n");
     if (par.weights_file != "none" && par.verbose>0) fprintf(stderr,"A data weights file is expected and will be applied to modeled and observed data\n");
+    if (par.filter_file != "none" && par.verbose>0) fprintf(stderr,"A 1D filter file is expected and will be applied to modeled and observed data\n");
+    if (par.inverse_diagonal_hessian_file != "none" && par.nlsolver=="lbfgs" && par.verbose>0) fprintf(stderr,"An inverse diagonal Hessian is expected and will be used in the l-BFGS solver\n");
     if (par.prior_file != "none" && par.verbose>0) fprintf(stderr,"A prior model file is expected and will be used in the regularization if any\n");
     if (par.regularization>-1 && par.regularization<3 && par.verbose>0) fprintf(stderr,"A Tikhonov regularization will be used, of order=%d and damping=%f\n",par.regularization,par.lambda);
     else if (par.regularization==3 && par.verbose>0) fprintf(stderr,"A cross (spatial)-gradient regularization will be used between the first two model parameters with damping=%f\n",par.lambda);

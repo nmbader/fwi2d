@@ -43,7 +43,7 @@ jupyter notebook --ip 0.0.0.0 --port 8080 --no-browser --allow-root &
 
 Open the browser at *localhost:8080/​* and use the printed token above to authenticate.
 
-The image will build the **fwi2d** library in single precision with **_CUDA_** and **_MPI_** disabled.
+The image will build the **fwi2d** library in single precision with **_CUDA_** disabled.
 
 ## Installation without a Docker
 
@@ -76,23 +76,23 @@ bash ./buildit.sh
 
 # When it is done, build the main library
 cd ../../build
-cmake -DCMAKE_INSTALL_PREFIX=../local -DISPC=path_to_ispc_binary/ispc ../
+cmake -DCMAKE_INSTALL_PREFIX=../local -DISPC_PATH=path_to_ispc_binary/ispc ../
 make -j12
 make install
 
 # clean up the build directory
 rm -rf *
 ```
-By default, the **fwi2d** library is built in single precision. For double precision, add the flag `-DDOUBLE_PRECISION=1`
+By default, the **fwi2d** library is built in single precision. For double precision, add the flag `-DENABLE_DOUBLE_PRECISION=1`
  to the **_cmake_** command. 
 
 All executables (and python scripts) will be installed into the subdirectory *fwi2d/local/bin*. It will be more convenient to add this path to the environment variable `PATH` in order to run the examples seeminglessly.
 
 If the host machine has **_CUDA_** enabled, add the flag `-DENABLE_CUDA=1`. In this case, the wave propagation and inversion executables will expect an available GPU device. It is recommended to install the **_CUDA_** enabled code in a separate location (e.g. *fwi2d/local_gpu*) so that the CPU-only code can still be used.
 
-**_MPI_** is also available for parallelization over seismic sources. Add the flag `-DENABLE_MPI=1` to activate this option.
+**_MPI_** is also available for parallelization over seismic sources. If **_CMAKE_** cannot locate an **_MPI_** installation automatically, add the corresponding path manually by setting the flag `-DCMAKE_PREFIX_PATH=path_to_mpi_directory`. Otherwise, **_MPI_** will be deactivated.
 
 
 ## Data format
 
-By default, the main executables read and write data in *SEPlib* format. Alternatively, regular binary format is also accepted provided that a description file is built (see [examples](https://github.com/nmbader/fwi2d/tree/master/examples)). A **_C++_** executable is provided to convert between these two formats. Moreover, a python script is provided to convert to/from *SEPlib* from/to **_numpy_**.
+By default, the main executables read and write data in *SEPlib* format (with little-endian binaries). Alternatively, native binary format is also accepted provided that a description file is built (see [examples](https://github.com/nmbader/fwi2d/tree/master/examples)). A **_C++_** executable is provided to convert between these two formats. Moreover, a python script is provided to convert to/from *SEPlib* from/to **_numpy_**.

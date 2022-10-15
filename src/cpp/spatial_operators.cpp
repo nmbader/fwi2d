@@ -209,6 +209,101 @@ void mult_Dx(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, 
     }
 }
 
+void Dzz(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int ixmin, int ixmax, int izmin, int izmax){
+    
+    data_t coef[3] = {-(4.0/3 - 1.0/12), 4.0/3, -1.0/12};
+    data_t bnd_coef[24] = {2,-5,4,-1,0,0,1,-2,1,0,0,0,-4.0/43, 59.0/43, -110.0/43, 59.0/43, -4.0/43, 0,-1.0/49, 0, 59.0/49, -118.0/49, 64.0/49, -4.0/49};
+
+    int nc1=4, nc2=6;
+    int izminb=std::max(nc1,izmin);
+    int izmaxb=std::min(nz - nc1, izmax);
+    data_t d2 = d*d;
+    
+    #pragma omp parallel for
+    for (int ix = ixmin; ix < ixmax; ix++){
+        int i1=ix*nz;
+
+        // apply the operator near the top boundary if included
+        for (int iz=izmin; iz<nc1; iz++){
+            out[i1+iz] = add*out[i1+iz] + 1.0/d2 * ( bnd_coef[iz*nc2] * in[i1] 
+                        + bnd_coef[iz*nc2+1] * in[i1+1] 
+                        + bnd_coef[iz*nc2+2] * in[i1+2] 
+                        + bnd_coef[iz*nc2+3] * in[i1+3] 
+                        + bnd_coef[iz*nc2+4] * in[i1+4] 
+                        + bnd_coef[iz*nc2+5] * in[i1+5] ) ;
+        }
+
+        // apply the operator near the bottom boundary if included
+        for (int iz=nz-izmax; iz<nc1; iz++){
+            out[i1+nz-1-iz] = add*out[i1+nz-1-iz] + 1.0/d2 * (bnd_coef[iz*nc2] * in[i1+nz-1] 
+                            + bnd_coef[iz*nc2+1] * in[i1+nz-2] 
+                            + bnd_coef[iz*nc2+2] * in[i1+nz-3] 
+                            + bnd_coef[iz*nc2+3] * in[i1+nz-4] 
+                            + bnd_coef[iz*nc2+4] * in[i1+nz-5] 
+                            + bnd_coef[iz*nc2+5] * in[i1+nz-6]);
+        }
+
+        // apply the operator in the interior
+        for (int iz = izminb; iz<izmaxb; iz++){
+            out[i1+iz] = add*out[i1+iz] + 1.0/d2 * ( 2 * coef[0] * in[i1+iz] 
+                        + coef[1] * (in[i1+iz-1] + in[i1+iz+1]) 
+                        + coef[2] * (in[i1+iz-2] + in[i1+iz+2]) );
+        }
+    }
+}
+
+void Dxx(bool add, const data_t* in, data_t* out, int nx, int nz, data_t d, int ixmin, int ixmax, int izmin, int izmax){
+
+    data_t coef[3] = {-(4.0/3 - 1.0/12), 4.0/3, -1.0/12};
+    data_t bnd_coef[24] = {2,-5,4,-1,0,0,1,-2,1,0,0,0,-4.0/43, 59.0/43, -110.0/43, 59.0/43, -4.0/43, 0,-1.0/49, 0, 59.0/49, -118.0/49, 64.0/49, -4.0/49};
+
+    int nc1=4, nc2=6;
+    int ixminb=std::max(nc1,ixmin);
+    int ixmaxb=std::min(nx - nc1, ixmax);
+    data_t d2 = d*d;
+
+    // apply the operator near the left boundary if included
+    #pragma omp parallel for
+    for (int ix = ixmin; ix < nc1; ix++){
+        int i1=ix*nz;
+        
+        for (int iz=izmin; iz<izmax; iz++){
+            out[i1+iz] = add*out[i1+iz] + 1.0/d2 * ( bnd_coef[ix*nc2] * in[iz] 
+                        + bnd_coef[ix*nc2+1] * in[(1)*nz+iz] 
+                        + bnd_coef[ix*nc2+2] * in[(2)*nz+iz] 
+                        + bnd_coef[ix*nc2+3] * in[(3)*nz+iz] 
+                        + bnd_coef[ix*nc2+4] * in[(4)*nz+iz] 
+                        + bnd_coef[ix*nc2+5] * in[(5)*nz+iz] ) ;
+        }
+    }
+
+    // apply the operator near the right boundary if included
+    #pragma omp parallel for
+    for (int ix = nx-ixmax; ix < nc1; ix++){
+        int i1=(nx-1-ix)*nz;
+
+        for (int iz=izmin; iz<izmax; iz++){
+            out[i1+iz] = add*out[i1+iz] + 1.0/d2 * ( bnd_coef[ix*nc2] * in[(nx-1)*nz+iz] 
+                        + bnd_coef[ix*nc2+1] * in[(nx-2)*nz+iz] 
+                        + bnd_coef[ix*nc2+2] * in[(nx-3)*nz+iz] 
+                        + bnd_coef[ix*nc2+3] * in[(nx-4)*nz+iz] 
+                        + bnd_coef[ix*nc2+4] * in[(nx-5)*nz+iz] 
+                        + bnd_coef[ix*nc2+5] * in[(nx-6)*nz+iz] ) ;
+        }
+    }
+
+    // apply the operator in the interior
+    #pragma omp parallel for
+    for (int ix=ixminb; ix<ixmaxb; ix++){
+        for (int iz = izmin; iz<izmax; iz++){
+            out[ix*nz+iz] = add*out[ix*nz+iz] + 1.0/d2 * ( 2 * coef[0] * in[ix*nz+iz] 
+                        + coef[1] * (in[(ix-1)*nz+iz] + in[(ix+1)*nz+iz]) 
+                        + coef[2] * (in[(ix-2)*nz+iz] + in[(ix+2)*nz+iz]) );
+        }
+    }
+
+}
+
 void esat_scale_boundaries(data_t** in, int nx, int nz, data_t dx, data_t dz, int ixmin, int ixmax, int izmin, int izmax, const data_t** par, data_t dt, bool top, bool bottom, bool left, bool right){
 
     // par must at least contain lambda, mu, rho in this order

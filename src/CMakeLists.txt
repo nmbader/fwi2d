@@ -20,7 +20,7 @@ set(SRC_FWI2D ${SRC_DIR}/injector.cpp
                 ${SRC_DIR}/we_op.cpp
 	)
 
-if(GPU)
+if(ENABLE_CUDA)
         set(SRC_FWI2D ${SRC_FWI2D} ${CUDA_DIR}/cudaKernels.cu
         ${CUDA_DIR}/cudaWeOp.cpp
         )
@@ -44,20 +44,20 @@ set(HEADERS ${INC_DIR}/injector.hpp
 set(PYTHON ${PYTHON_DIR}/seppy.py
                 ${PYTHON_DIR}/sep2numpy.py)
 
-if (GPU)
+if (ENABLE_CUDA)
         set(HEADERS ${HEADERS} ${CUDA_INC_DIR}/cudaCppWrappers.h
                 ${CUDA_INC_DIR}/cudaMisc.h
         )
 endif()
 
-if(DOUBLE_PRECISION)
+if(ENABLE_DOUBLE_PRECISION)
         add_custom_command(OUTPUT spatial_operators_ISPC.o
-                        COMMAND ${ISPC} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -DDOUBLE_PRECISION -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf --pic
+                        COMMAND ${ISPC_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -DDOUBLE_PRECISION -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf --pic
                         DEPENDS ${SRC_DIR}/spatial_operators.ispc
                         )
 else()
         add_custom_command(OUTPUT spatial_operators_ISPC.o
-                        COMMAND ${ISPC} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf --pic
+                        COMMAND ${ISPC_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cpp/spatial_operators.ispc -I ${INC_DIR} -o spatial_operators_ISPC.o --target=avx2-i32x8 --wno-perf --pic
                         DEPENDS ${SRC_DIR}/spatial_operators.ispc
                         )
 endif()
@@ -72,6 +72,9 @@ endif()
 #building the main executables
 add_executable(WE_MODELING.x ${MAIN_DIR}/we_modeling.cpp)
 target_link_libraries(WE_MODELING.x fwi2d sep)
+
+add_executable(BORN_MODELING.x ${MAIN_DIR}/born_modeling.cpp)
+target_link_libraries(BORN_MODELING.x fwi2d sep)
 
 add_executable(FWI2D.x ${MAIN_DIR}/fwi2d.cpp)
 target_link_libraries(FWI2D.x fwi2d sep)
@@ -126,6 +129,7 @@ install(FILES ${PYTHON}
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
         DESTINATION bin)
 install(TARGETS WE_MODELING.x
+                BORN_MODELING.x
                 FWI2D.x
                 BSPLINES.x
                 FX.x
@@ -145,7 +149,7 @@ install(TARGETS WE_MODELING.x
         DESTINATION bin)
 
 # For development purposes
-if (DEV)
+if (ENABLE_DEV)
         #add_executable(TEST.x ${MAIN_DIR}/test.cpp)
         #target_link_libraries(TEST.x fwi2d sep)
 

@@ -21,7 +21,7 @@ public:
         _domain = domain;
         _range = range;
     }
-    virtual bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > dat) const {return true;}
+    virtual bool checkDomainRange(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > dat) const {return checkN123(mod,dat);}
     bool checkSame(const std::shared_ptr<vecReg<data_t> > mod, const std::shared_ptr<vecReg<data_t> > dat) const {
         if ((*mod->getHyper() != _domain) || (*dat->getHyper() != _range)) return false;
         else return true;
@@ -928,7 +928,7 @@ public:
         _zw=zw;
     }
     gradient2d * clone() const {
-        gradient2d * op = new gradient2d(_domain);
+        gradient2d * op = new gradient2d(_domain,_xw,_zw);
         return op;
     }    
     void apply_forward(bool add, const data_t * pmod, data_t * pdat);
@@ -951,7 +951,7 @@ public:
         _zw=zw;
     }
     laplacian2d * clone() const {
-        laplacian2d * op = new laplacian2d(_domain);
+        laplacian2d * op = new laplacian2d(_domain,_xw,_zw);
         return op;
     }    
     void apply_forward(bool add, const data_t * pmod, data_t * pdat);
