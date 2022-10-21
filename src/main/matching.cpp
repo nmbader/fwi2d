@@ -144,7 +144,8 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> f = std::make_shared<vec> (hyper(Tf,ax(ns,0,1)));
     f->zero();
     hyper hyp(T,ax(ntr,0,1));
-    std::vector<data_t> func;
+    std::shared_ptr<vec> all_func = std::make_shared<vec> (hyper(niter+1,ns));
+    all_func->set(-1);
 
     for (int s=0; s<ns; s++){
         fprintf(stderr,"\n==========================\n Start processing gather %d\n==========================\n",s);
@@ -178,7 +179,7 @@ int main(int argc, char **argv){
         sol->run(&prob,verbose);
 
         // copy the objective function
-        for (int i=0; i<sol->_func.size(); i++) func.push_back(sol->_func[i]);
+        memcpy(all_func->getVals()+(niter+1)*s, sol->_func.data(), sizeof(data_t)*sol->_func.size());
 
         // compute the matched data
         op.forward(false, fs, ds);
@@ -189,9 +190,6 @@ int main(int argc, char **argv){
 
         delete sol;
     }
-
-    std::shared_ptr<vec> all_func = std::make_shared<vec> (hyper(ax(func.size(),0,1)));
-    memcpy(all_func->getVals(), func.data(), sizeof(data_t)*func.size());
           
     if (output_file!="none") write<data_t>(input, output_file, format, datapath);
     if (filter_file!="none") write<data_t>(f, filter_file, format, datapath);

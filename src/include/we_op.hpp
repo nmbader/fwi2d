@@ -401,7 +401,7 @@ class born_op_a : virtual public loper {
 public:
     param _par;
     std::shared_ptr<vecReg<data_t> > _allsrc;
-    std::shared_ptr<vecReg<data_t> > _full_wfld;
+    std::shared_ptr<vecReg<data_t> > _background_wfld;
     std::shared_ptr<vecReg<data_t> > _model; // background model
 
     born_op_a(){}

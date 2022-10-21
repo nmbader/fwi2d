@@ -1,6 +1,7 @@
 #include "we_op.hpp"
 #include "misc.hpp"
 #include "spatial_operators.hpp"
+#include "IO.hpp"
 
 void analyzeGeometry(const hypercube<data_t> &model, param &par, bool verbose)
 {
@@ -499,13 +500,13 @@ void nl_we_op_e::compute_gradients(const data_t * model, const data_t * u_full, 
     w *= w;
 
     // different from time zero
-    if (par.nt/par.sub-it>0){
+    if (par.nt/par.sub-1-it>0){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
             g[0][i] += w*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
             g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub-it][0][i]-2*pfor[par.nt/par.sub-it-1][0][i]+pfor[par.nt/par.sub-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
         }
     }
     // time zero
@@ -515,7 +516,7 @@ void nl_we_op_e::compute_gradients(const data_t * model, const data_t * u_full, 
         {
             g[0][i] += w*0.5*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
             g[1][i] += w*0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-pfor[par.nt/par.sub+1-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-pfor[par.nt/par.sub+1-it-1][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub-it][0][i]-pfor[par.nt/par.sub-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub-it][1][i]-pfor[par.nt/par.sub-it-1][1][i])); // rho gradient
         }
     }
 }
@@ -1177,7 +1178,6 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     }
     else
     {
-
         #pragma omp parallel for
         for(int i=0; i<nxz; i++)
         {
@@ -1466,7 +1466,7 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
     w *= w;
 
     // different from time zero
-    if (par.nt/par.sub-it>0){
+    if (par.nt/par.sub-1-it>0){
         #pragma omp parallel for private(val1,val2,val3,del)
         for (int i=0; i<nxz; i++) 
         {
@@ -1476,7 +1476,7 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
             val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
             g[0][i] += w*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
             g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-2*pfor[par.nt/par.sub+1-it-1][0][i]+pfor[par.nt/par.sub+1-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub-it][0][i]-2*pfor[par.nt/par.sub-it-1][0][i]+pfor[par.nt/par.sub-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub-it][1][i]-2*pfor[par.nt/par.sub-it-1][1][i]+pfor[par.nt/par.sub-it-2][1][i])); // rho gradient
             g[3][i] = 0;
             g[4][i] = 0;
         }
@@ -1492,7 +1492,7 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
             val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
             g[0][i] += w*0.5*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
             g[1][i] += w*0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub+1-it][0][i]-pfor[par.nt/par.sub+1-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-pfor[par.nt/par.sub+1-it-1][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub-it][0][i]-pfor[par.nt/par.sub-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub-it][1][i]-pfor[par.nt/par.sub-it-1][1][i])); // rho gradient
             g[3][i] = 0;
             g[4][i] = 0;
         }
@@ -1848,11 +1848,11 @@ void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, 
     w *= w;
 
     // different from time zero
-    if (par.nt/par.sub-it>0){
+    if (par.nt/par.sub-1-it>0){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-2*pfor[par.nt/par.sub+1-it-1][i]+pfor[par.nt/par.sub+1-it-2][i]); // K gradient
+            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub-it][i]-2*pfor[par.nt/par.sub-it-1][i]+pfor[par.nt/par.sub-it-2][i]); // K gradient
             g[1][i] += w*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
         }
     }
@@ -1861,7 +1861,7 @@ void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, 
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub+1-it][i]-pfor[par.nt/par.sub+1-it-1][i]); // K gradient
+            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub-it][i]-pfor[par.nt/par.sub-it-1][i]); // K gradient
             g[1][i] += w*0.5*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
         }
     }
@@ -2520,11 +2520,11 @@ void born_op_a::compute_gradients(const data_t * model, const data_t * u_full, c
     data_t (*g) [nxz] = (data_t (*)[nxz]) grad;
 
     // different from time zero
-    if (par.nt/par.sub-it>0){
+    if (par.nt/par.sub-1-it>0){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] += 1.0/(dt)*padj[i]*(pfor[par.nt/par.sub+1-it][i]-2*pfor[par.nt/par.sub+1-it-1][i]+pfor[par.nt/par.sub+1-it-2][i]);
+            g[0][i] += 1.0/dt*padj[i]*(pfor[par.nt/par.sub-it][i] - 2*pfor[par.nt/par.sub-it-1][i] + pfor[par.nt/par.sub-it-2][i]);
         }
     }
     // time zero
@@ -2532,7 +2532,7 @@ void born_op_a::compute_gradients(const data_t * model, const data_t * u_full, c
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] += 1.0/(dt)*padj[i]*(pfor[par.nt/par.sub+1-it][i]-pfor[par.nt/par.sub+1-it-1][i]);
+            g[0][i] += 1.0/dt*padj[i]*(pfor[par.nt/par.sub-it][i] - pfor[par.nt/par.sub-it-1][i]);
         }
     }
 }
@@ -2594,18 +2594,13 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
     for (int i=0; i<nxz; i++) prev[0][i] *= 0.5 * mod[0][i]*par.dt*par.dt;
     if (!adj) for (int i=0; i<nxz; i++) dprev[0][i] = -mod[0][i]*prev[0][i]*grad[i];
 
+
     int pct10 = round(par.nt/10);
 
     for (int it=0; it<par.nt-1; it++)
     {
         // copy the current wfld to the full wfld vector
         if ((par.sub>0) && (it%par.sub==0) && (!adj)) memcpy(u_full[it/par.sub], curr, nxz*sizeof(data_t));
-
-        // extract receivers
-        if (!adj)
-        {
-            ext->extract(true, dcurr[0], rcv, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
-        }
 
         // compute FWI gradients except for first and last time samples
         if ((adj) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
@@ -2614,107 +2609,58 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
         Dxx(false, curr[0], next[0], nx, nz, dx, 0, nx, 0, nz);
         Dzz(true, curr[0], next[0], nx, nz, dz, 0, nx, 0, nz);
 
-        if (!adj){
-            Dxx(false, dcurr[0], dnext[0], nx, nz, dx, 0, nx, 0, nz);
-            Dzz(true, dcurr[0], dnext[0], nx, nz, dz, 0, nx, 0, nz);
-        }
-
         // inject sources
         inj->inject(true, src, next[0], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
-
-        if (!adj) for (int i=0; i<nxz; i++) dnext[0][i] -= mod[0][i]*next[0][i]*grad[i];
 
         // apply boundary conditions
         if (par.bc_top==1)
         {
             const data_t * in[1] = {curr[0]};
             asat_dirichlet_top(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha);
-            if (!adj) {
-                const data_t * din[1] = {dcurr[0]};
-                asat_dirichlet_top(true, din, dnext[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha);
-            }
         }
         else if (par.bc_top==2)
         {
             const data_t * in[2] = {curr[0],prev[0]};
             asat_absorbing_top(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
-            if (!adj) {
-                const data_t * din[2] = {dcurr[0],dprev[0]};
-                asat_absorbing_top(true, din, dnext[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
-            }
         }
         if (par.bc_bottom==1)
         {
             const data_t * in[1] = {curr[0]};
             asat_dirichlet_bottom(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha);
-            if (!adj) {
-                const data_t * din[1] = {dcurr[0]};
-                asat_dirichlet_bottom(true, din, dnext[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha);
-            }
         }
         else if (par.bc_bottom==2)
         {
             const data_t * in[2] = {curr[0],prev[0]};
             asat_absorbing_bottom(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
-            if (!adj) {
-                const data_t * din[2] = {dcurr[0],dprev[0]};
-                asat_absorbing_bottom(true, din, dnext[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
-            }
         }
         if (par.bc_left==1)
         {
             const data_t * in[1] = {curr[0]};
             asat_dirichlet_left(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, alpha);
-            if (!adj) {
-                const data_t * din[1] = {dcurr[0]};
-                asat_dirichlet_left(true, din, dnext[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, alpha);
-            }
         }
         else if (par.bc_left==2)
         {
             const data_t * in[2] = {curr[0],prev[0]};
             asat_absorbing_left(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
-            if (!adj) {
-                const data_t * din[2] = {dcurr[0],dprev[0]};
-                asat_absorbing_left(true, din, dnext[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
-            }
         }
         if (par.bc_right==1)
         {
             const data_t * in[1] = {curr[0]};
             asat_dirichlet_right(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, alpha);
-            if (!adj) {
-                const data_t * din[1] = {dcurr[0]};
-                asat_dirichlet_right(true, din, dnext[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, alpha);
-            }
         }
         else if (par.bc_right==2)
         {
             const data_t * in[2] = {curr[0],prev[0]};
             asat_absorbing_right(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
-            if (!adj) {
-                const data_t * din[2] = {dcurr[0],dprev[0]};
-                asat_absorbing_right(true, din, dnext[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
-            }
         }
 
         // update wfld with the 2 steps time recursion
         #pragma omp parallel for
-        for (int i=0; i<nxz; i++) next[0][i] = par.dt*par.dt*next[0][i]*mod[0][i] + 2*curr[0][i] - prev[0][i];
-
-        if (!adj) {
-            #pragma omp parallel for
-            for (int i=0; i<nxz; i++) dnext[0][i] = par.dt*par.dt*dnext[0][i]*mod[0][i] + 2*dcurr[0][i] - dprev[0][i];
-        }
+        for (int i=0; i<nxz; i++) next[0][i] = par.dt*par.dt*mod[0][i]*next[0][i] + 2*curr[0][i] - prev[0][i];
 
         // scale boundaries when relevant (for locally absorbing BC only)
         data_t * in[1] = {next[0]};
         asat_scale_boundaries(in, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
-        
-        if (!adj) {
-            data_t * din[1] = {dnext[0]};
-            asat_scale_boundaries(din, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
-        }
 
         taperz(curr[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
         taperz(curr[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
@@ -2725,8 +2671,71 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
         taperx(next[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
         taperx(next[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
 
+        // propagate scattered wavefield
         if (!adj)
         {
+            // extract receivers
+            ext->extract(true, dcurr[0], rcv, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+
+            // apply spatial SBP operators
+            Dxx(false, dcurr[0], dnext[0], nx, nz, dx, 0, nx, 0, nz);
+            Dzz(true, dcurr[0], dnext[0], nx, nz, dz, 0, nx, 0, nz);
+
+            // add source for the scattered wfld
+            #pragma omp parallel for
+            //for (int i=0; i<nxz; i++) dnext[0][i] -= curr[0][i]*grad[i];
+            for (int i=0; i<nxz; i++) dnext[0][i] -= (next[0][i] - 2*curr[0][i] + prev[0][i])/(par.dt*par.dt)*grad[i];
+
+            // apply boundary conditions to the scattered wfld
+            if (par.bc_top==1)
+            {
+                    const data_t * din[1] = {dcurr[0]};
+                    asat_dirichlet_top(true, din, dnext[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha);
+            }
+            else if (par.bc_top==2)
+            {
+                    const data_t * din[2] = {dcurr[0],dprev[0]};
+                    asat_absorbing_top(true, din, dnext[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+            if (par.bc_bottom==1)
+            {
+                    const data_t * din[1] = {dcurr[0]};
+                    asat_dirichlet_bottom(true, din, dnext[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, alpha);
+            }
+            else if (par.bc_bottom==2)
+            {
+                    const data_t * din[2] = {dcurr[0],dprev[0]};
+                    asat_absorbing_bottom(true, din, dnext[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+            if (par.bc_left==1)
+            {
+                    const data_t * din[1] = {dcurr[0]};
+                    asat_dirichlet_left(true, din, dnext[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, alpha);
+            }
+            else if (par.bc_left==2)
+            {
+                    const data_t * din[2] = {dcurr[0],dprev[0]};
+                    asat_absorbing_left(true, din, dnext[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            if (par.bc_right==1)
+            {
+                    const data_t * din[1] = {dcurr[0]};
+                    asat_dirichlet_right(true, din, dnext[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, alpha);
+            }
+            else if (par.bc_right==2)
+            {
+                    const data_t * din[2] = {dcurr[0],dprev[0]};
+                    asat_absorbing_right(true, din, dnext[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+
+            // update scattered wfld with the 2 steps time recursion
+            #pragma omp parallel for
+            for (int i=0; i<nxz; i++) dnext[0][i] = par.dt*par.dt*dnext[0][i]*mod[0][i] + 2*dcurr[0][i] - dprev[0][i];
+
+            // scale boundaries when relevant (for locally absorbing BC only)
+            data_t * din[1] = {dnext[0]};
+            asat_scale_boundaries(din, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
+
             taperz(dcurr[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
             taperz(dcurr[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
             taperx(dcurr[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
@@ -2735,6 +2744,11 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
             taperz(dnext[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
             taperx(dnext[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
             taperx(dnext[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+
+            bucket=dprev;
+            dprev=dcurr;
+            dcurr=dnext;
+            dnext=bucket;
         }
 
         bucket=prev;
@@ -2742,17 +2756,10 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
         curr=next;
         next=bucket;
 
-        if (!adj){
-            bucket=dprev;
-            dprev=dcurr;
-            dcurr=dnext;
-            dnext=bucket;
-        }
-
         if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
     }
 
-    // copy the last wfld to the full wfld vector
+    // copy the last wfld to the full wfld vector (not needed)
     if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (!adj)) memcpy(u_full[(par.nt-1)/par.sub], curr, nxz*sizeof(data_t));
 
     // extract receivers last sample
@@ -2783,7 +2790,7 @@ void born_op_a::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     hypercube<data_t> domain = *_allsrc->getHyper();
 
     if (_par.sub>0){
-        _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
+        _background_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
     }
 
     // setting up and apply the time resampling operator
@@ -2842,7 +2849,7 @@ void born_op_a::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         // perform the wave propagation
         data_t * full = nullptr;
         if (_par.sub>0) {
-            full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
+            full = _background_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
         }
 
         data_t * ds2 = const_cast<data_t *> (pmod);
@@ -2865,11 +2872,11 @@ void born_op_a::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 
         if (_par.sub>0){
             data_t * temp;
-            if (rank==0) temp = new data_t[_full_wfld->getN123()];
-            if (sizeof(data_t)==8) MPI_Reduce(_full_wfld->getCVals(), temp, _full_wfld->getN123(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-            else MPI_Reduce(_full_wfld->getCVals(), temp, _full_wfld->getN123(), MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+            if (rank==0) temp = new data_t[_background_wfld->getN123()];
+            if (sizeof(data_t)==8) MPI_Reduce(_background_wfld->getCVals(), temp, _background_wfld->getN123(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+            else MPI_Reduce(_background_wfld->getCVals(), temp, _background_wfld->getN123(), MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
             if (rank==0) {
-                memcpy(_full_wfld->getVals(), temp, _full_wfld->getN123()*sizeof(data_t));
+                memcpy(_background_wfld->getVals(), temp, _background_wfld->getN123()*sizeof(data_t));
                 delete [] temp;
             }
         }
@@ -2964,7 +2971,7 @@ void born_op_a::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
         // perform the wave propagation
         data_t * full = nullptr;
         if (_par.sub>0) {
-            full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
+            full = _background_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
         }
 
         propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz, ox, oz, s);

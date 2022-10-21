@@ -34,9 +34,10 @@ int main(int argc, char **argv){
     if (par.nthreads>0) omp_set_num_threads(par.nthreads);
 
 // Read inputs/outputs files
-    std::string source_file="none", model_file="none", wavefield_file="none", output_file="none";
+    std::string source_file="none", model_file="none", data_file="none", wavefield_file="none", output_file="none";
     readParam<std::string>(argc, argv, "source", source_file);
     readParam<std::string>(argc, argv, "model", model_file);
+    readParam<std::string>(argc, argv, "data", data_file);
     readParam<std::string>(argc, argv, "wavefield", wavefield_file);
     readParam<std::string>(argc, argv, "output", output_file);
 
@@ -45,21 +46,22 @@ int main(int argc, char **argv){
 
     std::shared_ptr<vec> src = read<data_t>(source_file, par.format);
     std::shared_ptr<vec> model = read<data_t>(model_file, par.format);
-    
-// Analyze the input source time function and duplicate if necessary, analyze geometry, analyze model
-    analyzeGeometry(*model->getHyper(),par, par.verbose>0);
-    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
-    analyzeModel(*allsrc->getHyper(),model,par);
+    std::shared_ptr<vec> data = nullptr;
+    if (data_file != "none") data = read<data_t>(data_file, par.format);
 
 // Extract the reflectivity
     int nx = model->getHyper()->getAxis(2).n;
     int nz = model->getHyper()->getAxis(1).n;
     std::shared_ptr<vec> refl = std::make_shared<vec>(hyper(model->getHyper()->getAxis(1),model->getHyper()->getAxis(2)));
     memcpy(refl->getVals(),model->getCVals()+nx*nz, nx*nz*sizeof(data_t));
+    
+// Analyze the input source time function and duplicate if necessary, analyze geometry, analyze model
+    analyzeGeometry(*model->getHyper(),par, par.verbose>0);
+    std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
+    analyzeModel(*allsrc->getHyper(),model,par);
 
 // Build the Born operator
     born_op_a op(model,allsrc,par);
-    //born.dotProduct();
 
 // Run the forward modeling
     if (rank>0) par.verbose=verbose;
@@ -67,8 +69,20 @@ int main(int argc, char **argv){
     allrcv->zero();
     op.forward(false,refl,allrcv);
 
-    if ((rank==0) && (wavefield_file!="none") && (op._par.sub)>0) write<data_t>(op._full_wfld, wavefield_file, par.format, par.datapath);
-    if ((rank==0) && (output_file!="none")) write<data_t>(allrcv, output_file, par.format, par.datapath);
+    std::shared_ptr<vec> output = allrcv;
+
+// Run adjoint modeling (migration) is applicable
+    if (data != nullptr)
+    {
+        successCheck(data->getN123()==allrcv->getN123(),__FILE__,__LINE__,"The provided data is incompatible\n");
+
+        refl->zero();
+        op.adjoint(false,refl,data);
+        output = refl;
+    }
+
+    if ((rank==0) && (wavefield_file!="none") && (op._par.sub)>0) write<data_t>(op._background_wfld, wavefield_file, par.format, par.datapath);
+    if ((rank==0) && (output_file!="none")) write<data_t>(output, output_file, par.format, par.datapath);
 
 #ifdef ENABLE_MPI
     MPI_Finalize();
