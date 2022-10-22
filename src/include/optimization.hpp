@@ -578,7 +578,7 @@ public:
         }
     }
 
-    void compute_res_and_grad(data_t * r){       
+    void compute_res_and_grad(data_t * r){    
 
         _g->zero();
 

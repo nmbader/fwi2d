@@ -76,6 +76,9 @@ target_link_libraries(WE_MODELING.x fwi2d sep)
 add_executable(BORN.x ${MAIN_DIR}/born.cpp)
 target_link_libraries(BORN.x fwi2d sep)
 
+add_executable(LSRTM.x ${MAIN_DIR}/lsrtm.cpp)
+target_link_libraries(LSRTM.x fwi2d sep)
+
 add_executable(FWI2D.x ${MAIN_DIR}/fwi2d.cpp)
 target_link_libraries(FWI2D.x fwi2d sep)
 
@@ -130,6 +133,7 @@ install(FILES ${PYTHON}
         DESTINATION bin)
 install(TARGETS WE_MODELING.x
                 BORN.x
+                LSRTM.x
                 FWI2D.x
                 BSPLINES.x
                 FX.x

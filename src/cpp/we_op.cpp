@@ -488,35 +488,45 @@ void nl_we_op_e::compute_gradients(const data_t * model, const data_t * u_full, 
     data_t (*temp) [nxz] = (data_t (*)[nxz]) tmp;
     data_t (*g) [nxz] = (data_t (*)[nxz]) grad;
 
-    Dx(false, pfor[par.nt/par.sub+1-it-1][0], temp[0], nx, nz, dx, 0, nx, 0, nz); // forwardx_x
-    Dz(false, pfor[par.nt/par.sub+1-it-1][1], temp[1], nx, nz, dz, 0, nx, 0, nz); // forwardz_z
-    Dx(false, pfor[par.nt/par.sub+1-it-1][1], temp[2], nx, nz, dx, 0, nx, 0, nz); // forwardz_x
-    Dz(false, pfor[par.nt/par.sub+1-it-1][0], temp[3], nx, nz, dz, 0, nx, 0, nz); // forwardx_z
+    Dx(false, pfor[it][0], temp[0], nx, nz, dx, 0, nx, 0, nz); // forwardx_x
+    Dz(false, pfor[it][1], temp[1], nx, nz, dz, 0, nx, 0, nz); // forwardz_z
+    Dx(false, pfor[it][1], temp[2], nx, nz, dx, 0, nx, 0, nz); // forwardz_x
+    Dz(false, pfor[it][0], temp[3], nx, nz, dz, 0, nx, 0, nz); // forwardx_z
 
     // cosine square damping in a given time window, often around the source function (gradient close to the source)
-    data_t t = (par.nt/par.sub-it)*dt;
+    data_t t = it*dt;
     data_t w = 1;
     if (par.gdamp_tmax-t>0 && t-par.gdamp_tmin>=0) w = cos(par.gdamp_power*M_PI*(t-par.gdamp_tmin)/(par.gdamp_tmax-par.gdamp_tmin));
     w *= w;
 
-    // different from time zero
-    if (par.nt/par.sub-1-it>0){
+    // different from first and last time sample
+    if (it>0 && it<par.nt/par.sub){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
             g[0][i] += w*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
             g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub-it][0][i]-2*pfor[par.nt/par.sub-it-1][0][i]+pfor[par.nt/par.sub-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub+1-it][1][i]-2*pfor[par.nt/par.sub+1-it-1][1][i]+pfor[par.nt/par.sub+1-it-2][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[it+1][0][i]-2*pfor[it][0][i]+pfor[it-1][0][i]) + padj[1][i]*(pfor[it+1][1][i]-2*pfor[it][1][i]+pfor[it-1][1][i])); // rho gradient
         }
     }
     // time zero
-    else{
+    else if(it==0){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
             g[0][i] += w*0.5*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
             g[1][i] += w*0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub-it][0][i]-pfor[par.nt/par.sub-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub-it][1][i]-pfor[par.nt/par.sub-it-1][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[it+1][0][i]-pfor[it][0][i]) + padj[1][i]*(pfor[it+1][1][i]-pfor[it][1][i])); // rho gradient
+        }
+    }
+    // tmax
+    else{
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++) 
+        {
+            g[0][i] += w*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
+            g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(-2*pfor[it][0][i]+pfor[it-1][0][i]) + padj[1][i]*(-2*pfor[it][1][i]+pfor[it-1][1][i])); // rho gradient
         }
     }
 }
@@ -637,7 +647,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         }
 
         // compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
 
         // apply spatial SBP operators
         if (par.version==1)
@@ -840,7 +850,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
     }
 
     // last sample gradient
-    if ((grad != nullptr) && ((par.nt-1)%par.sub==0) ) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
+    if ( grad != nullptr ) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, 0, dx, dz, par.sub*par.dt);
     
     delete [] u;
     delete [] dux;
@@ -1452,21 +1462,21 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
     data_t (*temp) [nxz] = (data_t (*)[nxz]) tmp;
     data_t (*g) [nxz] = (data_t (*)[nxz]) grad;
 
-    Dx(false, pfor[par.nt/par.sub+1-it-1][0], temp[0], nx, nz, dx, 0, nx, 0, nz); // forwardx_x
-    Dz(false, pfor[par.nt/par.sub+1-it-1][1], temp[1], nx, nz, dz, 0, nx, 0, nz); // forwardz_z
-    Dx(false, pfor[par.nt/par.sub+1-it-1][1], temp[2], nx, nz, dx, 0, nx, 0, nz); // forwardz_x
-    Dz(false, pfor[par.nt/par.sub+1-it-1][0], temp[3], nx, nz, dz, 0, nx, 0, nz); // forwardx_z
+    Dx(false, pfor[it][0], temp[0], nx, nz, dx, 0, nx, 0, nz); // forwardx_x
+    Dz(false, pfor[it][1], temp[1], nx, nz, dz, 0, nx, 0, nz); // forwardz_z
+    Dx(false, pfor[it][1], temp[2], nx, nz, dx, 0, nx, 0, nz); // forwardz_x
+    Dz(false, pfor[it][0], temp[3], nx, nz, dz, 0, nx, 0, nz); // forwardx_z
 
     data_t val1=0, val2=0, val3=0, del=0;
 
     // cosine square damping in a given time window, often around the source function (gradient close to the source)
-    data_t t = (par.nt/par.sub-it)*dt;
+    data_t t = it*dt;
     data_t w = 1;
     if (par.gdamp_tmax-t>0 && t-par.gdamp_tmin>=0) w = cos(par.gdamp_power*M_PI*(t-par.gdamp_tmin)/(par.gdamp_tmax-par.gdamp_tmin));
     w *= w;
 
-    // different from time zero
-    if (par.nt/par.sub-1-it>0){
+    // different from first and last time sample
+    if (it>0 && it<par.nt/par.sub){
         #pragma omp parallel for private(val1,val2,val3,del)
         for (int i=0; i<nxz; i++) 
         {
@@ -1476,13 +1486,13 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
             val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
             g[0][i] += w*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
             g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub-it][0][i]-2*pfor[par.nt/par.sub-it-1][0][i]+pfor[par.nt/par.sub-it-2][0][i]) + padj[1][i]*(pfor[par.nt/par.sub-it][1][i]-2*pfor[par.nt/par.sub-it-1][1][i]+pfor[par.nt/par.sub-it-2][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[it+1][0][i]-2*pfor[it][0][i]+pfor[it-1][0][i]) + padj[1][i]*(pfor[it+1][1][i]-2*pfor[it][1][i]+pfor[it-1][1][i])); // rho gradient
             g[3][i] = 0;
             g[4][i] = 0;
         }
     }
     // time zero
-    else{
+    else if(it==0){
         #pragma omp parallel for private(val1,val2,val3,del)
         for (int i=0; i<nxz; i++) 
         {
@@ -1492,7 +1502,23 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
             val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
             g[0][i] += w*0.5*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
             g[1][i] += w*0.5*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[par.nt/par.sub-it][0][i]-pfor[par.nt/par.sub-it-1][0][i]) + padj[1][i]*(pfor[par.nt/par.sub-it][1][i]-pfor[par.nt/par.sub-it-1][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(pfor[it+1][0][i]-pfor[it][0][i]) + padj[1][i]*(pfor[it+1][1][i]-pfor[it][1][i])); // rho gradient
+            g[3][i] = 0;
+            g[4][i] = 0;
+        }
+    }
+    // tmax
+    else{
+        #pragma omp parallel for private(val1,val2,val3,del)
+        for (int i=0; i<nxz; i++) 
+        {
+            del = ((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));((pm[3][i]+pm[1][i])*(pm[3][i]+pm[1][i]) - (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i])) / (2*(pm[0][i]+pm[1][i])*(pm[0][i]+2*pm[1][i]));
+            val1 = sqrt(2*(pm[0][i]+2*pm[1][i])*(pm[0][i]+pm[1][i])*del + (pm[0][i]+pm[1][i])*(pm[0][i]+pm[1][i]));
+            val2 = ((1+2*del)*pm[0][i] + (1+3*del)*pm[1][i])/val1; // d(C13)/d(lambda)
+            val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
+            g[0][i] += w*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
+            g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(-2*pfor[it][0][i]+pfor[it-1][0][i]) + padj[1][i]*(-2*pfor[it][1][i]+pfor[it-1][1][i])); // rho gradient
             g[3][i] = 0;
             g[4][i] = 0;
         }
@@ -1595,7 +1621,7 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         }
 
         // compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
         
         // apply spatial SBP operators
         if (par.version==1)
@@ -1793,7 +1819,7 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
     }
 
     // last sample gradient
-    if ((grad != nullptr) && ((par.nt-1)%par.sub==0) ) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
+    if (grad != nullptr ) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, 0, dx, dz, par.sub*par.dt);
     
     delete [] u;
     delete [] dux;
@@ -1836,33 +1862,42 @@ void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, 
     data_t (*temp) [nxz] = (data_t (*)[nxz]) tmp;
     data_t (*g) [nxz] = (data_t (*)[nxz]) grad;
 
-    Dx(false, pfor[par.nt/par.sub+1-it-1], temp[0], nx, nz, dx, 0, nx, 0, nz); // forward_x
-    Dz(false, pfor[par.nt/par.sub+1-it-1], temp[1], nx, nz, dz, 0, nx, 0, nz); // forward_z
+    Dx(false, pfor[it], temp[0], nx, nz, dx, 0, nx, 0, nz); // forward_x
+    Dz(false, pfor[it], temp[1], nx, nz, dz, 0, nx, 0, nz); // forward_z
     Dx(false, curr, temp[2], nx, nz, dx, 0, nx, 0, nz); // adjoint_x
     Dz(false, curr, temp[3], nx, nz, dz, 0, nx, 0, nz); // adjoint_z
 
     // cosine square damping in a given time window, often around the source function (gradient close to the source)
-    data_t t = (par.nt/par.sub-it)*dt;
+    data_t t = it*dt;
     data_t w = 1;
     if (par.gdamp_tmax-t>0 && t-par.gdamp_tmin>=0) w = cos(par.gdamp_power*M_PI*(t-par.gdamp_tmin)/(par.gdamp_tmax-par.gdamp_tmin));
     w *= w;
 
-    // different from time zero
-    if (par.nt/par.sub-1-it>0){
+    // different from first and last time sample
+    if (it>0 && it<par.nt/par.sub){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub-it][i]-2*pfor[par.nt/par.sub-it-1][i]+pfor[par.nt/par.sub-it-2][i]); // K gradient
+            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[it+1][i]-2*pfor[it][i]+pfor[it-1][i]); // K gradient
             g[1][i] += w*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
         }
     }
     // time zero
+    else if(it==0){
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++) 
+        {
+            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[it+1][i]-pfor[it][i]); // K gradient
+            g[1][i] += w*0.5*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
+        }
+    }
+    // tmax
     else{
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(pfor[par.nt/par.sub-it][i]-pfor[par.nt/par.sub-it-1][i]); // K gradient
-            g[1][i] += w*0.5*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
+            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(-2*pfor[it][i]+pfor[it-1][i]); // K gradient
+            g[1][i] += w*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
         }
     }
 }
@@ -1926,7 +1961,7 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
         }
 
         // compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
 
         // apply spatial SBP operators
        
@@ -2059,7 +2094,7 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
     }
 
     // last sample gradient
-    if ((grad != nullptr) && ((par.nt-1)%par.sub==0) ) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
+    if (grad != nullptr ) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, 0, dx, dz, par.sub*par.dt);
     
     delete [] u;
     if (grad != nullptr) delete [] tmp;
@@ -2226,7 +2261,7 @@ void nl_we_op_ae::propagate(bool adj, const data_t * model, const data_t * allsr
         }
 
         // compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
 
         // apply spatial SBP operators
         Dxx_var<expr2>(false, curra[0], nexta[0], nx, nza, dx, 0, nx, 0, nza, moda, 1.0);
@@ -2519,20 +2554,31 @@ void born_op_a::compute_gradients(const data_t * model, const data_t * u_full, c
     const data_t *padj = curr;
     data_t (*g) [nxz] = (data_t (*)[nxz]) grad;
 
-    // different from time zero
-    if (par.nt/par.sub-1-it>0){
+    // different from first and last time sample
+    if (it>0 && it<par.nt/par.sub){
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] += 1.0/dt*padj[i]*(pfor[par.nt/par.sub-it][i] - 2*pfor[par.nt/par.sub-it-1][i] + pfor[par.nt/par.sub-it-2][i]);
+            //g[0][i] += 1.0/dt*padj[i]*(pfor[it+1][i] - 2*pfor[it][i] + pfor[it-1][i]);
+            g[0][i] += dt*padj[i]*pfor[it][i];
         }
     }
     // time zero
+    else if(it==0){
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++) 
+        {
+            //g[0][i] += 1.0/dt*padj[i]*(pfor[it+1][i] - pfor[it][i]);
+            g[0][i] += 0.5*dt*padj[i]*pfor[it][i];
+        }
+    }
+    // tmax
     else{
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] += 1.0/dt*padj[i]*(pfor[par.nt/par.sub-it][i] - pfor[par.nt/par.sub-it-1][i]);
+            //g[0][i] += 1.0/dt*padj[i]*(- 2*pfor[it][i] + pfor[it-1][i] );
+            g[0][i] += 0.5*dt*padj[i]*pfor[it][i];
         }
     }
 }
@@ -2600,10 +2646,10 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
     for (int it=0; it<par.nt-1; it++)
     {
         // copy the current wfld to the full wfld vector
-        if ((par.sub>0) && (it%par.sub==0) && (!adj)) memcpy(u_full[it/par.sub], curr, nxz*sizeof(data_t));
+        //if ((par.sub>0) && (it%par.sub==0) && (!adj)) memcpy(u_full[it/par.sub], curr, nxz*sizeof(data_t));
 
         // compute FWI gradients except for first and last time samples
-        if ((adj) && (it%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+        if ((adj) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
 
         // apply spatial SBP operators
         Dxx(false, curr[0], next[0], nx, nz, dx, 0, nx, 0, nz);
@@ -2671,6 +2717,12 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
         taperx(next[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
         taperx(next[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
 
+        // copy the current wfld to the full wfld vector
+        if ((par.sub>0) && (it%par.sub==0) && (!adj)) {
+            #pragma omp parallel for
+            for (int i=0; i<nxz; i++) u_full[it/par.sub][i] = (next[0][i] - 2*curr[0][i] + prev[0][i])/(par.dt*par.dt);
+        }
+
         // propagate scattered wavefield
         if (!adj)
         {
@@ -2683,7 +2735,6 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
 
             // add source for the scattered wfld
             #pragma omp parallel for
-            //for (int i=0; i<nxz; i++) dnext[0][i] -= curr[0][i]*grad[i];
             for (int i=0; i<nxz; i++) dnext[0][i] -= (next[0][i] - 2*curr[0][i] + prev[0][i])/(par.dt*par.dt)*grad[i];
 
             // apply boundary conditions to the scattered wfld
@@ -2760,7 +2811,12 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
     }
 
     // copy the last wfld to the full wfld vector (not needed)
-    if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (!adj)) memcpy(u_full[(par.nt-1)/par.sub], curr, nxz*sizeof(data_t));
+    //if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (!adj)) memcpy(u_full[(par.nt-1)/par.sub], curr, nxz*sizeof(data_t));
+    if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (!adj)) {
+        #pragma omp parallel for
+        //for (int i=0; i<nxz; i++) u_full[(par.nt-1)/par.sub][i] = ( - 2*curr[0][i] + prev[0][i])/(par.dt*par.dt);
+        for (int i=0; i<nxz; i++) u_full[(par.nt-1)/par.sub][i] = 0;
+    }
 
     // extract receivers last sample
     if (!adj)
@@ -2769,7 +2825,7 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
     }
 
     // last sample gradient
-    if ((adj) && ((par.nt-1)%par.sub==0) ) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
+    if (adj) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, 0, dx, dz, par.sub*par.dt);
     
     delete [] u;
     if (!adj) delete [] du;
