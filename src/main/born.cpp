@@ -60,23 +60,32 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
     analyzeModel(*allsrc->getHyper(),model,par);
 
-// Build the Born operator
+// Build the Born operator and the non-linear forward operator
     born_op_a op(model,allsrc,par);
-
-// Run the forward modeling
+    nl_we_op_a nlop(*model->getHyper(),allsrc,par);
     if (rank>0) par.verbose=verbose;
     std::shared_ptr<vec> allrcv = std::make_shared<vec> (*op.getRange());
     allrcv->zero();
-    op.forward(false,refl,allrcv);
+    std::shared_ptr<vec> output = nullptr;
 
-    std::shared_ptr<vec> output = allrcv;
+// Run the BORN forward modeling if applicable
+    if (data == nullptr)
+    {
+        op.forward(false,refl,allrcv);
+        output = allrcv;
+    }
 
-// Run adjoint modeling (migration) is applicable
-    if (data != nullptr)
+// Run BORN adjoint modeling (migration) if applicable
+    else
     {
         successCheck(data->getN123()==allrcv->getN123(),__FILE__,__LINE__,"The provided data is incompatible\n");
 
+        model->set(1,nx*nz);
         refl->zero();
+        nlop.forward(false,model,allrcv);
+        op._background_wfld = nlop._full_wfld;
+
+        data->scale(-1); // data needs to be scaled by -1
         op.adjoint(false,refl,data);
         output = refl;
     }

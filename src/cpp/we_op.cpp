@@ -319,6 +319,7 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
             {
                 model->clip(par.deltamin,par.deltamax,3*nx*nz,4*nx*nz);
                 model->clip(par.epsilonmin,par.epsilonmax,4*nx*nz,5*nx*nz);
+                epsmax = model->max(4*nx*nz,5*nx*nz);
             }
 
             bool check=true;
@@ -362,6 +363,7 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
 
         par.vmax=vpmax;
         par.vmin=vsmin;
+        if (par.nmodels==5) par.vmax *= sqrt(1+2*epsmax);
 
         if (par.acoustic_elastic){
             par.vmax = std::max(par.vmax, par.water_velocity);
@@ -938,7 +940,7 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     // loop over shots
     for (int s=rank; s<_par.ns; s += size)
     {
-        if (_par.verbose>2 || size>1) fprintf(stderr,"Start propagating shot %d by process %d\n",s,rank0);
+        if (_par.verbose>1) fprintf(stderr,"Start propagating shot %d by process %d\n",s,rank0);
 
         // cumulative number of receivers
         int nr=0;
@@ -966,14 +968,14 @@ void nl_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
 
-        if (_par.verbose>2 || size>1) fprintf(stderr,"Finish propagating shot %d by process %d\n",s, rank0);
+        if (_par.verbose>1) fprintf(stderr,"Finish propagating shot %d by process %d\n",s, rank0);
 
         delete inj;
         delete ext;
     }
 
 #ifdef ENABLE_MPI
-    if (!_par.skip_mpi){
+    if (!_par.skip_mpi && size>1){
         data_t * temp;
         if (rank==0) temp = new data_t[allrcv->getN123()];
         if (sizeof(data_t)==8) MPI_Reduce(allrcv->getCVals(), temp, allrcv->getN123(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -1114,7 +1116,7 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     // loop over shots
     for (int s=rank; s<_par.ns; s += size)
     {
-        if (_par.verbose>2 || size>1) fprintf(stderr,"Start back-propagating shot %d by process %d\n",s,rank0);
+        if (_par.verbose>1) fprintf(stderr,"Start back-propagating shot %d by process %d\n",s,rank0);
 
         // cumulative number of receivers
         int nr=0;
@@ -1142,14 +1144,14 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
         propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
 
-        if (_par.verbose>2 || size>1) fprintf(stderr,"Finish back-propagating shot %d with gradient computation by process %d\n",s, rank0);
+        if (_par.verbose>1) fprintf(stderr,"Finish back-propagating shot %d with gradient computation by process %d\n",s, rank0);
 
         delete inj;
         delete ext;
     }
 
 #ifdef ENABLE_MPI
-    if (!_par.skip_mpi){
+    if (!_par.skip_mpi && size>1){
         data_t * gtemp = new data_t[nm*nx*nz];
         if (sizeof(data_t)==8) MPI_Allreduce(pmod, gtemp, nm*nx*nz, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         else MPI_Allreduce(pmod, gtemp, nm*nx*nz, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
@@ -1249,7 +1251,7 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     // loop over shots
     for (int s=0; s<_par.ns; s++)
     {
-        if (_par.verbose>2) fprintf(stderr,"Start propagating shot %d\n",s);
+        if (_par.verbose>1) fprintf(stderr,"Start propagating shot %d\n",s);
 
         // cumulative number of receivers
         int nr=0;
@@ -1275,7 +1277,7 @@ void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         delete inj;
         delete ext;
 
-        if (_par.verbose>2) fprintf(stderr,"Finish propagating shot %d\n",s);
+        if (_par.verbose>1) fprintf(stderr,"Finish propagating shot %d\n",s);
     }
 
     // convert to DAS (strain) data when relevant
@@ -1367,7 +1369,7 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     // loop over shots
     for (int s=0; s<_par.ns; s++)
     {
-        if (_par.verbose>2) fprintf(stderr,"Start back-propagating shot %d\n",s);
+        if (_par.verbose>1) fprintf(stderr,"Start back-propagating shot %d\n",s);
 
         // cumulative number of receivers
         int nr=0;
@@ -1393,7 +1395,7 @@ void l_we_op_e::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
         delete inj;
         delete ext;
 
-        if (_par.verbose>2) fprintf(stderr,"Finish back-propagating shot %d\n",s);
+        if (_par.verbose>1) fprintf(stderr,"Finish back-propagating shot %d\n",s);
     }
 
     // apply time quadrature and revert back in time
@@ -2874,7 +2876,6 @@ void born_op_a::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     else resamp = new sinc_resampler(domain, hyper_s, _par.sinc_half_length);
 
     // resample in time (interpolation)
-    //fprintf(stderr,"Resample in time all source traces\n");
     resamp->apply_forward(false,_allsrc->getCVals(),allsrc->getVals());
 
     int size=1, rank=0, rank0=0;
@@ -2889,6 +2890,8 @@ void born_op_a::apply_forward(bool add, const data_t * pmod, data_t * pdat)
     // loop over shots
     for (int s=rank; s<_par.ns; s += size)
     {
+        if (_par.verbose>1) fprintf(stderr,"Start propagating shot %d by process %d\n",s,rank0);
+
         // cumulative number of receivers
         int nr=0;
         if (s>0) {for (int i=0; i<s; i++) nr += _par.rxz[i].size();}
@@ -2911,12 +2914,14 @@ void born_op_a::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         data_t * ds2 = const_cast<data_t *> (pmod);
         propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, ds2, _par, nx, nz, dx, dz, ox, oz, s);
 
+        if (_par.verbose>1) fprintf(stderr,"Finish propagating shot %d by process %d\n",s, rank0);
+
         delete inj;
         delete ext;
     }
 
 #ifdef ENABLE_MPI
-    if (!_par.skip_mpi){
+    if (!_par.skip_mpi && size>1){
         data_t * temp;
         if (rank==0) temp = new data_t[allrcv->getN123()];
         if (sizeof(data_t)==8) MPI_Reduce(allrcv->getCVals(), temp, allrcv->getN123(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -3011,6 +3016,8 @@ void born_op_a::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
     // loop over shots
     for (int s=rank; s<_par.ns; s += size)
     {
+        if (_par.verbose>1) fprintf(stderr,"Start back-propagating shot %d by process %d\n",s,rank0);
+
         // cumulative number of receivers
         int nr=0;
         if (s>0) {for (int i=0; i<s; i++) nr += _par.rxz[i].size();}
@@ -3032,12 +3039,14 @@ void born_op_a::apply_adjoint(bool add, data_t * pmod, const data_t * pdat)
 
         propagate(true, pm0, allrcv->getCVals()+nr*_par.nt, allsrc->getVals()+s*_par.nt, inj, ext, full, pmod, _par, nx, nz, dx, dz, ox, oz, s);
         
+        if (_par.verbose>1) fprintf(stderr,"Finish back-propagating shot %d with gradient computation by process %d\n",s, rank0);
+        
         delete inj;
         delete ext;
     }
 
 #ifdef ENABLE_MPI
-    if (!_par.skip_mpi){
+    if (!_par.skip_mpi && size>1){
         data_t * gtemp = new data_t[nm*nx*nz];
         if (sizeof(data_t)==8) MPI_Allreduce(pmod, gtemp, nm*nx*nz, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         else MPI_Allreduce(pmod, gtemp, nm*nx*nz, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);

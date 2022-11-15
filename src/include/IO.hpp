@@ -154,18 +154,18 @@ std::shared_ptr<vecReg<T> > sepRead(std::string input, int ndim0=1){
     std::shared_ptr<vecReg<T> > vec = std::make_shared<vecReg<T> > (hyper);
 
     if (sizeof(T)==size){
-        successCheck(size*n123 == sreed(data,vec->getVals(),size*n123),__FILE__,__LINE__, "Cannot read data\n");
+        successCheck(size*n123 == sreed_big(data,vec->getVals(),size*n123),__FILE__,__LINE__, "Cannot read data\n");
     }
     else {
         if (size==4){
             float* val = new float[n123];
-            successCheck(size*n123 == sreed(data,val,size*n123),__FILE__,__LINE__, "Cannot read data\n");
+            successCheck(size*n123 == sreed_big(data,val,size*n123),__FILE__,__LINE__, "Cannot read data\n");
             for (long i=0; i<n123; i++) vec->getVals()[i]=val[i];
             delete [] val;
         }
         else if (size==8){
             double* val = new double[n123];
-            successCheck(size*n123 == sreed(data,val,size*n123),__FILE__,__LINE__, "Cannot read data\n");
+            successCheck(size*n123 == sreed_big(data,val,size*n123),__FILE__,__LINE__, "Cannot read data\n");
             for (long i=0; i<n123; i++) vec->getVals()[i]=val[i];
             delete [] val;
         }
