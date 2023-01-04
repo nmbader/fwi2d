@@ -1059,3 +1059,212 @@ public:
 std::shared_ptr<vecReg<data_t> > zero_phase(const std::shared_ptr<vecReg<data_t> > dat);
 // transform a filter to minimum phase
 std::shared_ptr<vecReg<data_t> > minimum_phase(const std::shared_ptr<vecReg<data_t> > dat, const data_t eps);
+
+
+
+
+
+
+
+
+// operator that takes and extended model (one for each source) and damp (cosine squared) around the sources location while borrowing from other sources location
+// m = W.ms where ms is the extended model across sources, 'W' is a non-diagonal operator of normalized cosine squared weighting for each source 's'
+class sWeighting : public loper {
+protected:
+    data_t _dpower; // damping strength for cosine^2
+    data_t _dwidthx; // damping width (radius)
+    data_t _dwidthz;
+    std::vector<std::vector<data_t> > _sxz; // sources location
+    std::shared_ptr<vecReg<data_t> > _W; // normalized weights for the extended model
+
+public:
+    sWeighting(){}
+    ~sWeighting(){}
+    sWeighting(const hypercube<data_t> &domain,const std::vector<std::vector<data_t> > &sxz, const std::vector<std::vector<std::vector<data_t> > > &rxz, const data_t dwidthx, const data_t dwidthz, const data_t dpower, const data_t xextension, const data_t zextension, bool damp_around_sources, bool normalize){
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        successCheck(axes.size()>=3,__FILE__,__LINE__,"The domain must contain at least 3 axes\n");
+        int ns=domain.getN123()/(axes[0].n*axes[1].n*axes[2].n);
+        successCheck(ns>=2,__FILE__,__LINE__,"The number of sources in the extension must be at least 2\n");
+        axis<data_t> S(ns,0,1);
+        successCheck(ns==sxz.size(),__FILE__,__LINE__,"The domain size must be consistent with the number of sources\n");
+        
+        _domain = hypercube<data_t>(axes[0],axes[1],axes[2],S);
+        _range = _domain;
+        _dwidthx = dwidthx;
+        _dwidthz = dwidthz;
+        _dpower = dpower;
+        _sxz=sxz;
+        _W = std::make_shared<vecReg<data_t> >(hypercube<data_t>(axes[0],axes[1],S));
+        _W->zero();
+
+        axis<data_t> Z = _range.getAxis(1);
+        axis<data_t> X = _range.getAxis(2);
+        axis<data_t> C = _range.getAxis(3);
+
+        data_t val0 = pow(cos(_dpower*0.5*M_PI),2);
+        _W->set(val0);
+        data_t * ptr = _W->getVals();
+        data_t (*pw) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) _W->getVals();
+        
+        // compute geometrical weights
+        #pragma omp parallel for
+        for (int s=0; s<ns; s++){
+
+            // find the box surrounding the source location
+            int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
+            int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
+            int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
+            int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
+            ixmin=std::max(0,ixmin);
+            ixmax=std::min(X.n,ixmax);
+            izmin=std::max(0,izmin);
+            izmax=std::min(Z.n,izmax);
+
+            // find the bounding box for each shot+receivers spread (shot zone of influence)
+            std::vector<int> v (4,0);
+            data_t rxmin=rxz[s][0][0];
+            data_t rxmax=rxz[s][0][0];
+            data_t rzmin=rxz[s][0][1];
+            data_t rzmax=rxz[s][0][1];
+            for (int r=0; r<rxz[s].size(); r++){
+                if (rxmin>rxz[s][r][0]) rxmin=rxz[s][r][0];
+                if (rxmax<rxz[s][r][0]) rxmax=rxz[s][r][0];
+                if (rzmin>rxz[s][r][1]) rzmin=rxz[s][r][1];
+                if (rzmax<rxz[s][r][1]) rzmax=rxz[s][r][1];
+            }
+            rxmin = std::min(rxmin,_sxz[s][0]-dwidthx);
+            rxmax = std::max(rxmax,_sxz[s][0]+dwidthx);
+            rzmin = std::min(rzmin,_sxz[s][1]-dwidthz);
+            rzmax = std::max(rzmax,_sxz[s][1]+dwidthz);
+            rxmin -= xextension; 
+            rxmax += xextension;
+            rzmin -= zextension; 
+            rzmax += zextension; 
+            v[0] = floor((rxmin-X.o)/X.d);
+            v[1] = ceil((rxmax-X.o)/X.d);
+            v[2] = floor((rzmin-Z.o)/Z.d);
+            v[3] = ceil((rzmax-Z.o)/Z.d);
+            v[0]=std::max(0,v[0]);
+            v[1]=std::min(X.n,v[1]);
+            v[2]=std::max(0,v[2]);
+            v[3]=std::min(Z.n,v[3]);
+
+            if (xextension<0) {v[0]=0; v[1]=X.n;}
+            if (zextension<0) {v[2]=0; v[3]=Z.n;}
+
+            int ixw=ceil(dwidthx/X.d);
+            int izw=ceil(dwidthz/Z.d);
+
+            // compute weights inside the shot+receivers spread box of influence
+            for (int ix=std::max(v[0]-ixw,0); ix<v[0]; ix++){
+                data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[0]-ix)/ixw),2);
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x;
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+            }
+
+            for (int ix=v[0]; ix<v[1]; ix++){
+                data_t val0x=1;
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = 1.0;
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+            }
+            for (int ix=v[1]; ix<std::min(v[1]+ixw,X.n); ix++){
+                data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[1]-ix)/ixw),2);
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x;
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+            }
+
+            // compute weights around the source location
+            if (damp_around_sources)
+            {
+                for (int ix=ixmin; ix<ixmax; ix++){
+                    data_t x = X.o + ix*X.d;
+                    data_t rx = (x-_sxz[s][0])/_dwidthx;
+                    rx*=rx;
+                    for (int iz=izmin; iz<izmax; iz++){
+                        data_t z = Z.o + iz*Z.d;
+                        data_t rz = (z-_sxz[s][1])/_dwidthz;
+                        rz*=rz;
+                        data_t d = sqrt(rx+rz);
+                        data_t val = 1;
+                        if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
+                        ptr[s*X.n*Z.n + ix*Z.n + iz] = val*val;
+                    }
+                }
+            }
+        }
+
+        // normalization factors (sum of _W over shots)
+        if (normalize)
+        {
+            std::shared_ptr<vecReg<data_t> > nW = std::make_shared<vecReg<data_t> >(hypercube<data_t>(axes[0],axes[1]));
+            nW->zero();
+            data_t * pnw = nW->getVals();
+            // data_t (*pnw) [Z.n] = (data_t (*)[Z.n]) nW->getVals();
+
+            // sum weights across shots
+            for (int s=0; s<ns; s++){
+                for (int ix=0; ix<X.n; ix++){
+                    for (int iz=0; iz<Z.n; iz++) pnw[ix*Z.n + iz] += ptr[s*X.n*Z.n + ix*Z.n + iz];
+                }
+            }
+
+            // normalize weights by their sum across shots
+            #pragma omp parallel for
+            for (int s=0; s<ns; s++){
+                for (int ix=0; ix<X.n; ix++){
+                    for (int iz=0; iz<Z.n; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] /= pnw[ix*Z.n + iz];
+                }
+            }
+        }
+    }
+
+    sWeighting * clone() const {
+        sWeighting * op = new sWeighting();
+        op->_domain=_domain;
+        op->_range=_range;
+        op->_dpower=_dpower;
+        op->_dwidthx=_dwidthx;
+        op->_dwidthz=_dwidthz;
+        op->_sxz=_sxz;
+        op->_W = _W->clone();
+        return op;
+    }    
+    int getNs(){return _sxz.size();}
+    std::shared_ptr<vecReg<data_t> > getW(){return _W;}
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};
+
+
+// operator that outputs the weighted average of an extended model along sources (the extension is assumed along the last axis) 
+class sWSum : public loper {
+protected:    
+    std::shared_ptr<vecReg<data_t> > _W; // weights
+
+public:
+    sWSum(){}
+    ~sWSum(){}
+    sWSum(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t> > W){
+        successCheck(domain.getNdim()>=2,__FILE__,__LINE__,"The domain must contain at least 2 axes\n");
+        _domain = domain;
+        std::vector<axis<data_t> > axes = domain.getAxes();
+        axes.pop_back();
+        _range = hypercube<data_t>(axes);
+        int ns = domain.getAxis(domain.getNdim()).n;
+        int nc = domain.getN123() / W->getN123();
+        int nxz = W->getN123() / ns;
+        successCheck(_range.getN123()/nc==nxz,__FILE__,__LINE__,"Inconsistency between the domain and the weights\n");
+       
+        _W = W->clone();
+    }
+    sWSum * clone() const {
+        sWSum * op = new sWSum(_domain, _W);
+        return op;
+    }
+    std::shared_ptr<vecReg<data_t> > getW(){return _W;}
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
+};

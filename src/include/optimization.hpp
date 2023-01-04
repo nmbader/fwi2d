@@ -466,6 +466,7 @@ protected:
     std::shared_ptr<vecReg<data_t> > _p; // preconditioned model
     std::shared_ptr<vecReg<data_t> > _pg; // gradient before applying preconditioner Jacobian
     std::shared_ptr<vecReg<data_t> > _gmask; // gradient mask vector
+    std::shared_ptr<vecReg<data_t> > _gweights; // gradient weights for preconditioning (extended along sources)
     std::shared_ptr<vecReg<data_t> > _w; // residual weighting vector
     std::shared_ptr<vecReg<data_t> > _filter; // 1D filter
     data_t _dnorm; // data normalization factor
@@ -576,6 +577,14 @@ public:
         if (_L->_par.scale_source_times>0) {
             for (int s=0; s<_L->_par.ns; s++) _scalers.push_back(1.0);
         }
+
+        // gradient preconditioning weights to remove strong contributions around the sources
+        if (_L->_par.gradient_preconditioning)
+        {
+            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, true);
+            _gweights = sW->getW()->clone();
+            delete sW;
+        }
     }
 
     void compute_res_and_grad(data_t * r){    
@@ -589,7 +598,9 @@ public:
         else _pg=_g;
 
         hypercube<data_t> hyp(_p->getHyper()->getAxis(1),_p->getHyper()->getAxis(2),_p->getHyper()->getAxis(3));
-        int ncxz = hyp.getN123();
+        int nxz = _p->getHyper()->getAxis(1).n * _p->getHyper()->getAxis(2).n;
+        int nc = _p->getHyper()->getAxis(3).n;
+        int ncxz = nc*nxz;
 
         int ns = _L->_par.ns;
         int nt = _d->getHyper()->getAxis(1).n;
@@ -862,9 +873,21 @@ public:
                 S.adjoint(false, rs, rs);
             }
 
-            rs->scale(1.0/_dnorm);
+            if (_L->_par.gradient_preconditioning)
+            {
+                std::shared_ptr<vecReg<data_t> > temp = std::make_shared<vecReg<data_t> > (hypercube<data_t>(ncxz));
+                temp->zero();
+                L->apply_jacobianT(false,temp->getVals(),_p->getVals()+s*par.sextension*ncxz,rs->getVals());
+                data_t * ptemp = temp->getVals();
+                data_t * pg = _pg->getVals()+s*par.sextension*ncxz;
+                const data_t * pw = _gweights->getCVals() + s*nxz;
 
-            L->apply_jacobianT(true,_pg->getVals()+s*par.sextension*ncxz,_p->getVals()+s*par.sextension*ncxz,rs->getVals());
+                for (int c=0; c<nc; c++){
+                    #pragma omp parallel for
+                    for (int i=0; i<nxz; i++) pg[c*nxz+i] += ptemp[c*nxz+i]*pw[i]*ns;
+                }
+            }
+            else L->apply_jacobianT(true,_pg->getVals()+s*par.sextension*ncxz,_p->getVals()+s*par.sextension*ncxz,rs->getVals());
 
             delete L;
 
@@ -874,14 +897,19 @@ public:
 
 #ifdef ENABLE_MPI
         // Sum all gradients
-        data_t * gtemp = new data_t[_pg->getN123()];
-        memset(gtemp, 0, _pg->getN123()*sizeof(data_t));
-        if (sizeof(data_t)==8) MPI_Allreduce(_pg->getVals(), gtemp, _pg->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        else MPI_Allreduce(_pg->getVals(), gtemp, _pg->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-        memcpy(_pg->getVals(), gtemp, _pg->getN123()*sizeof(data_t));
-        delete [] gtemp;
-        MPI_Barrier(MPI_COMM_WORLD);
+        if (size>1){
+            data_t * gtemp = new data_t[_pg->getN123()];
+            memset(gtemp, 0, _pg->getN123()*sizeof(data_t));
+            if (sizeof(data_t)==8) MPI_Allreduce(_pg->getVals(), gtemp, _pg->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            else MPI_Allreduce(_pg->getVals(), gtemp, _pg->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+            memcpy(_pg->getVals(), gtemp, _pg->getN123()*sizeof(data_t));
+            delete [] gtemp;
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
 #endif
+
+        // scale by normalization factor
+        _pg->scale(1.0/_dnorm);
         
         if (_L->_par.scale_source_times>0) _scale_source_times++;
     }
@@ -890,14 +918,19 @@ public:
         _r->zero();
         compute_res_and_grad(_r->getVals()); _flag = true;
 #ifdef ENABLE_MPI
+        int size=1;
+        MPI_Comm_size(MPI_COMM_WORLD,&size);
+
         // gather all residual
-        data_t * temp = new data_t[_r->getN123()];
-        memset(temp, 0, _r->getN123()*sizeof(data_t));
-        if (sizeof(data_t)==8) MPI_Allreduce(_r->getVals(), temp, _r->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        else MPI_Allreduce(_r->getVals(), temp, _r->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-        memcpy(_r->getVals(), temp, _r->getN123()*sizeof(data_t));
-        delete [] temp;
-        MPI_Barrier(MPI_COMM_WORLD);
+        if (size>1){
+            data_t * temp = new data_t[_r->getN123()];
+            memset(temp, 0, _r->getN123()*sizeof(data_t));
+            if (sizeof(data_t)==8) MPI_Allreduce(_r->getVals(), temp, _r->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            else MPI_Allreduce(_r->getVals(), temp, _r->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+            memcpy(_r->getVals(), temp, _r->getN123()*sizeof(data_t));
+            delete [] temp;
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
 #endif
         }
 
@@ -1048,6 +1081,14 @@ public:
         if (_L->_par.scale_source_times>0) {
             for (int s=0; s<_L->_par.ns; s++) _scalers.push_back(1.0);
         }
+
+        // gradient preconditioning weights to remove strong contributions around the sources
+        if (_L->_par.gradient_preconditioning)
+        {
+            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, true);
+            _gweights = sW->getW()->clone();
+            delete sW;
+        }
     }
 
     void initRes() {
@@ -1068,14 +1109,19 @@ public:
         const data_t * pdmp = _Dmp->getCVals();
         compute_res_and_grad(_r->getVals());
 #ifdef ENABLE_MPI
+        int size=1;
+        MPI_Comm_size(MPI_COMM_WORLD,&size);
+
         // gather all residual
-        data_t * temp = new data_t[_d->getN123()];
-        memset(temp, 0, _d->getN123()*sizeof(data_t));
-        if (sizeof(data_t)==8) MPI_Allreduce(_r->getVals(), temp, _d->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        else MPI_Allreduce(_r->getVals(), temp, _d->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-        memcpy(_r->getVals(), temp, _d->getN123()*sizeof(data_t));
-        delete [] temp;
-        MPI_Barrier(MPI_COMM_WORLD);
+        if (size>1){
+            data_t * temp = new data_t[_d->getN123()];
+            memset(temp, 0, _d->getN123()*sizeof(data_t));
+            if (sizeof(data_t)==8) MPI_Allreduce(_r->getVals(), temp, _d->getN123(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            else MPI_Allreduce(_r->getVals(), temp, _d->getN123(), MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+            memcpy(_r->getVals(), temp, _d->getN123()*sizeof(data_t));
+            delete [] temp;
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
 #endif
         _D->apply_forward(false,_m->getCVals(),pr+nd);
         #pragma omp parallel for

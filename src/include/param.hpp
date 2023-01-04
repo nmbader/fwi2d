@@ -47,7 +47,7 @@ struct param{
 
     // model parameterization
     int nmodels=3;
-    int model_parameterization=1; // 1 : Vp, Vs, rho, aniso ; 2 : IP, IS, rho, aniso ; 3 : log(Vs/Vs0), log(Vp/Vs - sqrt(2)), log(rho/rho0), aniso
+    int model_parameterization=1; // 0 : lambda, mu, rho, aniso ; 1 : Vp, Vs, rho, aniso ; 2 : IP, IS, rho, aniso ; 3 : log(Vs/Vs0), log(Vp/Vs - sqrt(2)), log(rho/rho0), aniso
     bool bsplines=false, soft_clip=false, inversion1d=false;
     int bs_nx=3, bs_nz=3;
     std::vector<int> bs_mx, bs_mz;
@@ -64,7 +64,9 @@ struct param{
     
     // Dev parameters with limited implementation
     data_t gdamp_tmin=0, gdamp_tmax=0, gdamp_power=1; // gradient damping during time integration ; cosine square damping between time gdamp_tmin and gdamp_tmax with power gdamp_power;
-    bool sextension=false; // model extension along sources
+    // model extension along sources with corresponding parameters
+    bool sextension=false, gradient_preconditioning=false; // extend model along sources, precondition gradient using same operators used in model extension
+    data_t dwidthx=0, dwidthz=0, dpower=0, xextension=-1, zextension=-1; // damping width, power and extension
 
     // advanced line search parameters (check nlsolver.hpp)
     data_t ls_a0=1, ls_a1=0, ls_c1=1e-4, ls_c2=0.9, ls_max_step=1e6;

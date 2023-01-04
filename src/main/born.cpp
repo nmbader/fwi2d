@@ -85,7 +85,6 @@ int main(int argc, char **argv){
         nlop.forward(false,model,allrcv);
         op._background_wfld = nlop._full_wfld;
 
-        data->scale(-1); // data needs to be scaled by -1
         op.adjoint(false,refl,data);
         output = refl;
     }

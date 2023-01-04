@@ -123,6 +123,11 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "gdamp_tmin", par.gdamp_tmin);
     readParam<data_t>(argc, argv, "gdamp_tmax", par.gdamp_tmax);
     readParam<data_t>(argc, argv, "gdamp_power", par.gdamp_power);
+    readParam<data_t>(argc, argv, "damping_widthx", par.dwidthx);
+    readParam<data_t>(argc, argv, "damping_widthz", par.dwidthz);
+    readParam<data_t>(argc, argv, "damping_power", par.dpower);
+    readParam<data_t>(argc, argv, "xextension", par.xextension);
+    readParam<data_t>(argc, argv, "zextension", par.zextension);
     readParam<data_t>(argc, argv, "ls_a0", par.ls_a0);
     readParam<data_t>(argc, argv, "ls_a1", par.ls_a1);
     readParam<data_t>(argc, argv, "ls_c1", par.ls_c1);
@@ -177,6 +182,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<bool>(argc, argv, "double_difference", par.double_difference);
     readParam<bool>(argc, argv, "interferometry", par.interferometry);
     readParam<bool>(argc, argv, "normalize_obj_func", par.normalize_obj_func);
+    readParam<bool>(argc, argv, "gradient_preconditioning", par.gradient_preconditioning);
     readParam<bool>(argc, argv, "ls_version", par.ls_version);
     readParam<bool>(argc, argv, "format", par.format);
     readParam<int>(argc, argv, "bs_mx", par.bs_mx);

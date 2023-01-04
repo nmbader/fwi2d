@@ -206,9 +206,9 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
         }
 
         // copy snapshot of the full wavefield to compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) {
-            if (par.nt/par.sub+1-it/par.sub-1>0) {cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[par.nt/par.sub+1-it/par.sub-2], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
-            else {cudaCheckError( cudaMemcpyAsync(dev_u_for + 2*nxz, u_full[par.nt/par.sub+1-it/par.sub-1], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) {
+            if ( (par.nt-1-it)/par.sub < par.nt/par.sub ) {cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[(par.nt-1-it)/par.sub - 1], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
+            else {cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[(par.nt-1-it)/par.sub - 1 ], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
         }
         //if ((grad != nullptr) && (it%par.sub==0) && it!=0) cudaCheckError( cudaMemcpy(dev_u_for, u_full[par.nt/par.sub+1-it], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice) );
 
@@ -223,7 +223,7 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
 
         // compute FWI gradients except for first and last time samples
         cudaStreamSynchronize(streams[0]);
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients_gpu(model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients_gpu(dev_model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
 
         Dx_gpu(false, dev_u_curr, dev_dux, nx, nz, dx, 1, 2);
         Dz_gpu(false, dev_u_curr+nxz, dev_duz+nxz, nx, nz, dz, 2, 1);
@@ -374,7 +374,9 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
     }
     else
     {
-        if ((par.nt-1)%par.sub==0) compute_gradients_gpu(model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
+        // if ((par.nt-1)%par.sub==0) compute_gradients_gpu(dev_model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
+        cudaCheckError( cudaMemcpyAsync(dev_u_for + 2*nxz, u_full[0], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
+        compute_gradients_gpu(dev_model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, 0, dx, dz, par.sub*par.dt);
         cudaDeviceSynchronize();
         cudaCheckError( cudaMemcpy(grad, dev_grad, 3*nxz*sizeof(data_t), cudaMemcpyDeviceToHost) );
     }
@@ -647,9 +649,9 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
         }
 
         // copy snapshot of the full wavefield to compute FWI gradients except for first and last time samples
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) {
-            if (par.nt/par.sub+1-it/par.sub-1>0) {cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[par.nt/par.sub+1-it/par.sub-2], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
-            else {cudaCheckError( cudaMemcpyAsync(dev_u_for + 2*nxz, u_full[par.nt/par.sub+1-it/par.sub-1], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) {
+            if ( (par.nt-1-it)/par.sub < par.nt/par.sub ) {cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[(par.nt-1-it)/par.sub - 1], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
+            else {cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[(par.nt-1-it)/par.sub - 1 ], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
         }
 
         // apply spatial SBP operators
@@ -663,7 +665,7 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
 
         // compute FWI gradients except for first and last time samples
         cudaStreamSynchronize(streams[0]);
-        if ((grad != nullptr) && (it%par.sub==0) && it!=0) compute_gradients_gpu(model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, it/par.sub, dx, dz, par.sub*par.dt);
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients_gpu(dev_model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
 
         Dx_gpu(false, dev_u_curr, dev_dux, nx, nz, dx, 1, 2);
         Dz_gpu(false, dev_u_curr+nxz, dev_duz+nxz, nx, nz, dz, 2, 1);
@@ -813,7 +815,8 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
     }
     else
     {
-        if ((par.nt-1)%par.sub==0) compute_gradients_gpu(model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, (par.nt-1)/par.sub, dx, dz, par.sub*par.dt);
+        cudaCheckError( cudaMemcpyAsync(dev_u_for + 2*nxz, u_full[0], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
+        compute_gradients_gpu(dev_model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, 0, dx, dz, par.sub*par.dt);
         cudaDeviceSynchronize();
         cudaCheckError( cudaMemcpy(grad, dev_grad, 3*nxz*sizeof(data_t), cudaMemcpyDeviceToHost) );
     }

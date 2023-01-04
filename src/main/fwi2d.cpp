@@ -31,6 +31,9 @@ int rank=0, size=0;
     if (rank>0) par.verbose=0;
     par.device+=rank;
 
+    time_t t1 = time(NULL);
+    if (par.verbose>0 && rank==0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t1));
+
 // Set the maximum number of threads
     if (par.nthreads>0) omp_set_num_threads(par.nthreads);
 
@@ -373,6 +376,9 @@ if (par.bsplines)
 #ifdef ENABLE_MPI
     MPI_Finalize();
 #endif
+
+    time_t t2 = time(NULL);
+    if (par.verbose>0 && rank==0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t2));
 
 return 0;
 }

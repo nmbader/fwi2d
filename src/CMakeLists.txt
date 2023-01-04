@@ -163,17 +163,12 @@ if (ENABLE_DEV)
         add_executable(FWI2D_MODEL_EXTENSION.x ${DEV_DIR}/fwi2d_model_extension.cpp)
         target_link_libraries(FWI2D_MODEL_EXTENSION.x fwi2d sep)
 
-        add_executable(FWI2D_MODEL_EXTENSION2.x ${DEV_DIR}/fwi2d_model_extension2.cpp)
-        target_link_libraries(FWI2D_MODEL_EXTENSION2.x fwi2d sep)
-
         add_executable(LEAKY_TUBE_WAVE.x ${DEV_DIR}/leaky_tw.cpp)
         target_link_libraries(LEAKY_TUBE_WAVE.x fwi2d sep)
 
         install(TARGETS FWI2D_MODEL_EXTENSION.x
-                FWI2D_MODEL_EXTENSION2.x
+                FWI2D_MODEL_EXTENSION.x
                 LEAKY_TUBE_WAVE.x
-                #TEST_FD.x
-                #TEST.x
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
         DESTINATION bin)
 endif()

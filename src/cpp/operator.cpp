@@ -2319,4 +2319,175 @@ std::shared_ptr<vecReg<data_t> > minimum_phase(const std::shared_ptr<vecReg<data
     return vec0;
 }
 
+
+
+
+
+void sWeighting::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+    
+    data_t * temp;
+    if (add) {
+        temp = new data_t [_domain.getN123()];
+        memcpy(temp, pmod, _domain.getN123()*sizeof(data_t));
+    }
+    else {
+        memcpy(pdat, pmod, _domain.getN123()*sizeof(data_t));
+        temp = pdat;
+    }
+
+    axis<data_t> Z = _range.getAxis(1);
+    axis<data_t> X = _range.getAxis(2);
+    axis<data_t> C = _range.getAxis(3);
+    int ns = _sxz.size();
+    const data_t (*pw) [X.n][Z.n] = (const data_t (*)[X.n][Z.n]) _W->getCVals();
+    const data_t (*pm) [C.n][X.n][Z.n] = (const data_t (*)[C.n][X.n][Z.n]) pmod;
+    data_t (*pd) [C.n][X.n][Z.n] = (data_t (*)[C.n][X.n][Z.n]) temp;
+
+    // loop over source-extended model 
+    for (int s=0; s<ns; s++){
+
+        // find the box surrounding the source location
+        int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
+        int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
+        int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
+        int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
+        ixmin=std::max(0,ixmin);
+        ixmax=std::min(X.n,ixmax);
+        izmin=std::max(0,izmin);
+        izmax=std::min(Z.n,izmax);
+
+        // damp the model for source s using an ellispsis cosine squared and borrow model from the other sources
+        for (int c=0; c<C.n; c++){
+            #pragma omp parallel for
+            for (int ix=ixmin; ix<ixmax; ix++){
+                for (int iz=izmin; iz<izmax; iz++){
+                    data_t sum = 0;
+                    for (int so=0; so<ns; so++) sum += pw[so][ix][iz] * pm[so][c][ix][iz];
+                    pd[s][c][ix][iz] = sum;
+                }
+            }
+        }
+    }
+
+    if (add) {
+        #pragma omp parallel for
+        for (int i=0; i<_domain.getN123(); i++) pdat[i] += temp[i];
+        delete [] temp;
+    }
+}
+
+void sWeighting::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+    data_t * temp;
+    if (add) {
+        temp = new data_t [_domain.getN123()];
+        memcpy(temp, pdat, _domain.getN123()*sizeof(data_t));
+    }
+    else {
+        memcpy(pmod, pdat, _domain.getN123()*sizeof(data_t));
+        temp = pmod;
+    }
+
+    axis<data_t> Z = _range.getAxis(1);
+    axis<data_t> X = _range.getAxis(2);
+    axis<data_t> C = _range.getAxis(3);
+    int ns = _sxz.size();
+    const data_t (*pw) [X.n][Z.n] = (const data_t (*)[X.n][Z.n]) _W->getCVals();
+    data_t (*pm) [C.n][X.n][Z.n] = (data_t (*)[C.n][X.n][Z.n]) temp;
+    const data_t (*pd) [C.n][X.n][Z.n] = (const data_t (*)[C.n][X.n][Z.n]) pdat;
+
+    // set the output to zero in the source regions
+    for (int s=0; s<ns; s++){
+
+        int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
+        int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
+        int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
+        int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
+        ixmin=std::max(0,ixmin);
+        ixmax=std::min(X.n,ixmax);
+        izmin=std::max(0,izmin);
+        izmax=std::min(Z.n,izmax);
+        for (int c=0; c<C.n; c++){
+            for (int ix=ixmin; ix<ixmax; ix++){
+                for (int iz=izmin; iz<izmax; iz++){
+                    pm[s][c][ix][iz] = 0;
+                }
+            }
+        }
+    }
+
+    // loop over source-extended model 
+    for (int s=0; s<ns; s++){
+
+        // find the box surrounding the source location
+        int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
+        int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
+        int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
+        int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
+        ixmin=std::max(0,ixmin);
+        ixmax=std::min(X.n,ixmax);
+        izmin=std::max(0,izmin);
+        izmax=std::min(Z.n,izmax);
+
+        // damp the model for source s using an ellispsis cosine squared and spread model to the other sources
+        #pragma omp parallel for
+        for (int c=0; c<C.n; c++){
+            for (int ix=ixmin; ix<ixmax; ix++){
+                for (int iz=izmin; iz<izmax; iz++){
+                    // spread a weighted model to the other sources
+                    for (int so=0; so<ns; so++) pm[so][c][ix][iz] += pw[so][ix][iz]*pd[s][c][ix][iz];
+                }
+            }
+        }
+    }
+
+    if (add) {
+        #pragma omp parallel for
+        for (int i=0; i<_domain.getN123(); i++) pmod[i] += temp[i];
+        delete [] temp;
+    }  
+}
+
+
+void sWSum::apply_forward(bool add, const data_t * pmod, data_t * pdat){
+
+    int ns = _domain.getAxis(_domain.getNdim()).n;
+    int nxz = _W->getN123()/ns;
+    int nc = _range.getN123() / nxz;
+
+    const data_t (*pm) [nc][nxz] = (const data_t (*)[nc][nxz]) pmod;
+    data_t (*pd) [nxz] = (data_t (*)[nxz]) pdat;
+    const data_t (*pw) [nxz] = (const data_t (*)[nxz]) _W->getCVals();
+
+    for (int ic=0; ic<nc; ic++){
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++){
+            data_t sum = 0;
+            for (int s=0; s<ns; s++) sum += pw[s][i]*pm[s][ic][i];
+            pd[ic][i] = add*pd[ic][i] + sum;
+        }
+    }
+}
+
+void sWSum::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
+
+    if (!add) memset(pmod, 0, _domain.getN123()*sizeof(data_t));
+    
+    int ns = _domain.getAxis(_domain.getNdim()).n;
+    int nxz = _W->getN123()/ns;
+    int nc = _range.getN123() / nxz;
+
+    data_t (*pm) [nc][nxz] = (data_t (*)[nc][nxz]) pmod;
+    const data_t (*pd) [nxz] = (const data_t (*)[nxz]) pdat;
+    const data_t (*pw) [nxz] = (const data_t (*)[nxz]) _W->getCVals();
+
+    for (int ic=0; ic<nc; ic++){
+        #pragma omp parallel for
+        for (int i=0; i<nxz; i++){
+            data_t sum = 0;
+            for (int s=0; s<ns; s++) pm[s][ic][i] += pw[s][i]*pd[ic][i];                
+        }
+    }
+}
+
 #undef EPS

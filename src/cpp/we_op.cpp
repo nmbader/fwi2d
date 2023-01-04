@@ -528,7 +528,7 @@ void nl_we_op_e::compute_gradients(const data_t * model, const data_t * u_full, 
         {
             g[0][i] += w*dt*(padj_x[0][i] + padj_z[1][i])*(temp[0][i] + temp[1][i]); // lambda gradient
             g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i]); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(-2*pfor[it][0][i]+pfor[it-1][0][i]) + padj[1][i]*(-2*pfor[it][1][i]+pfor[it-1][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(-pfor[it][0][i]+pfor[it-1][0][i]) + padj[1][i]*(-pfor[it][1][i]+pfor[it-1][1][i])); // rho gradient
         }
     }
 }
@@ -1520,7 +1520,7 @@ void nl_we_op_vti::compute_gradients(const data_t * model, const data_t * u_full
             val3 = ((1+3*del)*pm[0][i] + (1+4*del)*pm[1][i])/val1 - 1; // d(C13)/d(mu)
             g[0][i] += w*dt*((1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + padj_z[1][i]*temp[1][i] + val2*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // lambda gradient
             g[1][i] += w*dt*((padj_z[0][i] + padj_x[1][i])*(temp[2][i] + temp[3][i]) + 2*(1+2*pm[4][i])*padj_x[0][i]*temp[0][i] + 2*padj_z[1][i]*temp[1][i] + val3*(padj_x[0][i]*temp[1][i] + padj_z[1][i]*temp[0][i])); // mu gradient
-            g[2][i] += w*1.0/dt*(padj[0][i]*(-2*pfor[it][0][i]+pfor[it-1][0][i]) + padj[1][i]*(-2*pfor[it][1][i]+pfor[it-1][1][i])); // rho gradient
+            g[2][i] += w*1.0/dt*(padj[0][i]*(-pfor[it][0][i]+pfor[it-1][0][i]) + padj[1][i]*(-pfor[it][1][i]+pfor[it-1][1][i])); // rho gradient
             g[3][i] = 0;
             g[4][i] = 0;
         }
@@ -1898,7 +1898,7 @@ void nl_we_op_a::compute_gradients(const data_t * model, const data_t * u_full, 
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(-2*pfor[it][i]+pfor[it-1][i]); // K gradient
+            g[0][i] -= w*1.0/(dt*pm[0][i]*pm[0][i])*padj[i]*(-pfor[it][i]+pfor[it-1][i]); // K gradient
             g[1][i] += w*dt*(temp[2][i]*temp[0][i] + temp[3][i]*temp[1][i]); // rho-1 gradient
         }
     }
@@ -2561,8 +2561,8 @@ void born_op_a::compute_gradients(const data_t * model, const data_t * u_full, c
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            //g[0][i] += 1.0/dt*padj[i]*(pfor[it+1][i] - 2*pfor[it][i] + pfor[it-1][i]);
-            g[0][i] += dt*padj[i]*pfor[it][i];
+            g[0][i] += 1.0/dt*padj[i]*(pfor[it+1][i] - 2*pfor[it][i] + pfor[it-1][i]);
+            // g[0][i] += dt*padj[i]*pfor[it][i];
         }
     }
     // time zero
@@ -2570,8 +2570,8 @@ void born_op_a::compute_gradients(const data_t * model, const data_t * u_full, c
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            //g[0][i] += 1.0/dt*padj[i]*(pfor[it+1][i] - pfor[it][i]);
-            g[0][i] += 0.5*dt*padj[i]*pfor[it][i];
+            g[0][i] += 1.0/dt*padj[i]*(pfor[it+1][i] - pfor[it][i]);
+            // g[0][i] += 0.5*dt*padj[i]*pfor[it][i];
         }
     }
     // tmax
@@ -2579,8 +2579,8 @@ void born_op_a::compute_gradients(const data_t * model, const data_t * u_full, c
         #pragma omp parallel for
         for (int i=0; i<nxz; i++) 
         {
-            //g[0][i] += 1.0/dt*padj[i]*(- 2*pfor[it][i] + pfor[it-1][i] );
-            g[0][i] += 0.5*dt*padj[i]*pfor[it][i];
+            g[0][i] += 1.0/dt*padj[i]*(- pfor[it][i] + pfor[it-1][i] );
+            // g[0][i] += 0.5*dt*padj[i]*pfor[it][i];
         }
     }
 }
@@ -2648,7 +2648,7 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
     for (int it=0; it<par.nt-1; it++)
     {
         // copy the current wfld to the full wfld vector
-        //if ((par.sub>0) && (it%par.sub==0) && (!adj)) memcpy(u_full[it/par.sub], curr, nxz*sizeof(data_t));
+        if ((par.sub>0) && (it%par.sub==0) && (!adj)) memcpy(u_full[it/par.sub], curr, nxz*sizeof(data_t));
 
         // compute FWI gradients except for first and last time samples
         if ((adj) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], tmp, grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
@@ -2719,11 +2719,11 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
         taperx(next[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
         taperx(next[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
 
-        // copy the current wfld to the full wfld vector
-        if ((par.sub>0) && (it%par.sub==0) && (!adj)) {
-            #pragma omp parallel for
-            for (int i=0; i<nxz; i++) u_full[it/par.sub][i] = (next[0][i] - 2*curr[0][i] + prev[0][i])/(par.dt*par.dt);
-        }
+        // copy the second time derivative of the current wfld to the full wfld vector
+        // if ((par.sub>0) && (it%par.sub==0) && (!adj)) {
+        //     #pragma omp parallel for
+        //     for (int i=0; i<nxz; i++) u_full[it/par.sub][i] = (next[0][i] - 2*curr[0][i] + prev[0][i])/(par.dt*par.dt);
+        // }
 
         // propagate scattered wavefield
         if (!adj)
@@ -2812,13 +2812,13 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
         if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
     }
 
-    // copy the last wfld to the full wfld vector (not needed)
-    //if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (!adj)) memcpy(u_full[(par.nt-1)/par.sub], curr, nxz*sizeof(data_t));
-    if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (!adj)) {
-        #pragma omp parallel for
-        //for (int i=0; i<nxz; i++) u_full[(par.nt-1)/par.sub][i] = ( - 2*curr[0][i] + prev[0][i])/(par.dt*par.dt);
-        for (int i=0; i<nxz; i++) u_full[(par.nt-1)/par.sub][i] = 0;
-    }
+    // copy the last wfld (or second time derivative) to the full wfld vector (not needed)
+    if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (!adj)) memcpy(u_full[(par.nt-1)/par.sub], curr, nxz*sizeof(data_t));
+    // if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (!adj)) {
+    //     #pragma omp parallel for
+    //     //for (int i=0; i<nxz; i++) u_full[(par.nt-1)/par.sub][i] = ( - 2*curr[0][i] + prev[0][i])/(par.dt*par.dt);
+    //     for (int i=0; i<nxz; i++) u_full[(par.nt-1)/par.sub][i] = 0;
+    // }
 
     // extract receivers last sample
     if (!adj)

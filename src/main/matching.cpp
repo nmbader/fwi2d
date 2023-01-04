@@ -272,6 +272,31 @@ int main(int argc, char **argv){
     std::shared_ptr<vec> all_func = std::make_shared<vec> (hyper(niter+1,ns));
     all_func->set(-1);
 
+    // filters preconditioning operator P = W.TT.ST (temporal and spectral Gaussian tapers and temporal cosine squared taper)
+    loper * P = nullptr;
+    {
+        window W(hyper(Tf),t1,t2,t3,t4);
+        if (stddev_f>0){
+            fprintf(stderr,"Spectral taper activated\n");
+            spectral_taper ST(hyper(Tf), stddev_f, bias_f);
+            if (stddev_t>0){
+                fprintf(stderr,"Temporal taper activated\n");
+                temporal_taper TT(hyper(Tf), stddev_t, bias_t);
+                chainLOper TT_ST(&TT, &ST);
+                P = new chainLOper(&W, &TT_ST);
+            }
+            else{
+                P = new chainLOper(&W, &ST);
+            }
+        }
+        else if (stddev_t>0){
+            fprintf(stderr,"Temporal taper activated\n");
+            temporal_taper TT(hyper(Tf), stddev_t, bias_t);
+            P = new chainLOper(&W, &TT);
+        }
+        else P = W.clone();
+    }
+
     for (int s=0; s<ns; s++){
         fprintf(stderr,"\n==========================\n Start processing gather %d\n==========================\n",s);
 
@@ -287,28 +312,8 @@ int main(int argc, char **argv){
         if (centered) fs->getVals()[fl]=1;
         else fs->getVals()[0]=1;
 
-        // time convolution operator with preconditioning (temporal and spectral Gaussian tapers and temporal cosine squared taper)
+        // time convolution operator with preconditioning
         convnd1d conv(*fs->getHyper(), ds, centered);
-        loper * P = nullptr;
-        {
-            window W(*fs->getHyper(),t1,t2,t3,t4);
-            if (stddev_f>0){
-                spectral_taper ST(*fs->getHyper(), stddev_f, bias_f);
-                if (stddev_t>0){
-                    temporal_taper TT(*fs->getHyper(), stddev_t, bias_t);
-                    chainLOper TT_ST(&TT, &ST);
-                    P = new chainLOper(&W, &TT_ST);
-                }
-                else{
-                    P = new chainLOper(&W, &ST);
-                }
-            }
-            else if (stddev_t>0){
-                temporal_taper TT(*fs->getHyper(), stddev_t, bias_t);
-                P = new chainLOper(&W, &TT);
-            }
-            else P = W.clone();
-        }
         chainLOper op(&conv, P);
 
         // set the least-squares problem
@@ -338,8 +343,9 @@ int main(int argc, char **argv){
         memcpy(f->getVals()+s*Tf.n, fs->getVals(), sizeof(data_t)*Tf.n);
 
         delete sol;
-        delete P;
     }
+
+    delete P;
           
     if (output_file!="none") write<data_t>(input, output_file, format, datapath);
     if (filter_file!="none") write<data_t>(f, filter_file, format, datapath);

@@ -1249,10 +1249,12 @@ int rank=0;
     else successCheck(_H0->getN123()==n,__FILE__,__LINE__,"The provided inverse Hessian has an incorrect size\n");
     std::vector<std::shared_ptr<vecReg<data_t> > > s(_m);
     std::vector<std::shared_ptr<vecReg<data_t> > > y(_m);
-    std::vector<data_t> rho(_m);
+    std::vector<data_t> rho(_m, 0);
     for (int i=0; i<_m; i++){
         s[i] = std::make_shared<vecReg<data_t> >(*m->getHyper());
         y[i] = std::make_shared<vecReg<data_t> >(*g->getHyper());
+        s[i]->zero();
+        y[i]->zero();
     }
 
     //iteration number

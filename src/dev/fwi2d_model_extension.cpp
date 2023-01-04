@@ -10,192 +10,8 @@ typedef cvecReg<data_t> cvec;
 typedef axis<data_t> ax;
 typedef hypercube<data_t> hyper;
 
-// operator that takes and extended model (one for each source) and damp (cosine squared) around the sources location while borrowing from other sources location
-// m = W.ms where ms is the extended model across sources, 'W' is a non-diagonal operator of normalized cosine squared weighting for each source 's'
-class sWeighting : public loper {
-protected:
-    data_t _dpower; // damping strength for cosine^2
-    data_t _dwidthx; // damping width (radius)
-    data_t _dwidthz;
-    std::vector<std::vector<data_t> > _sxz; // sources location
 
-public:
-    sWeighting(){}
-    ~sWeighting(){}
-    sWeighting(const hypercube<data_t> &domain,const std::vector<std::vector<data_t> > &sxz, const data_t dwidthx, const data_t dwidthz, const data_t dpower){
-        std::vector<ax > axes = domain.getAxes();
-        successCheck(axes.size()>=3,__FILE__,__LINE__,"The domain must contain at least 3 axes\n");
-        int ns=domain.getN123()/(axes[0].n*axes[1].n*axes[2].n);
-        successCheck(ns>=2,__FILE__,__LINE__,"The number of sources in the extension must be at least 2\n");
-        ax S(ns,0,1);
-        successCheck(ns==sxz.size(),__FILE__,__LINE__,"The domain size must be consistent with the number of sources\n");
-        
-        _domain = hyper(axes[0],axes[1],axes[2],S);
-        _range = _domain;
-        _dwidthx = dwidthx;
-        _dwidthz = dwidthz;
-        _dpower = dpower;
-        _sxz=sxz;
-    }
-
-    sWeighting * clone() const {
-        sWeighting * op = new sWeighting(_domain, _sxz, _dwidthx, _dwidthz, _dpower);
-        return op;
-    }    
-    int getNs(){return _sxz.size();}
-    void apply_forward(bool add, const data_t * pmod, data_t * pdat){
-
-        data_t * temp;
-        if (add) {
-            temp = new data_t [_domain.getN123()];
-            memcpy(temp, pmod, _domain.getN123()*sizeof(data_t));
-        }
-        else {
-            memcpy(pdat, pmod, _domain.getN123()*sizeof(data_t));
-            temp = pdat;
-        }
-
-        ax Z = _range.getAxis(1);
-        ax X = _range.getAxis(2);
-        ax C = _range.getAxis(3);
-        int ns = _sxz.size();
-        const data_t (*pm) [C.n][X.n][Z.n] = (const data_t (*)[C.n][X.n][Z.n]) pmod;
-        data_t (*pd) [C.n][X.n][Z.n] = (data_t (*)[C.n][X.n][Z.n]) temp;
-
-        // loop over source-extended model 
-        for (int s=0; s<ns; s++){
-
-            // find the box surrounding the source location
-            int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
-            int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
-            int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
-            int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
-            ixmin=std::max(0,ixmin);
-            ixmax=std::min(X.n,ixmax);
-            izmin=std::max(0,izmin);
-            izmax=std::min(Z.n,izmax);
-
-            // damp the model for source s using an ellispsis cosine squared and borrow model from the other sources
-            for (int c=0; c<C.n; c++){
-                #pragma omp parallel for
-                for (int ix=ixmin; ix<ixmax; ix++){
-                    data_t x = X.o + ix*X.d;
-                    data_t rx = (x-_sxz[s][0])/_dwidthx;
-                    rx*=rx;
-                    for (int iz=izmin; iz<izmax; iz++){
-                        data_t z = Z.o + iz*Z.d;
-                        data_t rz = (z-_sxz[s][1])/_dwidthz;
-                        rz*=rz;
-                        data_t d = sqrt(rx+rz);
-                        data_t val = 1.0;
-                        if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
-                        val *= val;
-
-                        // damp with ellipsis cosine squared
-                        pd[s][c][ix][iz] *= val;
-
-                        // borrow a weighted averaged model from other sources
-                        data_t sum = 0;
-                        for (int so=0; so<ns; so++) sum += pm[so][c][ix][iz];
-                        sum -= pm[s][c][ix][iz];
-                        pd[s][c][ix][iz] += sum*(1-val)/(ns-1);
-                    }
-                }
-            }
-        }
-
-        if (add) {
-            #pragma omp parallel for
-            for (int i=0; i<_domain.getN123(); i++) pdat[i] += temp[i];
-            delete [] temp;
-        }
-    }
-
-    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
-
-        data_t * temp;
-        if (add) {
-            temp = new data_t [_domain.getN123()];
-            memcpy(temp, pdat, _domain.getN123()*sizeof(data_t));
-        }
-        else {
-            memcpy(pmod, pdat, _domain.getN123()*sizeof(data_t));
-            temp = pmod;
-        }
-
-        ax Z = _range.getAxis(1);
-        ax X = _range.getAxis(2);
-        ax C = _range.getAxis(3);
-        int ns = _sxz.size();
-        data_t (*pm) [C.n][X.n][Z.n] = (data_t (*)[C.n][X.n][Z.n]) temp;
-        const data_t (*pd) [C.n][X.n][Z.n] = (const data_t (*)[C.n][X.n][Z.n]) pdat;
-
-        // set the output to zero in the source regions
-        for (int s=0; s<ns; s++){
-            int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
-            int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
-            int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
-            int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
-            ixmin=std::max(0,ixmin);
-            ixmax=std::min(X.n,ixmax);
-            izmin=std::max(0,izmin);
-            izmax=std::min(Z.n,izmax);
-            for (int c=0; c<C.n; c++){
-                for (int ix=ixmin; ix<ixmax; ix++){
-                    for (int iz=izmin; iz<izmax; iz++){
-                        pm[s][c][ix][iz] = 0;
-                    }
-                }
-            }
-        }
-
-        // loop over source-extended model 
-        for (int s=0; s<ns; s++){
-
-            // find the box surrounding the source location
-            int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
-            int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
-            int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
-            int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
-            ixmin=std::max(0,ixmin);
-            ixmax=std::min(X.n,ixmax);
-            izmin=std::max(0,izmin);
-            izmax=std::min(Z.n,izmax);
-
-            // damp the model for source s using an ellispsis cosine squared and spread model to the other sources
-            #pragma omp parallel for
-            for (int c=0; c<C.n; c++){
-                for (int ix=ixmin; ix<ixmax; ix++){
-                    data_t x = X.o + ix*X.d;
-                    data_t rx = (x-_sxz[s][0])/_dwidthx;
-                    rx*=rx;
-                    for (int iz=izmin; iz<izmax; iz++){
-                        data_t z = Z.o + iz*Z.d;
-                        data_t rz = (z-_sxz[s][1])/_dwidthz;
-                        rz*=rz;
-                        data_t d = sqrt(rx+rz);
-                        data_t val = 1.0;
-                        if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
-                        val *= val;
-
-                        // spread a weighted model to the other sources
-                        for (int so=0; so<ns; so++) pm[so][c][ix][iz] += pd[s][c][ix][iz]*(1-val)/(ns-1);
-                        pm[s][c][ix][iz] += pd[s][c][ix][iz]*(val - (1-val)/(ns-1));
-                    }
-                }
-            }
-        }
-
-        if (add) {
-            #pragma omp parallel for
-            for (int i=0; i<_domain.getN123(); i++) pmod[i] += temp[i];
-            delete [] temp;
-        }
-    }
-};
-
-// operator that outputs the "average" of an extended model along sources (the extension is assumed along the last axis) 
-// the average is taken with sqrt(nb of sources) to maintain the adjointness of the adjoint
+// operator that outputs the stack (sum) of an extended model along sources (the extension is assumed along the last axis) 
 class sSum : public loper {
 public:
     sSum(){}
@@ -218,13 +34,12 @@ public:
         int ns = _domain.getN123()/n;
 
         const data_t (*pm) [n] = (const data_t (*)[n]) pmod;
-        data_t sq_ns = sqrt(ns);
 
         #pragma omp parallel for
         for (int i=0; i<n; i++){
             data_t sum = 0;
             for (int s=0; s<ns; s++) sum += pm[s][i];
-            pdat[i] = add*pdat[i] + sum/sq_ns;
+            pdat[i] = add*pdat[i] + sum;
         }
     }
 
@@ -236,31 +51,34 @@ public:
         int ns = _domain.getN123()/n;
 
         data_t (*pm) [n] = (data_t (*)[n]) pmod;
-        data_t sq_ns = sqrt(ns);
 
         #pragma omp parallel for
         for (int i=0; i<n; i++){
-            for (int s=0; s<ns; s++) pm[s][i] += pdat[i]/sq_ns; 
+            for (int s=0; s<ns; s++) pm[s][i] += pdat[i]; 
         }
     }
 };
 
+
 // Regularization operator used in source-extended FWI
-// Op = (I-S'.S).W.ms where ms is the extended model across sources, 'W' and 'S' are the operators defined above
+// Op = (I-S'.Sw).W.ms where ms is the extended model across sources, 'W' and 'Sw' are the operators defined above
+// S' is a spreading operator (S is the Stacking operator above)
 class model_extension : public loper {
 protected:
     sWeighting * _W;
+    sWSum * _wS;
     sSum * _S;
     std::shared_ptr<vec> _v1;
     std::shared_ptr<vec> _v2;
 
 public:
     model_extension(){}
-    ~model_extension(){delete _W; delete _S;}
-    model_extension(sWeighting * W){
+    ~model_extension(){delete _W; delete _S; delete _wS;}
+    model_extension(sWeighting * W, std::shared_ptr<vec> sW){
         _W = W->clone();
         _domain = *W->getDomain();
         _range = _domain;
+        _wS = new sWSum(*W->getRange(), sW);
         _S = new sSum(*W->getRange());
         _v1 = std::make_shared<vec>(_domain);
         _v2 = std::make_shared<vec>(*_S->getRange());
@@ -268,16 +86,17 @@ public:
         _v2->zero();        
     }
     model_extension * clone() const {
-        model_extension * op = new model_extension(_W);
+        model_extension * op = new model_extension(_W, _wS->getW());
         return op;
     }
     sWeighting * getW(){return _W;}
     sSum * getS(){return _S;}
+    sWSum * getWS(){return _wS;}
 
     void apply_forward(bool add, const data_t * pmod, data_t * pdat){
 
         _W->apply_forward(false, pmod, _v1->getVals());
-        _S->apply_forward(false, _v1->getCVals(), _v2->getVals());
+        _wS->apply_forward(false, _v1->getCVals(), _v2->getVals());
         _v2->scale(-1);
         _S->apply_adjoint(add, pdat, _v2->getCVals());
         
@@ -290,7 +109,7 @@ public:
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
 
         _S->apply_forward(false, pdat, _v2->getVals());
-        _S->apply_adjoint(false, _v1->getVals(), _v2->getCVals());
+        _wS->apply_adjoint(false, _v1->getVals(), _v2->getCVals());
 
         data_t * pv1 = _v1->getVals();
         data_t * pv2 = _v2->getVals();
@@ -352,23 +171,21 @@ int rank=0, size=0;
     if (rank>0) par.verbose=0;
     par.device+=rank;
 
+    time_t t1 = time(NULL);
+    if (par.verbose>0 && rank==0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t1));
+
 // Set the maximum number of threads
     if (par.nthreads>0) omp_set_num_threads(par.nthreads);
 
 // Read inputs/outputs files
-    std::string source_file="none", model_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none";
+    std::string source_file="none", model_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none", extension_weights_file="none";
     readParam<std::string>(argc, argv, "source", source_file);
     readParam<std::string>(argc, argv, "model", model_file);
     readParam<std::string>(argc, argv, "data", data_file);
     readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "ioutput", ioutput_file);
     readParam<std::string>(argc, argv, "obj_func", obj_func_file);
-
-// Read some parameters
-    data_t dwidthx=0, dwidthz=0, dpower=0;
-    readParam<data_t>(argc, argv, "damping_widthx", dwidthx);
-    readParam<data_t>(argc, argv, "damping_widthz", dwidthz);
-    readParam<data_t>(argc, argv, "damping_power", dpower);
+    readParam<std::string>(argc, argv, "extension_weights", extension_weights_file);
 
     successCheck(source_file!="none",__FILE__,__LINE__,"Source wavelet is not provided\n");
     successCheck(model_file!="none",__FILE__,__LINE__,"Earth model is not provided\n");
@@ -378,7 +195,7 @@ int rank=0, size=0;
     std::shared_ptr<vec> data = read<data_t>(data_file, par.format);
     std::shared_ptr<vec> model = read<data_t>(model_file, par.format);
     hyper hyp0 = *model->getHyper();
-    std::vector<ax > axes = model->getHyper()->getAxes();
+    std::vector<ax > axes = hyp0.getAxes();
     int n=model->getN123();
 
 // Analyze the inputs and parameters and modify if necessary
@@ -440,9 +257,20 @@ int rank=0, size=0;
         else successCheck(prior->getN123()==n*par.ns,__FILE__,__LINE__,"The prior model has an incorrect size\n");
     }
 
-    sWeighting * sW = new sWeighting(*model->getHyper(), par.sxz, dwidthx, dwidthz, dpower);
-    model_extension * E = new model_extension(sW);
-    delete sW;
+    sWeighting * sW1 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, true, true);
+    sWeighting * sW2 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, false, true);
+    sWeighting * sW3 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, true, false);
+    model_extension * E = new model_extension(sW1, sW2->getW());
+
+    if (rank==0 && extension_weights_file!="none") {
+        write<data_t>(sW1->getW(), extension_weights_file, par.format, par.datapath);
+        write<data_t>(sW2->getW(), extension_weights_file+".influence", par.format, par.datapath);
+        write<data_t>(sW3->getW(), extension_weights_file+".unnormalized", par.format, par.datapath);
+    }
+    delete sW1;
+    delete sW2;
+    delete sW3;
+
 // ----------------------------------------------------------------------------------------//
 
 // Build model parameterization precon
@@ -639,8 +467,7 @@ if (par.bsplines)
         std::shared_ptr<vec> temp = std::make_shared<vec>(*E->getW()->getRange());
         temp->zero();
         E->getW()->forward(false, model, temp);
-        E->getS()->forward(false, temp, fmodel);
-        fmodel->scale(1.0/sqrt(E->getW()->getNs()));
+        E->getWS()->forward(false, temp, fmodel);
     }
 
     if (rank==0 && output_file!="none") {
@@ -668,6 +495,9 @@ if (par.bsplines)
 #ifdef ENABLE_MPI
     MPI_Finalize();
 #endif
+
+    time_t t2 = time(NULL);
+    if (par.verbose>0 && rank==0) fprintf(stderr,"\n====================\n%s\n====================\n",ctime(&t2));
 
 return 0;
 }

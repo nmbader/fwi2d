@@ -70,6 +70,8 @@ int main(int argc, char **argv){
 // Build the Born operator
     born_op_a op(model,allsrc,par);
     successCheck(data->getN123()==op.getRange()->getN123(),__FILE__,__LINE__,"The provided data is incompatible\n");
+    model->set(1,nx*nz);
+
 
 // set the least-squares problem
     llsq prob(&op, refl, data);
