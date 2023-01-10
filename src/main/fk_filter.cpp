@@ -85,7 +85,7 @@ int main(int argc, char **argv){
         int nx4 = (0.5+kHigh+taper)*X.n;
         nx4 = std::min(nx4, X.n);
 
-        if ((kLow != -0.5) || (kHigh != 0.5)){
+        if ((kLow > -0.5) || (kHigh < 0.5)){
 
             for (int ix=0; ix<nx1; ix++){
                 for (int iz=0; iz<F.n; iz++){
@@ -109,7 +109,7 @@ int main(int argc, char **argv){
             }
         }
 
-        if (vmin != 0){
+        if (vmin > 0){
             data_t f, k, k1, k2;
             int imin, imax;
             // negative wavenumbers

@@ -319,6 +319,9 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
             {
                 model->clip(par.deltamin,par.deltamax,3*nx*nz,4*nx*nz);
                 model->clip(par.epsilonmin,par.epsilonmax,4*nx*nz,5*nx*nz);
+                delmin = model->min(3*nx*nz,4*nx*nz);
+                delmax = model->max(3*nx*nz,4*nx*nz);
+                epsmin = model->min(4*nx*nz,5*nx*nz);
                 epsmax = model->max(4*nx*nz,5*nx*nz);
             }
 
@@ -342,14 +345,6 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
             rhomin = model->min(2*nx*nz,3*nx*nz);
             rhomax = model->max(2*nx*nz,3*nx*nz);
 
-            if (par.nmodels==5)
-            {
-                delmin = model->min(3*nx*nz,4*nx*nz);
-                delmax = model->max(3*nx*nz,4*nx*nz);
-                epsmin = model->min(4*nx*nz,5*nx*nz);
-                epsmax = model->max(4*nx*nz,5*nx*nz);
-            }
-
             if (par.verbose>1) {
                 fprintf(stderr,"Vp bounds after hard clipping are %.2f - %.2f km/s\n",vpmin,vpmax);
                 fprintf(stderr,"Vs bounds after hard clipping are %.2f - %.2f km/s\n",vsmin,vsmax);
@@ -363,7 +358,18 @@ void analyzeModel(const hypercube<data_t> &domain, std::shared_ptr<vecReg<data_t
 
         par.vmax=vpmax;
         par.vmin=vsmin;
-        if (par.nmodels==5) par.vmax *= sqrt(1+2*epsmax);
+
+        // compute the maximum horizontal P-wave velocity
+        if (par.nmodels==5) {
+            std::shared_ptr<vecReg<data_t> > temp = std::make_shared<vecReg<data_t> >(hypercube<data_t>(Z,X));
+            data_t * ptemp = temp->getVals();
+            const data_t * pvp = model->getCVals();
+            const data_t * pe = model->getCVals()+4*nx*nz;
+            #pragma omp parallel for
+            for (int i=0; i<nx*nz; i++) ptemp[i] = pvp[i]*sqrt(1+2*pe[i]);
+            
+            par.vmax = temp->max();
+        }
 
         if (par.acoustic_elastic){
             par.vmax = std::max(par.vmax, par.water_velocity);
