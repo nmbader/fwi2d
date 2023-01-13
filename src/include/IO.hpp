@@ -125,7 +125,7 @@ std::shared_ptr<vecReg<T> > sepRead(std::string input, int ndim0=1){
     axis<T> ax5(n5, (T)o5, (T)d5, lab5);
     axis<T> ax6(n6, (T)o6, (T)d6, lab6);
 
-	long n123 = n1*n2*n3*n4*n5*n6;
+	long n123 = (long)n1*(long)n2*(long)n3*(long)n4*(long)n5*(long)n6;
 
     std::vector<axis<T> > axes = {ax1, ax2, ax3, ax4, ax5, ax6};
     int ndim = 6;
@@ -364,7 +364,7 @@ std::shared_ptr<vecReg<T> > binRead(std::string input, int ndim0=1){
     axis<T> ax5(n5, o5, d5, label5);
     axis<T> ax6(n6, o6, d6, label6);
 
-	long n123 = n1*n2*n3*n4*n5*n6;
+	long n123 = (long)n1*(long)n2*(long)n3*(long)n4*(long)n5*(long)n6;
     std::vector<axis<T> > axes = {ax1, ax2, ax3, ax4, ax5, ax6};
     int ndim = 6;
     if ((n6==1) && (ndim0!=6)){

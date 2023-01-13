@@ -96,7 +96,7 @@ public:
 		_axes.emplace_back(axis<T1>(n3));
 		_axes.emplace_back(axis<T1>(n4));
 		_axes.emplace_back(axis<T1>(n5));
-		_n123=n1*n2*n3*n4*n5;
+		_n123=(long)n1*(long)n2*(long)n3*(long)n4*(long)n5;
 	}
 	hypercube(const axis<T1> &a1) {
 		_axes.push_back(a1);
