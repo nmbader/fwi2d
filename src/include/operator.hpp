@@ -229,6 +229,31 @@ public:
     }
 };
 
+// Adjoint of linear operator
+class adjointLOper : public loper {
+protected:
+    loper * _O; // linear operator
+    std::shared_ptr<vecReg<data_t> > _v;
+public:
+    adjointLOper(){}
+    ~adjointLOper(){delete _O;}
+    adjointLOper(loper * O){
+        _range = *O->getDomain();
+        _domain = *O->getRange();
+        _O=O->clone();
+    }
+    adjointLOper * clone() const {
+        adjointLOper * op = new adjointLOper(_O);
+        return op;
+    }
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat) {
+        _O->apply_adjoint(add, pdat, pmod);
+    }
+    void apply_adjoint(bool add, data_t * pmod, const data_t * pdat) {
+        _O->apply_forward(add, pdat, pmod);
+    }
+};
+
 // non-linear soft clip operator h(x) = ig(f(g(x)))
 // g(x) = (2.(x-xmean)/Dx)^p    Dx = xmax-xmin  xmean = (xmax+xmin)/2
 // f(g) = g-g^q/q if |g|<1 and = sign(g).(q-1)/q otherwise

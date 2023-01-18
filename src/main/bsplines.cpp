@@ -1,6 +1,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "operator.hpp"
+#include "lsolver.hpp"
 #include "bsplines.hpp"
 #include "param.hpp"
 #include "IO.hpp"
@@ -22,6 +23,9 @@ void printdoc(){
     "   nx,nz - int - [3] :\n\t\tnumber of control points in each direction. If provided, will override the parameters below.\n"
     "   controlx,controlz - [float] :\n\t\tarrays of control points manually entered. Must contain the first and last physical points. To be used in conjunction with mx,mz.\n"
     "   mx,mz - [int] :\n\t\tarrays of control points multiplicity manually entered.\n"
+    "   niter - int - [0]:\n\t\tnumber of iterations to build a least-squares solution for the B-splines model (less smoothing is expected).\n"
+    "   threshold - float - [0]:\n\t\tconvergence threshold to stop the solver.\n"
+    "   bsoutput - string - ['none']:\n\t\tname of output file to store the B-splines model.\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
     "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
     "\nNote:\n"
@@ -42,8 +46,9 @@ int main(int argc, char **argv){
 	initpar(argc,argv);
     omp_set_num_threads(1);
 
-    std::string input_file="in", bsmodel_file="none", output_file="out", datapath="none";
-    int nx=3, nz=3;
+    std::string input_file="in", bsmodel_file="none", output_file="out", bsoutput_file="none", datapath="none";
+    int nx=3, nz=3, niter=0;
+    data_t threshold = 0;
     bool format=0;
     std::vector<data_t> controlx={0}, controlz={0}; // locations of the control points that define the B-splines
     std::vector<int> mx={0}, mz={0}; // multiplicity of the control points that define the B-splines
@@ -51,14 +56,17 @@ int main(int argc, char **argv){
 	readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "bsmodel", bsmodel_file);
 	readParam<std::string>(argc, argv, "output", output_file);
+	readParam<std::string>(argc, argv, "bsoutput", bsoutput_file);
 	readParam<std::string>(argc, argv, "datapath", datapath);
     readParam<int>(argc, argv, "nx", nx);
     readParam<int>(argc, argv, "nz", nz);
+    readParam<int>(argc, argv, "niter", niter);
     readParam<int>(argc, argv, "mx", mx);
     readParam<int>(argc, argv, "mz", mz);
     readParam<bool>(argc, argv, "format", format);
     readParam<data_t>(argc, argv, "controlx", controlx);
     readParam<data_t>(argc, argv, "controlz", controlz);
+    readParam<data_t>(argc, argv, "threshold", threshold);
     
     std::shared_ptr<vec> input = read<data_t>(input_file,format);
     std::shared_ptr<vec> output = std::make_shared<vec>(*input->getHyper());
@@ -101,6 +109,7 @@ int main(int argc, char **argv){
     setKnot(kx,controlx,mx);
     setKnot(kz,controlz,mz);
 
+
     std::vector<ax> axes = input->getHyper()->getAxes();
     axes[0].n=controlz.size(); 
     if (nx!=0) axes[1].n=controlx.size();
@@ -120,6 +129,21 @@ int main(int argc, char **argv){
         duplicate D(*bsmodel->getHyper(),mx,mz);
         bsplines3 B(*D.getRange(),*input->getHyper(),kx,kz);
         chainLOper * BD = new chainLOper(&B,&D);
+
+        if (niter>0)
+        {
+            // set the least-squares problem
+            llsq prob(BD, bsmodel, input);
+
+            // Set the linear solver
+            lsolver * sol = new cgls(niter,threshold);
+
+            // Invert the B-splines model
+            sol->run(&prob,true);
+
+            delete sol;
+        }
+
         BD->forward(false,bsmodel,output);
         delete BD;
     }
@@ -127,12 +151,28 @@ int main(int argc, char **argv){
         duplicate1d D(*bsmodel->getHyper(),mz);
         bsplines31d B(*D.getRange(),*input->getHyper(),kz);
         chainLOper * BD = new chainLOper(&B,&D);
+
+        if (niter>0)
+        {
+            // set the least-squares problem
+            llsq prob(BD, bsmodel, input);
+
+            // Set the linear solver
+            lsolver * sol = new cgls(niter,threshold);
+
+            // Invert the B-splines model
+            sol->run(&prob,true);
+
+            delete sol;
+        }
+
         BD->forward(false,bsmodel,output);
         delete BD;
     }
 // ----------------------------------------------------------------------------------------//
 
     if (output_file!="none") write<data_t>(output,output_file,format,datapath);
+    if (bsoutput_file!="none") write<data_t>(bsmodel,bsoutput_file,format,datapath);
 
     return 0;
 }

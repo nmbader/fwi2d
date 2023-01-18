@@ -38,9 +38,10 @@ int rank=0, size=0;
     if (par.nthreads>0) omp_set_num_threads(par.nthreads);
 
 // Read inputs/outputs files
-    std::string source_file="none", model_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none";
+    std::string source_file="none", model_file="none", bsmodel_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none";
     readParam<std::string>(argc, argv, "source", source_file);
     readParam<std::string>(argc, argv, "model", model_file);
+    readParam<std::string>(argc, argv, "bsmodel", bsmodel_file);
     readParam<std::string>(argc, argv, "data", data_file);
     readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "ioutput", ioutput_file);
@@ -165,8 +166,13 @@ if (par.bsplines)
     axes[0].n=par.bs_nz; axes[1].n=par.bs_nx;
     if (par.inversion1d) axes.erase(axes.begin()+1);
     bsmodel = std::make_shared<vec>(vec(hyper(axes)));
-    if (par.inversion1d) fillin1d(bsmodel,model1d,par.bs_controlz);
+    if (bsmodel_file!="none") {
+        bsmodel = read<data_t>(bsmodel_file, par.format);
+        successCheck(bsmodel->getHyper()->isCompatible(hyper(axes)),__FILE__,__LINE__,"The B-splines model is not compatible with the input and B-splines parameters\n");
+    }
+    else if (par.inversion1d) fillin1d(bsmodel,model1d,par.bs_controlz);
     else fillin(bsmodel,model1d,par.bs_controlx,par.bs_controlz);
+
     if (par.mask_file != "none"){
         bsmask = std::make_shared<vec>(vec(hyper(axes)));
         if (par.inversion1d) fillin1d(bsmask,gmask1d,par.bs_controlz);

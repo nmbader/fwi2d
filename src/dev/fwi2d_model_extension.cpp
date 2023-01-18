@@ -61,7 +61,7 @@ public:
 
 
 // Regularization operator used in source-extended FWI
-// Op = (I-S'.Sw).W.ms where ms is the extended model across sources, 'W' and 'Sw' are the operators defined above
+// Op = (I-S'.Sw).W.ms where ms is the extended model across sources, 'W' and 'Sw' are the operators defined in 'operator.hpp'
 // S' is a spreading operator (S is the Stacking operator above)
 class model_extension : public loper {
 protected:
