@@ -651,7 +651,7 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
         // copy snapshot of the full wavefield to compute FWI gradients except for first and last time samples
         if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) {
             if ( (par.nt-1-it)/par.sub < par.nt/par.sub ) {cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[(par.nt-1-it)/par.sub - 1], 6*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
-            else {cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[(par.nt-1-it)/par.sub - 1 ], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
+            else { cudaCheckError( cudaMemcpyAsync(dev_u_for, u_full[(par.nt-1-it)/par.sub - 1 ], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );}
         }
 
         // apply spatial SBP operators
