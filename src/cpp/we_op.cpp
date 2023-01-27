@@ -640,7 +640,7 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         prev[1][i]  *= 0.5 * par.dt*par.dt/ mod[2][i];
     }    
 
-    int pct10 = round(par.nt/10);
+    int pct10 = round(par.nt/10)
 
     for (int it=0; it<par.nt-1; it++)
     {
@@ -844,7 +844,8 @@ void nl_we_op_e::propagate(bool adj, const data_t * model, const data_t * allsrc
         curr=next;
         next=bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",100*(it+1)/(par.nt-1));
+        else if (it == par.nt-2 && par.verbose>2) fprintf(stderr,"Propagation progress = 100\%\n");
     }
 
     // copy the last wfld to the full wfld vector
@@ -1614,7 +1615,7 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         prev[1][i]  *= 0.5 * par.dt*par.dt/ mod[2][i];
     }    
 
-    int pct10 = round(par.nt/10);
+    int pct10 = round(par.nt/10)
 
     for (int it=0; it<par.nt-1; it++)
     {
@@ -1813,7 +1814,8 @@ void nl_we_op_vti::propagate(bool adj, const data_t * model, const data_t * alls
         curr=next;
         next=bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",100*(it+1)/(par.nt-1));
+        else if (it == par.nt-2 && par.verbose>2) fprintf(stderr,"Propagation progress = 100\%\n");
     }
 
     // copy the last wfld to the full wfld vector
@@ -1955,7 +1957,7 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
     inj->inject(false, src, prev[0], nx, nz, par.nt, inj->_ntr, 0, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
     for (int i=0; i<nxz; i++) prev[0][i]  *= 0.5 * mod[0][i]*par.dt*par.dt;  
 
-    int pct10 = round(par.nt/10);
+    int pct10 = round(par.nt/10)
 
     for (int it=0; it<par.nt-1; it++)
     {
@@ -2089,7 +2091,8 @@ void nl_we_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc
         curr=next;
         next=bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",100*(it+1)/(par.nt-1));
+        else if (it == par.nt-2 && par.verbose>2) fprintf(stderr,"Propagation progress = 100\%\n");
     }
 
     // copy the last wfld to the full wfld vector
@@ -2243,7 +2246,7 @@ void nl_we_op_ae::propagate(bool adj, const data_t * model, const data_t * allsr
         for (int i=0; i<nxza; i++) preva[0][i]  *= 0.5 * moda[0][i]*par.dt*par.dt;
     }   
 
-    int pct10 = round(par.nt/10);
+    int pct10 = round(par.nt/10)
 
     for (int it=0; it<par.nt-1; it++)
     {
@@ -2516,7 +2519,8 @@ void nl_we_op_ae::propagate(bool adj, const data_t * model, const data_t * allsr
         curr=next;
         next=bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",100*(it+1)/(par.nt-1));
+        else if (it == par.nt-2 && par.verbose>2) fprintf(stderr,"Propagation progress = 100\%\n");
     }
 
     // copy the last wfld to the full wfld vector
@@ -2649,7 +2653,7 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
     if (!adj) for (int i=0; i<nxz; i++) dprev[0][i] = -mod[0][i]*prev[0][i]*grad[i];
 
 
-    int pct10 = round(par.nt/10);
+    int pct10 = round(par.nt/10)
 
     for (int it=0; it<par.nt-1; it++)
     {
@@ -2815,7 +2819,8 @@ void born_op_a::propagate(bool adj, const data_t * model, const data_t * allsrc,
         curr=next;
         next=bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",100*(it+1)/(par.nt-1));
+        else if (it == par.nt-2 && par.verbose>2) fprintf(stderr,"Propagation progress = 100\%\n");
     }
 
     // copy the last wfld (or second time derivative) to the full wfld vector (not needed)

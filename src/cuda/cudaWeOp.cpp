@@ -187,7 +187,7 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
     cudaCheckError( cudaMemcpy(dev_u_prev, wfld, 2*nxz*sizeof(data_t), cudaMemcpyHostToDevice) );
     delete [] wfld;
 
-    int pct10 = round(par.nt/10);
+    int pct10 = round(par.nt/10)
 
     // pin the memory for the full wavefield on the host
     if ((par.sub>0) && (grad==nullptr)) mlock(full_wfld, nxz*2*(1+par.nt/par.sub));
@@ -352,7 +352,8 @@ void nl_we_op_e::propagate_gpu(bool adj, const data_t * model, const data_t * al
         dev_u_curr=dev_u_next;
         dev_u_next=dev_bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",100*(it+1)/(par.nt-1));
+        else if (it == par.nt-2 && par.verbose>2) fprintf(stderr,"Propagation progress = 100\%\n");
     }
 
     // copy the last wfld to the full wfld vector
@@ -631,7 +632,7 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
     cudaCheckError( cudaMemcpy(dev_u_prev, wfld, 2*nxz*sizeof(data_t), cudaMemcpyHostToDevice) );
     delete [] wfld;
 
-    int pct10 = round(par.nt/10);
+    int pct10 = round(par.nt/10)
 
     // pin the memory for the full wavefield on the host
     if ((par.sub>0) && (grad==nullptr)) mlock(full_wfld, nxz*2*(1+par.nt/par.sub));
@@ -793,7 +794,8 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
         dev_u_curr=dev_u_next;
         dev_u_next=dev_bucket;
 
-        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",10*(it+1)/pct10);
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",100*(it+1)/(par.nt-1));
+        else if (it == par.nt-2 && par.verbose>2) fprintf(stderr,"Propagation progress = 100\%\n");
     }
 
     // copy the last wfld to the full wfld vector

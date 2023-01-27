@@ -178,9 +178,10 @@ int rank=0, size=0;
     if (par.nthreads>0) omp_set_num_threads(par.nthreads);
 
 // Read inputs/outputs files
-    std::string source_file="none", model_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none", extension_weights_file="none";
+    std::string source_file="none", model_file="none", bsmodel_file="none", data_file="none", output_file="none", ioutput_file="none", obj_func_file="none", extension_weights_file="none";
     readParam<std::string>(argc, argv, "source", source_file);
     readParam<std::string>(argc, argv, "model", model_file);
+    readParam<std::string>(argc, argv, "bsmodel", bsmodel_file);
     readParam<std::string>(argc, argv, "data", data_file);
     readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "ioutput", ioutput_file);
@@ -318,7 +319,11 @@ if (par.bsplines)
     bsfillin F(*model->getHyper(),par.bs_controlx,par.bs_controlz);
     bsmodel = std::make_shared<vec>(vec(*F.getRange()));
     bsmodel->zero();
-    F.apply_forward(false, model->getVals(), bsmodel->getVals());
+    if (bsmodel_file!="none") {
+        bsmodel = read<data_t>(bsmodel_file, par.format);
+        successCheck(bsmodel->getHyper()->isCompatible(*F.getRange()),__FILE__,__LINE__,"The B-splines model is not compatible with the input and B-splines parameters\n");
+    }
+    else F.apply_forward(false, model->getVals(), bsmodel->getVals());
     if (par.mask_file != "none") {
         bsmask = std::make_shared<vec>(vec(*F.getRange()));
         bsmask->zero();
