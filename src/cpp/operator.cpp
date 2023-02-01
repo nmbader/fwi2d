@@ -2356,14 +2356,21 @@ void sWeighting::apply_forward(bool add, const data_t * pmod, data_t * pdat){
         izmin=std::max(0,izmin);
         izmax=std::min(Z.n,izmax);
 
-        // damp the model for source s using an ellispsis cosine squared and borrow model from the other sources
+        // damp the model for source s using an ellispsis cosine squared and borrow model from the other sources while maintaining continuity
+        // out_s = ws * in_s + (1-ws)/(sum{wsi, si != s}) * sum{wsi * in_s1, si != s}
         for (int c=0; c<C.n; c++){
             #pragma omp parallel for
             for (int ix=ixmin; ix<ixmax; ix++){
                 for (int iz=izmin; iz<izmax; iz++){
-                    data_t sum = 0;
-                    for (int so=0; so<ns; so++) sum += pw[so][ix][iz] * pm[so][c][ix][iz];
-                    pd[s][c][ix][iz] = sum;
+                    data_t sum1 = 0;
+                    data_t sum2 = 0;
+                    for (int so=0; so<ns; so++) {
+                        sum1 += pw[so][ix][iz];
+                        sum2 += pw[so][ix][iz] * pm[so][c][ix][iz];
+                    }
+                    sum1 -= pw[s][ix][iz];
+                    sum2 -= pw[s][ix][iz]*pm[s][c][ix][iz];
+                    pd[s][c][ix][iz] = pw[s][ix][iz]*pm[s][c][ix][iz] + (1 - pw[s][ix][iz]) * sum2 / sum1;
                 }
             }
         }
@@ -2434,8 +2441,14 @@ void sWeighting::apply_adjoint(bool add, data_t * pmod, const data_t * pdat){
         for (int c=0; c<C.n; c++){
             for (int ix=ixmin; ix<ixmax; ix++){
                 for (int iz=izmin; iz<izmax; iz++){
+                    data_t sum1 = 0;
+                    for (int so=0; so<ns; so++) sum1 += pw[so][ix][iz];
+                    sum1 -= pw[s][ix][iz];
+
                     // spread a weighted model to the other sources
-                    for (int so=0; so<ns; so++) pm[so][c][ix][iz] += pw[so][ix][iz]*pd[s][c][ix][iz];
+                    for (int so=0; so<ns; so++) pm[so][c][ix][iz] += (1 - pw[s][ix][iz]) * pw[so][ix][iz] * pd[s][c][ix][iz] / sum1;
+                    pm[s][c][ix][iz] -= (1 - pw[s][ix][iz]) * pw[s][ix][iz] * pd[s][c][ix][iz] / sum1;
+                    pm[s][c][ix][iz] += pw[s][ix][iz] * pd[s][c][ix][iz];
                 }
             }
         }

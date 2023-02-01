@@ -258,16 +258,17 @@ int rank=0, size=0;
         else successCheck(prior->getN123()==n*par.ns,__FILE__,__LINE__,"The prior model has an incorrect size\n");
     }
 
-    sWeighting * sW1 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, true, true);
+    sWeighting * sW1 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, true, false);
     sWeighting * sW2 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, false, true);
-    sWeighting * sW3 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, true, false);
+    sWeighting * sW3 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, false, false);
     model_extension * E = new model_extension(sW1, sW2->getW());
 
     if (rank==0 && extension_weights_file!="none") {
         write<data_t>(sW1->getW(), extension_weights_file, par.format, par.datapath);
         write<data_t>(sW2->getW(), extension_weights_file+".influence", par.format, par.datapath);
-        write<data_t>(sW3->getW(), extension_weights_file+".unnormalized", par.format, par.datapath);
+        write<data_t>(sW3->getW(), extension_weights_file+".influence.unnormalized", par.format, par.datapath);
     }
+
     delete sW1;
     delete sW2;
     delete sW3;

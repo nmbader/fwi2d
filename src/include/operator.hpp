@@ -3,6 +3,8 @@
 #include "vecReg.hpp"
 #include "misc.hpp"
 
+#define P_INF 1e+16
+
 // generic class for non-linear operators
 class nloper {
 protected:
@@ -1097,7 +1099,7 @@ std::shared_ptr<vecReg<data_t> > minimum_phase(const std::shared_ptr<vecReg<data
 class sWeighting : public loper {
 protected:
     data_t _dpower; // damping strength for cosine^2
-    data_t _dwidthx; // damping width (radius)
+    data_t _dwidthx; // damping width (radius) around sources
     data_t _dwidthz;
     std::vector<std::vector<data_t> > _sxz; // sources location
     std::shared_ptr<vecReg<data_t> > _W; // normalized weights for the extended model
@@ -1117,7 +1119,8 @@ public:
         _range = _domain;
         _dwidthx = dwidthx;
         _dwidthz = dwidthz;
-        _dpower = dpower;
+        if (dpower>0 && dpower<=1) _dpower = -log(dpower);
+        else _dpower = P_INF;
         _sxz=sxz;
         _W = std::make_shared<vecReg<data_t> >(hypercube<data_t>(axes[0],axes[1],S));
         _W->zero();
@@ -1126,7 +1129,8 @@ public:
         axis<data_t> X = _range.getAxis(2);
         axis<data_t> C = _range.getAxis(3);
 
-        data_t val0 = pow(cos(_dpower*0.5*M_PI),2);
+        // data_t val0 = pow(cos(_dpower*0.5*M_PI),2);
+        data_t val0 = (pow(cos(0.5*M_PI),2) + _dpower) / (1 + _dpower);
         _W->set(val0);
         data_t * ptr = _W->getVals();
         data_t (*pw) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) _W->getVals();
@@ -1136,10 +1140,10 @@ public:
         for (int s=0; s<ns; s++){
 
             // find the box surrounding the source location
-            int ixmin = ceil((_sxz[s][0]-_dwidthx-X.o)/X.d);
-            int ixmax = ceil((_sxz[s][0]+_dwidthx-X.o)/X.d);
-            int izmin = ceil((_sxz[s][1]-_dwidthz-Z.o)/Z.d);
-            int izmax = ceil((_sxz[s][1]+_dwidthz-Z.o)/Z.d);
+            int ixmin = ceil((_sxz[s][0] - dwidthx-X.o)/X.d);
+            int ixmax = ceil((_sxz[s][0] + dwidthx-X.o)/X.d);
+            int izmin = ceil((_sxz[s][1] - dwidthz-Z.o)/Z.d);
+            int izmax = ceil((_sxz[s][1] + dwidthz-Z.o)/Z.d);
             ixmin=std::max(0,ixmin);
             ixmax=std::min(X.n,ixmax);
             izmin=std::max(0,izmin);
@@ -1157,10 +1161,10 @@ public:
                 if (rzmin>rxz[s][r][1]) rzmin=rxz[s][r][1];
                 if (rzmax<rxz[s][r][1]) rzmax=rxz[s][r][1];
             }
-            rxmin = std::min(rxmin,_sxz[s][0]-dwidthx);
-            rxmax = std::max(rxmax,_sxz[s][0]+dwidthx);
-            rzmin = std::min(rzmin,_sxz[s][1]-dwidthz);
-            rzmax = std::max(rzmax,_sxz[s][1]+dwidthz);
+            rxmin = std::min(rxmin,_sxz[s][0] - dwidthx);
+            rxmax = std::max(rxmax,_sxz[s][0] + dwidthx);
+            rzmin = std::min(rzmin,_sxz[s][1] - dwidthz);
+            rzmax = std::max(rzmax,_sxz[s][1] + dwidthz);
             rxmin -= xextension; 
             rxmax += xextension;
             rzmin -= zextension; 
@@ -1182,23 +1186,23 @@ public:
 
             // compute weights inside the shot+receivers spread box of influence
             for (int ix=std::max(v[0]-ixw,0); ix<v[0]; ix++){
-                data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[0]-ix)/ixw),2);
-                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                data_t val0x=( pow(cos(0.5*M_PI*(v[0]-ix)/ixw),2) + _dpower) / (1 + _dpower);
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),2) + _dpower) / (1+_dpower) ;
                 for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x;
-                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),2) + _dpower) / (1 + _dpower);
             }
 
             for (int ix=v[0]; ix<v[1]; ix++){
                 data_t val0x=1;
-                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),2) + _dpower) / (1+_dpower);
                 for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = 1.0;
-                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),2) + _dpower) / (1+_dpower);
             }
             for (int ix=v[1]; ix<std::min(v[1]+ixw,X.n); ix++){
-                data_t val0x=pow(cos(_dpower*0.5*M_PI*(v[1]-ix)/ixw),2);
-                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[2]-iz)/izw),2);
+                data_t val0x=( pow(cos(0.5*M_PI*(v[1]-ix)/ixw),2) + _dpower) / (1+_dpower);
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),2) + _dpower) / (1+_dpower);
                 for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x;
-                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x*pow(cos(_dpower*0.5*M_PI*(v[3]-iz)/izw),2);
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),2) + _dpower) / (1+_dpower);
             }
 
             // compute weights around the source location
@@ -1206,16 +1210,16 @@ public:
             {
                 for (int ix=ixmin; ix<ixmax; ix++){
                     data_t x = X.o + ix*X.d;
-                    data_t rx = (x-_sxz[s][0])/_dwidthx;
+                    data_t rx = (x-_sxz[s][0])/dwidthx;
                     rx*=rx;
                     for (int iz=izmin; iz<izmax; iz++){
                         data_t z = Z.o + iz*Z.d;
-                        data_t rz = (z-_sxz[s][1])/_dwidthz;
+                        data_t rz = (z-_sxz[s][1])/dwidthz;
                         rz*=rz;
                         data_t d = sqrt(rx+rz);
                         data_t val = 1;
-                        if (d<1) val = cos(_dpower*0.5*M_PI*(1-d));
-                        ptr[s*X.n*Z.n + ix*Z.n + iz] = val*val;
+                        if (d<1) val = ( pow(cos(0.5*M_PI*(1-d)),2) + _dpower) / (1+_dpower);
+                        ptr[s*X.n*Z.n + ix*Z.n + iz] = val;
                     }
                 }
             }
@@ -1227,7 +1231,6 @@ public:
             std::shared_ptr<vecReg<data_t> > nW = std::make_shared<vecReg<data_t> >(hypercube<data_t>(axes[0],axes[1]));
             nW->zero();
             data_t * pnw = nW->getVals();
-            // data_t (*pnw) [Z.n] = (data_t (*)[Z.n]) nW->getVals();
 
             // sum weights across shots
             for (int s=0; s<ns; s++){
@@ -1293,3 +1296,5 @@ public:
     void apply_forward(bool add, const data_t * pmod, data_t * pdat);
     void apply_adjoint(bool add, data_t * pmod, const data_t * pdat);
 };
+
+#undef P_INF

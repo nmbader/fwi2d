@@ -1,8 +1,5 @@
 #pragma once
 
-#define ZERO 1e-16
-#define M_INF -1e+16
-
 #include <time.h>
 #include "operator.hpp"
 #include "we_op.hpp"
@@ -10,6 +7,9 @@
 #ifdef CUDA
     #include "cudaMisc.h"
 #endif
+
+#define ZERO 1e-16
+#define M_INF -1e+16
 
 // General class for optimization problems: min(f(m))
 class optimization {
@@ -581,7 +581,7 @@ public:
         // gradient preconditioning weights to remove strong contributions around the sources
         if (_L->_par.gradient_preconditioning)
         {
-            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, true);
+            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, false);
             _gweights = sW->getW()->clone();
             delete sW;
         }
@@ -1085,7 +1085,7 @@ public:
         // gradient preconditioning weights to remove strong contributions around the sources
         if (_L->_par.gradient_preconditioning)
         {
-            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, true);
+            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, false);
             _gweights = sW->getW()->clone();
             delete sW;
         }
