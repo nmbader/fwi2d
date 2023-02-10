@@ -309,8 +309,8 @@ public:
 
         if (add == false) memset(pmod, 0, _domain.getN123()*sizeof(data_t));
 
+        #pragma omp parallel for private(x,z)
         for (int iy=0; iy<ny; iy++){
-            //#pragma omp parallel for private(x,z)
             for (int ix=0; ix<X.n; ix++){
                 x = ix*X.d+X.o;
                 for (int iz=0; iz<Z.n; iz++){

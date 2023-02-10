@@ -44,10 +44,9 @@ int main(int argc, char **argv){
     if (argc == 1 && isatty(STDIN_FILENO)==true) {printdoc(); return 0;}
 
 	initpar(argc,argv);
-    omp_set_num_threads(1);
 
     std::string input_file="in", bsmodel_file="none", output_file="out", bsoutput_file="none", datapath="none";
-    int nx=3, nz=3, niter=0;
+    int nx=3, nz=3, niter=0, nthreads=1;
     data_t threshold = 0;
     bool format=0;
     std::vector<data_t> controlx={0}, controlz={0}; // locations of the control points that define the B-splines
@@ -61,12 +60,15 @@ int main(int argc, char **argv){
     readParam<int>(argc, argv, "nx", nx);
     readParam<int>(argc, argv, "nz", nz);
     readParam<int>(argc, argv, "niter", niter);
+    readParam<int>(argc, argv, "nthreads", nthreads);
     readParam<int>(argc, argv, "mx", mx);
     readParam<int>(argc, argv, "mz", mz);
     readParam<bool>(argc, argv, "format", format);
     readParam<data_t>(argc, argv, "controlx", controlx);
     readParam<data_t>(argc, argv, "controlz", controlz);
     readParam<data_t>(argc, argv, "threshold", threshold);
+
+    omp_set_num_threads(nthreads);
     
     std::shared_ptr<vec> input = read<data_t>(input_file,format);
     std::shared_ptr<vec> output = std::make_shared<vec>(*input->getHyper());
