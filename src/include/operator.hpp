@@ -1098,7 +1098,8 @@ std::shared_ptr<vecReg<data_t> > minimum_phase(const std::shared_ptr<vecReg<data
 // m = W.ms where ms is the extended model across sources, 'W' is a non-diagonal operator of normalized cosine squared weighting for each source 's'
 class sWeighting : public loper {
 protected:
-    data_t _dpower; // damping strength for cosine^2
+    int _dpower ; // damping power for cosine taper
+    data_t _dfloor; // damping floor
     data_t _dwidthx; // damping width (radius) around sources
     data_t _dwidthz;
     std::vector<std::vector<data_t> > _sxz; // sources location
@@ -1107,7 +1108,7 @@ protected:
 public:
     sWeighting(){}
     ~sWeighting(){}
-    sWeighting(const hypercube<data_t> &domain,const std::vector<std::vector<data_t> > &sxz, const std::vector<std::vector<std::vector<data_t> > > &rxz, const data_t dwidthx, const data_t dwidthz, const data_t dpower, const data_t xextension, const data_t zextension, bool damp_around_sources, bool normalize){
+    sWeighting(const hypercube<data_t> &domain,const std::vector<std::vector<data_t> > &sxz, const std::vector<std::vector<std::vector<data_t> > > &rxz, const data_t dwidthx, const data_t dwidthz, const data_t dfloor, const int dpower, const data_t xextension, const data_t zextension, bool damp_around_sources, bool normalize){
         std::vector<axis<data_t> > axes = domain.getAxes();
         successCheck(axes.size()>=3,__FILE__,__LINE__,"The domain must contain at least 3 axes\n");
         int ns=domain.getN123()/(axes[0].n*axes[1].n*axes[2].n);
@@ -1119,8 +1120,9 @@ public:
         _range = _domain;
         _dwidthx = dwidthx;
         _dwidthz = dwidthz;
-        if (dpower>0 && dpower<=1) _dpower = -log(dpower);
-        else _dpower = P_INF;
+        _dpower = dpower;
+        if (dfloor>0 && dfloor<=1) _dfloor = -log(dfloor);
+        else _dfloor = P_INF;
         _sxz=sxz;
         _W = std::make_shared<vecReg<data_t> >(hypercube<data_t>(axes[0],axes[1],S));
         _W->zero();
@@ -1129,8 +1131,8 @@ public:
         axis<data_t> X = _range.getAxis(2);
         axis<data_t> C = _range.getAxis(3);
 
-        // data_t val0 = pow(cos(_dpower*0.5*M_PI),2);
-        data_t val0 = (pow(cos(0.5*M_PI),2) + _dpower) / (1 + _dpower);
+        // data_t val0 = pow(cos(_dfloor*0.5*M_PI),2);
+        data_t val0 = (pow(cos(0.5*M_PI),_dpower) + _dfloor) / (1 + _dfloor);
         _W->set(val0);
         data_t * ptr = _W->getVals();
         data_t (*pw) [X.n][Z.n] = (data_t (*)[X.n][Z.n]) _W->getVals();
@@ -1186,23 +1188,23 @@ public:
 
             // compute weights inside the shot+receivers spread box of influence
             for (int ix=std::max(v[0]-ixw,0); ix<v[0]; ix++){
-                data_t val0x=( pow(cos(0.5*M_PI*(v[0]-ix)/ixw),2) + _dpower) / (1 + _dpower);
-                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),2) + _dpower) / (1+_dpower) ;
+                data_t val0x=( pow(cos(0.5*M_PI*(v[0]-ix)/ixw),_dpower) + _dfloor) / (1 + _dfloor);
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),_dpower) + _dfloor) / (1+_dfloor) ;
                 for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x;
-                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),2) + _dpower) / (1 + _dpower);
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),_dpower) + _dfloor) / (1 + _dfloor);
             }
 
             for (int ix=v[0]; ix<v[1]; ix++){
                 data_t val0x=1;
-                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),2) + _dpower) / (1+_dpower);
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),_dpower) + _dfloor) / (1+_dfloor);
                 for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = 1.0;
-                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),2) + _dpower) / (1+_dpower);
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),_dpower) + _dfloor) / (1+_dfloor);
             }
             for (int ix=v[1]; ix<std::min(v[1]+ixw,X.n); ix++){
-                data_t val0x=( pow(cos(0.5*M_PI*(v[1]-ix)/ixw),2) + _dpower) / (1+_dpower);
-                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),2) + _dpower) / (1+_dpower);
+                data_t val0x=( pow(cos(0.5*M_PI*(v[1]-ix)/ixw),_dpower) + _dfloor) / (1+_dfloor);
+                for (int iz=std::max(v[2]-izw,0); iz<v[2]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[2]-iz)/izw),_dpower) + _dfloor) / (1+_dfloor);
                 for (int iz=v[2]; iz<v[3]; iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x;
-                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),2) + _dpower) / (1+_dpower);
+                for (int iz=v[3]; iz<std::min(v[3]+izw,Z.n); iz++) ptr[s*X.n*Z.n + ix*Z.n + iz] = val0x* (pow(cos(0.5*M_PI*(v[3]-iz)/izw),_dpower) + _dfloor) / (1+_dfloor);
             }
 
             // compute weights around the source location
@@ -1218,7 +1220,7 @@ public:
                         rz*=rz;
                         data_t d = sqrt(rx+rz);
                         data_t val = 1;
-                        if (d<1) val = ( pow(cos(0.5*M_PI*(1-d)),2) + _dpower) / (1+_dpower);
+                        if (d<1) val = ( pow(cos(0.5*M_PI*(1-d)),_dpower) + _dfloor) / (1+_dfloor);
                         ptr[s*X.n*Z.n + ix*Z.n + iz] = val;
                     }
                 }
@@ -1253,6 +1255,7 @@ public:
         sWeighting * op = new sWeighting();
         op->_domain=_domain;
         op->_range=_range;
+        op->_dfloor=_dfloor;
         op->_dpower=_dpower;
         op->_dwidthx=_dwidthx;
         op->_dwidthz=_dwidthz;

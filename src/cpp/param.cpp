@@ -125,7 +125,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "gdamp_power", par.gdamp_power);
     readParam<data_t>(argc, argv, "damping_widthx", par.dwidthx);
     readParam<data_t>(argc, argv, "damping_widthz", par.dwidthz);
-    readParam<data_t>(argc, argv, "damping_power", par.dpower);
+    readParam<data_t>(argc, argv, "damping_floor", par.dfloor);
     readParam<data_t>(argc, argv, "xextension", par.xextension);
     readParam<data_t>(argc, argv, "zextension", par.zextension);
     readParam<data_t>(argc, argv, "ls_a0", par.ls_a0);
@@ -161,6 +161,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<int>(argc, argv, "niter", par.niter);
     readParam<int>(argc, argv, "max_trial", par.max_trial);
     readParam<int>(argc, argv, "isave", par.isave);
+    readParam<int>(argc, argv, "damping_power", par.dpower);
     readParam<int>(argc, argv, "envelop", par.envelop);
     readParam<int>(argc, argv, "smth_half_length", par.smth_half_length);
     readParam<int>(argc, argv, "regularization", par.regularization);
@@ -245,6 +246,8 @@ void readParameters(int argc, char **argv, param &par){
 void analyzeNLInversion(param &par)
 {
     par.isave=std::max(1,par.isave);
+    if (par.sub==0) par.sub=-1;
+    if (par.nmodels<3) par.model_parameterization = 1;
     if (par.verbose>0)
     {
         fprintf(stderr,"\n==========================\n Inversion parameters\n==========================\n");

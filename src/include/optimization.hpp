@@ -581,7 +581,7 @@ public:
         // gradient preconditioning weights to remove strong contributions around the sources
         if (_L->_par.gradient_preconditioning)
         {
-            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, false);
+            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dfloor, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, false);
             _gweights = sW->getW()->clone();
             delete sW;
         }
@@ -1085,7 +1085,7 @@ public:
         // gradient preconditioning weights to remove strong contributions around the sources
         if (_L->_par.gradient_preconditioning)
         {
-            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, false);
+            sWeighting * sW = new sWeighting(hypercube<data_t>(_pg->getHyper()->getAxis(1), _pg->getHyper()->getAxis(2), _pg->getHyper()->getAxis(3), axis<data_t>(_L->_par.sxz.size())), _L->_par.sxz, _L->_par.rxz, _L->_par.dwidthx, _L->_par.dwidthz, _L->_par.dfloor, _L->_par.dpower, _L->_par.xextension, _L->_par.zextension, true, false);
             _gweights = sW->getW()->clone();
             delete sW;
         }

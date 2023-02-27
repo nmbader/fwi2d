@@ -66,7 +66,7 @@ struct param{
     data_t gdamp_tmin=0, gdamp_tmax=0, gdamp_power=1; // gradient damping during time integration ; cosine square damping between time gdamp_tmin and gdamp_tmax with power gdamp_power;
     // model extension along sources with corresponding parameters
     bool sextension=false, gradient_preconditioning=false; // extend model along sources, precondition gradient using same operators used in model extension
-    data_t dwidthx=0, dwidthz=0, dpower=0, xextension=-1, zextension=-1; // damping width, power and extension
+    int dpower=2; data_t dwidthx=0, dwidthz=0, dfloor=0, xextension=-1, zextension=-1; // damping width, power and extension
 
     // advanced line search parameters (check nlsolver.hpp)
     data_t ls_a0=1, ls_a1=0, ls_c1=1e-4, ls_c2=0.9, ls_max_step=1e6;

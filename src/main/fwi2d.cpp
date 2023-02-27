@@ -121,17 +121,21 @@ if (par.inversion1d)
     std::shared_ptr<vec> model_temp = model1d;
     std::shared_ptr<vec> prior_temp = prior1d;
     int n = model1d->getN123()/par.nmodels;
-    data_t vs0 = model1d->sum(n, 2*n);
-    data_t rho0 = model1d->sum(2*n, 3*n);
-    vs0 /= n;
-    rho0 /= n;
+    data_t vs0=0;
+    data_t rho0=0;
+    if (par.nmodels>=3){
+        vs0 = model1d->sum(n, 2*n);
+        rho0 = model1d->sum(2*n, 3*n);
+        vs0 /= n;
+        rho0 /= n;
+    }
 
     nloper * P = nullptr;
     if (par.model_parameterization==0) P = new lam_mu_rho(*model1d->getHyper());
     else if (par.model_parameterization==2) P = new ip_is_rho(*model1d->getHyper());
     else if (par.model_parameterization==3) {
         P = new vs_vpvs_rho(*model1d->getHyper(), vs0, rho0);
-        if (par.verbose>0) fprintf(stderr,"Average Vs and rho used in model parameterization are %.3f and %.3f\n",vs0/n, rho0/n);
+        if (par.verbose>0) fprintf(stderr,"Average Vs and rho used in model parameterization are %.3f and %.3f\n",vs0, rho0);
     }
     if (P != nullptr){
         model_temp = std::make_shared<vec>(*model1d->getHyper());

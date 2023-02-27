@@ -258,9 +258,9 @@ int rank=0, size=0;
         else successCheck(prior->getN123()==n*par.ns,__FILE__,__LINE__,"The prior model has an incorrect size\n");
     }
 
-    sWeighting * sW1 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, true, false);
-    sWeighting * sW2 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, false, true);
-    sWeighting * sW3 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dpower, par.xextension, par.zextension, false, false);
+    sWeighting * sW1 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dfloor, par.dpower, par.xextension, par.zextension, true, false);
+    sWeighting * sW2 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dfloor, par.dpower, par.xextension, par.zextension, false, true);
+    sWeighting * sW3 = new sWeighting(*model->getHyper(), par.sxz, par.rxz, par.dwidthx, par.dwidthz, par.dfloor, par.dpower, par.xextension, par.zextension, false, false);
     model_extension * E = new model_extension(sW1, sW2->getW());
 
     if (rank==0 && extension_weights_file!="none") {
