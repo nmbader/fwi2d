@@ -92,6 +92,9 @@ target_link_libraries(FX.x fwi2d sep)
 add_executable(FK.x ${MAIN_DIR}/fk.cpp)
 target_link_libraries(FK.x fwi2d sep)
 
+add_executable(FV.x ${MAIN_DIR}/fv.cpp)
+target_link_libraries(FV.x fwi2d sep)
+
 add_executable(GENERATE_WAVELET.x ${MAIN_DIR}/generate_wavelet.cpp)
 target_link_libraries(GENERATE_WAVELET.x fwi2d sep)
 
@@ -138,6 +141,7 @@ install(TARGETS WE_MODELING.x
                 BSPLINES.x
                 FX.x
                 FK.x
+                FV.x
                 GENERATE_WAVELET.x
                 DERIVATIVE.x
                 INTEGRAL.x

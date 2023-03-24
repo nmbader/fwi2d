@@ -40,7 +40,7 @@ RUN cd /home/fwi2d &&\
     cd external/SEP &&\
     bash ./buildit.sh &&\
     cd ../../build  &&\
-    cmake -DCMAKE_INSTALL_PREFIX=/opt/fwi2d/ -DISPC=/opt/ispc/bin/ispc ../  &&\
+    cmake -DCMAKE_INSTALL_PREFIX=/opt/fwi2d/ -DISPC_PATH=/opt/ispc/bin/ispc ../  &&\
     make -j12  &&\
     make install &&\
     cd ../ &&\
