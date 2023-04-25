@@ -101,8 +101,8 @@ void softClip::apply_forward(bool add, const data_t * pmod, data_t * pdat) {
     int n = _domain.getN123();
     data_t xbar = 0.5*(_xmax+_xmin);
     data_t dx = 2*(_xmax-xbar)*std::pow(1.0*_q/(_q-1),1.0/_p);
-    data_t xmax = xbar + dx;
-    data_t xmin = xbar - dx;
+    data_t xmax = xbar + 0.5*dx;
+    data_t xmin = xbar - 0.5*dx;
     data_t g = 0;
 
     #pragma omp parallel for private(g)

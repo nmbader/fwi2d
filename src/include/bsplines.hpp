@@ -1,5 +1,7 @@
 #include "operator.hpp"
 
+#define ZERO 1e-16
+
 // B-splines functions of order 0, 1, 2, 3
 // N0
 data_t N0(int i, data_t u, const std::vector<data_t> &uk){
@@ -8,25 +10,25 @@ data_t N0(int i, data_t u, const std::vector<data_t> &uk){
 }
 // N1
 data_t N1(int i, data_t u, const std::vector<data_t> &uk){
-    if ((uk[i+1]-uk[i]==0) && (uk[i+2]-uk[i+1]==0)) return 0;
-    else if  ((uk[i+1]-uk[i]==0) && (uk[i+2]-uk[i+1]!=0)) return (uk[i+2]-u)/(uk[i+2]-uk[i+1])*N0(i+1,u,uk);
-    else if ((uk[i+1]-uk[i]!=0) && (uk[i+2]-uk[i+1]==0)) return (u-uk[i])/(uk[i+1]-uk[i])*N0(i,u,uk);
+    if (std::abs(uk[i+1]-uk[i])<ZERO && std::abs(uk[i+2]-uk[i+1])<ZERO) return 0;
+    else if  (std::abs(uk[i+1]-uk[i])<ZERO && std::abs(uk[i+2]-uk[i+1])>=ZERO) return (uk[i+2]-u)/(uk[i+2]-uk[i+1])*N0(i+1,u,uk);
+    else if (std::abs(uk[i+1]-uk[i])>=ZERO && std::abs(uk[i+2]-uk[i+1])<ZERO) return (u-uk[i])/(uk[i+1]-uk[i])*N0(i,u,uk);
     else return (u-uk[i])/(uk[i+1]-uk[i])*N0(i,u,uk) + (uk[i+2]-u)/(uk[i+2]-uk[i+1])*N0(i+1,u,uk);
 }
 
 // N2
 data_t N2(int i, data_t u, const std::vector<data_t> &uk){
-    if ((uk[i+2]-uk[i]==0) && (uk[i+3]-uk[i+1]==0)) return 0;
-    else if  ((uk[i+2]-uk[i]==0) && (uk[i+3]-uk[i+1]!=0))return (uk[i+3]-u)/(uk[i+3]-uk[i+1])*N1(i+1,u,uk);
-    else if ((uk[i+2]-uk[i]!=0) && (uk[i+3]-uk[i+1]==0)) return (u-uk[i])/(uk[i+2]-uk[i])*N1(i,u,uk);
+    if (std::abs(uk[i+2]-uk[i])<ZERO && std::abs(uk[i+3]-uk[i+1])<ZERO) return 0;
+    else if  (std::abs(uk[i+2]-uk[i])<ZERO && std::abs(uk[i+3]-uk[i+1])>=ZERO) return (uk[i+3]-u)/(uk[i+3]-uk[i+1])*N1(i+1,u,uk);
+    else if (std::abs(uk[i+2]-uk[i])>=ZERO && std::abs(uk[i+3]-uk[i+1])<ZERO) return (u-uk[i])/(uk[i+2]-uk[i])*N1(i,u,uk);
     else return (u-uk[i])/(uk[i+2]-uk[i])*N1(i,u,uk) + (uk[i+3]-u)/(uk[i+3]-uk[i+1])*N1(i+1,u,uk);
 }
 
 // N3
 data_t N3(int i, data_t u, const std::vector<data_t> &uk){
-    if ((uk[i+3]-uk[i]==0) && (uk[i+4]-uk[i+1]==0)) return 0;
-    else if  ((uk[i+3]-uk[i]==0) && (uk[i+4]-uk[i+1]!=0)) return (uk[i+4]-u)/(uk[i+4]-uk[i+1])*N2(i+1,u,uk);
-    else if ((uk[i+3]-uk[i]!=0) && (uk[i+4]-uk[i+1]==0)) return (u-uk[i])/(uk[i+3]-uk[i])*N2(i,u,uk);
+    if (std::abs(uk[i+3]-uk[i])<ZERO && std::abs(uk[i+4]-uk[i+1])<ZERO) return 0;
+    else if  (std::abs(uk[i+3]-uk[i])<ZERO && std::abs(uk[i+4]-uk[i+1])>=ZERO) return (uk[i+4]-u)/(uk[i+4]-uk[i+1])*N2(i+1,u,uk);
+    else if (std::abs(uk[i+3]-uk[i])>=ZERO && std::abs(uk[i+4]-uk[i+1])<ZERO) return (u-uk[i])/(uk[i+3]-uk[i])*N2(i,u,uk);
     else return (u-uk[i])/(uk[i+3]-uk[i])*N2(i,u,uk) + (uk[i+4]-u)/(uk[i+4]-uk[i+1])*N2(i+1,u,uk);
 }
 
@@ -232,14 +234,14 @@ public:
         _kx = kx;
         _kz = kz;
 
-        _kx[kx.size()-1] += 1e-06;
-        _kx[kx.size()-2] += 1e-06;
-        _kx[kx.size()-3] += 1e-06;
-        _kx[kx.size()-4] += 1e-06;
-        _kz[kz.size()-1] += 1e-06;
-        _kz[kz.size()-2] += 1e-06;
-        _kz[kz.size()-3] += 1e-06;
-        _kz[kz.size()-4] += 1e-06;
+        _kx[kx.size()-1] += range.getAxis(2).d*1e-03;
+        _kx[kx.size()-2] += range.getAxis(2).d*1e-03;
+        _kx[kx.size()-3] += range.getAxis(2).d*1e-03;
+        _kx[kx.size()-4] += range.getAxis(2).d*1e-03;
+        _kz[kz.size()-1] += range.getAxis(1).d*1e-03;
+        _kz[kz.size()-2] += range.getAxis(1).d*1e-03;
+        _kz[kz.size()-3] += range.getAxis(1).d*1e-03;
+        _kz[kz.size()-4] += range.getAxis(1).d*1e-03;
 
         axis<data_t> Z = _range.getAxis(1);
         axis<data_t> X = _range.getAxis(2);
@@ -350,10 +352,10 @@ public:
         _range = range;
         _kz = kz;
 
-        _kz[kz.size()-1] += 1e-06;
-        _kz[kz.size()-2] += 1e-06;
-        _kz[kz.size()-3] += 1e-06;
-        _kz[kz.size()-4] += 1e-06;
+        _kz[kz.size()-1] += range.getAxis(1).d*1e-03;
+        _kz[kz.size()-2] += range.getAxis(1).d*1e-03;
+        _kz[kz.size()-3] += range.getAxis(1).d*1e-03;
+        _kz[kz.size()-4] += range.getAxis(1).d*1e-03;
 
         axis<data_t> Z = _range.getAxis(1);
         data_t z;
@@ -385,7 +387,6 @@ public:
         data_t z;
 
         if (add == false) memset(pdat, 0, _range.getN123()*sizeof(data_t));
-
         #pragma omp parallel for private(z)
         for (int iy=0; iy<ny; iy++){
             for (int iz=0; iz<Z.n; iz++){
@@ -553,3 +554,5 @@ void fillin1d(std::shared_ptr<vecReg<data_t> > c, const std::shared_ptr<vecReg<d
         }
     }
 }
+
+#undef ZERO
