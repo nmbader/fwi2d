@@ -42,7 +42,8 @@ set(HEADERS ${INC_DIR}/injector.hpp
         )
 
 set(PYTHON ${PYTHON_DIR}/seppy.py
-                ${PYTHON_DIR}/sep2numpy.py)
+                ${PYTHON_DIR}/sep2numpy.py
+                ${PYTHON_DIR}/remove.py)
 
 if (ENABLE_CUDA)
         set(HEADERS ${HEADERS} ${CUDA_INC_DIR}/cudaCppWrappers.h
