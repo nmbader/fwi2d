@@ -19,12 +19,16 @@ def parse_args():
 def remove_file(file):
   sep = seppy.sep()
   faxes = sep.read_header(file)
-  os.remove(sep.hdict["in"])
+  try:
+    os.remove(sep.hdict["in"])
+  except OSError:
+    pass
   os.remove(file)
 
 if __name__ == "__main__":
   
   args,files=parse_args()
   for file in files:
-    remove_file(file)
+    if os.path.exists(file):
+      remove_file(file)
   sys.exit(0)
