@@ -1,4 +1,4 @@
-# time parameters
+# time parameters, default are usually good
 courant=0.6
 dt=-1
 fmax=30
@@ -16,8 +16,7 @@ rz0=0.2
 rxinc=0.01
 rzinc=0
 
-
-# source mechanism and receiver type
+# receiver type
 seismotype=0
 
 # boundary parameters

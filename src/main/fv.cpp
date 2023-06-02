@@ -5,6 +5,8 @@
 #include "IO.hpp"
 #include "seplib.h"
 
+#define ZERO 1
+
 typedef vecReg<data_t> vec;
 typedef cvecReg<data_t> cvec;
 typedef axis<data_t> ax;
@@ -19,6 +21,7 @@ void printdoc(){
     "   type - string - ['amplitude']:\n\t\toptions: 'amplitude', 'power', 'phase', 'real', 'imag'.\n"
     "   vmin - float - [1000]:\n\t\tMinimum phase velocity to scan.\n"
     "   vmax - float - [5000]:\n\t\tMaximum phase velocity to scan (must be > vmin).\n"
+    "   avmin - float - [1]:\n\t\tMinimum absolute phase velocity to try.\n"
     "   nv - int - [101]:\n\t\tNumber of velocity values to scan (must be > 1).\n"
     "   format - bool - [0]:\n\t\tdata format for IO. 0 for SEPlib, 1 for binary with description file.\n"
     "   datapath - string - ['none']:\n\t\tpath for output binaries.\n"
@@ -38,13 +41,14 @@ int main(int argc, char **argv){
     std::string input_file="in", output_file="out", type="amplitude", datapath="none";
     bool format=0;
     int nv=101;
-    data_t vmin=1000, vmax=5000;
+    data_t vmin=1000, vmax=5000, avmin=ZERO;
     readParam<std::string>(argc, argv, "input", input_file);
 	readParam<std::string>(argc, argv, "output", output_file);
     readParam<std::string>(argc, argv, "type", type);
 	readParam<std::string>(argc, argv, "datapath", datapath);
     readParam<data_t>(argc, argv, "vmin", vmin);
     readParam<data_t>(argc, argv, "vmax", vmax);
+    readParam<data_t>(argc, argv, "avmin", avmin);
     readParam<int>(argc, argv, "nv", nv);
     readParam<bool>(argc, argv, "format", format);
 
@@ -80,13 +84,16 @@ int main(int argc, char **argv){
         for (int iv=0; iv<nv; iv++)
         {
             data_t v = vmin + dv*iv;
-            for (int ix=0; ix<X.n; ix++)
+            if (std::abs(v)>avmin)
             {
-                data_t x = X.o + ix*X.d;
-                for (int fi=0; fi<F.n; fi++)
+                for (int ix=0; ix<X.n; ix++)
                 {
-                    data_t arg = 2*M_PI*(F.o+fi*F.d)*x/v;
-                    pout[iy][iv][fi] += pin[iy][ix][fi] * std::complex<data_t>(cos(arg), sin(arg));
+                    data_t x = X.o + ix*X.d;
+                    for (int fi=0; fi<F.n; fi++)
+                    {
+                        data_t arg = 2*M_PI*(F.o+fi*F.d)*x/v;
+                        pout[iy][iv][fi] += pin[iy][ix][fi] * std::complex<data_t>(cos(arg), sin(arg));
+                    }
                 }
             }
         }
@@ -103,3 +110,5 @@ int main(int argc, char **argv){
 
     return 0;
 }
+
+#undef ZERO
