@@ -48,7 +48,7 @@ rhomin=0
 rhomax=8
 deltamin=-0.5
 deltamax=1
-epsilonmin=0
+epsilonmin=-0.5
 epsilonmax=1
 
 # miscallenous
