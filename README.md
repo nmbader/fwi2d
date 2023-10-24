@@ -95,4 +95,6 @@ If the host machine has **_CUDA_** enabled, add the flag `-DENABLE_CUDA=1`. In t
 
 ## Data format
 
-By default, the main executables read and write data in *SEPlib* format (with little-endian binaries). Alternatively, native binary format is also accepted provided that a description file is built (see [examples](https://github.com/nmbader/fwi2d/tree/master/examples)). A **_C++_** executable is provided to convert between these two formats. Moreover, a python script is provided to convert to/from *SEPlib* from/to **_numpy_**.
+By default, the main executables read and write data in *SEPlib* format (with little-endian binaries). Alternatively, native binary format is also accepted provided that a description file is built. A **_C++_** executable is provided to convert between these two formats. Moreover, a python script is provided to convert to/from *SEPlib* from/to **_numpy_**, and a python class to write and read directly from python to *SEPlib*.
+
+Refer to the [examples](https://github.com/nmbader/fwi2d/tree/master/examples) for simple modeling and inversion tests.
