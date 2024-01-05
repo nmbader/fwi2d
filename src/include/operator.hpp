@@ -423,7 +423,7 @@ public:
     polar(){}
     ~polar(){}
     polar(const hypercube<data_t> &domain){
-        successCheck(2*round(domain.getN123()/2)==domain.getN123(),__FILE__,__LINE__,"The number of samples must be even\n");
+        successCheck(2*round(domain.getN123()/2.)==domain.getN123(),__FILE__,__LINE__,"The number of samples must be even\n");
         _domain = domain;
         _range = domain;
     }
@@ -442,7 +442,7 @@ public:
     ipolar(){}
     ~ipolar(){}
     ipolar(const hypercube<data_t> &domain){
-        successCheck(2*round(domain.getN123()/2)==domain.getN123(),__FILE__,__LINE__,"The number of samples must be even\n");
+        successCheck(2*round(domain.getN123()/2.)==domain.getN123(),__FILE__,__LINE__,"The number of samples must be even\n");
         _domain = domain;
         _range = domain;
     }
