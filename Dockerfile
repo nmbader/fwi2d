@@ -50,5 +50,6 @@ RUN apt-get -y clean
 
 ENV HOME=/home 
 ENV PATH="/opt/fwi2d/bin:${PATH}"
+ENV PYTHONPATH="/opt/fwi2d/bin:${PYTHONPATH}"
 ENV DATAPATH="/tmp/"
 RUN echo 'alias python=python3' >> ~/.bashrc
