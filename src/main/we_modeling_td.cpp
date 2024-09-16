@@ -52,27 +52,27 @@ int main(int argc, char **argv){
     
 //  Copy the first time snapshot model for analysis and operator construction
     std::vector<ax> axes = modelall->getHyper()->getAxes();
+    successCheck(axes.size() == 4,__FILE__,__LINE__,"Time-dependent model must have 4 dimensions\n");
     int ntm = axes[3].n;
-    int dtm = axes[3].d;
+    data_t dtm = axes[3].d;
+    hyper hypall(axes);
     axes.pop_back(); // remove the time axis
     hyper hyp(axes);
-    std::shared_ptr<vec> model = std::make_shared<vec> (hyp);
-    std::memcpy(model->getVals(),modelall->getCVals(),hyp.getN123());
-    
+
 // Analyze the input source time function and duplicate if necessary, analyze geometry
-    analyzeGeometry(*model->getHyper(),par, par.verbose>0);
+    analyzeGeometry(hyp,par, par.verbose>0);
     std::shared_ptr<vec> allsrc = analyzeWavelet(src, par, par.verbose>0);
     
     // If more than one shot is modeled, don't save the wavefield
     // if (par.ns>1) par.sub=0;
 
 // Build the appropriate wave equation operator
-    nl_we_op_e_td * op = new nl_we_op_e_td(*model->getHyper(),allsrc,par,ntm,dtm);
+    nl_we_op_e * op = new nl_we_op_e_td(hypall,allsrc,par);
 
 // Run the forward modeling
     if (rank>0) par.verbose=verbose;
     std::shared_ptr<vec> allrcv = std::make_shared<vec> (*op->getRange());
-    op->apply_forward(false,modelall->getCVals(),allrcv->getVals());
+    op->forward(false,modelall,allrcv);
 
     if ((rank==0) && (wavefield_file!="none") && (op->_par.sub)>0) write<data_t>(op->_full_wfld, wavefield_file, par.format, par.datapath);
     if ((rank==0) && (wavefield_file!="none") && (op->_par.sub)>0 && par.acoustic_elastic && par.acoustic_wavefield) write<data_t>(op->_full_wflda, wavefield_file+"a", par.format, par.datapath);

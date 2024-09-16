@@ -1242,7 +1242,8 @@ void nl_we_op_e_td::convert_model(data_t * m, int n, bool forward) const
 {
     data_t (* pm) [3][n] = (data_t (*) [3][n]) m;
 
-    for (int itm=0; itm<_ntm; itm++){
+    int ntm = _domain.getAxes()[3].n;
+    for (int itm=0; itm<ntm; itm++){
         if (forward)
         {
             for (int i=0; i<n; i++){
@@ -1260,7 +1261,7 @@ void nl_we_op_e_td::convert_model(data_t * m, int n, bool forward) const
     }
 }
 
-void nl_we_op_e_td::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, int ntm, data_t dx, data_t dz, data_t dtm, data_t ox, data_t oz, int s) const
+void nl_we_op_e_td::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, data_t dx, data_t dz, data_t ox, data_t oz, int s) const
 {
     // wavefields allocations and pointers
     data_t * u  = new data_t[6*nx*nz];
@@ -1289,7 +1290,10 @@ void nl_we_op_e_td::propagate(bool adj, const data_t * model, const data_t * all
         tmp = new data_t[nx*nz];
         memset(tmp, 0, nx*nz*sizeof(data_t));
     }
+
 	const data_t* mod[3] = {model, model+nx*nz, model+2*nx*nz};
+    int ntm = _domain.getAxes()[3].n;
+    data_t dtm = _domain.getAxes()[3].d;
 
     // #############  PML stuff ##################
     int l = std::max(par.taper_top,par.taper_bottom);
@@ -1362,11 +1366,16 @@ void nl_we_op_e_td::propagate(bool adj, const data_t * model, const data_t * all
     }    
 
     int pct10 = round(par.nt/10);
+    int itm0 = 0;
 
     for (int it=0; it<par.nt-1; it++)
     {
         // set the proper time dependent model snapshot
         int itm = std::min((int)(floor(it*par.dt/dtm)), ntm);
+        if (itm != itm0) {
+            if (par.verbose > 2) fprintf(stderr,"Switch to model %d\n", itm);
+            itm0 = itm;
+        }
         mod[0] = model+itm*3*nx*nz;
         mod[1] = model+itm*3*nx*nz+nx*nz;
         mod[2] = model+itm*3*nx*nz+2*nx*nz;
@@ -1610,11 +1619,23 @@ void nl_we_op_e_td::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 {
 //    if (_par.verbose>1) fprintf(stderr,"Start forward propagation\n");
 
-    std::shared_ptr<vecReg<data_t> > model = std::make_shared<vecReg<data_t> >(_domain);
-    memcpy(model->getVals(), pmod, _domain.getN123()*sizeof(data_t));
+    std::vector<axis<data_t> > axes = _domain.getAxes();
+    int ntm = axes[3].n; // number of time-dependent models
+    data_t dtm = axes[3].d;
+    hypercube<data_t> hypall(axes);
+    axes.pop_back(); // remove the time axis
+    hypercube<data_t> hyp(axes);
+    std::shared_ptr<vecReg<data_t> > modelall = std::make_shared<vecReg<data_t> > (hypall);
+    std::memcpy(modelall->getVals(),pmod,hypall.getN123()*sizeof(data_t));
+    
+    {
+    std::shared_ptr<vecReg<data_t> > model = std::make_shared<vecReg<data_t> > (hyp);
+    std::memcpy(model->getVals(),pmod,hyp.getN123()*sizeof(data_t));
     analyzeModel(*_allsrc->getHyper(),model,_par);
-    convert_model(model->getVals(), model->getN123()/_par.nmodels, true);
-    const data_t * pm = model->getCVals();
+    }
+    
+    convert_model(modelall->getVals(), hyp.getN123()/_par.nmodels, true);
+    const data_t * pm = modelall->getCVals();
 
     int nx = _domain.getAxis(2).n;
     int nz = _domain.getAxis(1).n;
@@ -1697,9 +1718,9 @@ void nl_we_op_e_td::apply_forward(bool add, const data_t * pmod, data_t * pdat)
         }
 
 #ifdef CUDA
-        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, _ntm, dx, dz, _dtm, ox, oz, s);
+        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #else
-        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, _ntm, dx, dz, _dtm, ox, oz, s);
+        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, dx, dz, ox, oz, s);
 #endif
 
         if (_par.verbose>1) fprintf(stderr,"Finish propagating shot %d by process %d\n",s, rank0);
