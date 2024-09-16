@@ -83,6 +83,9 @@ make install
 # clean up the build directory
 rm -rf *
 ```
+
+If the build fails, it might be necessary to pass other flags to **_cmake_** such as `-DCMAKE_CXX_FLAGS=-ltirpc`.
+
 By default, the **fwi2d** library is built in single precision. For double precision, add the flag `-DENABLE_DOUBLE_PRECISION=1`
  to the **_cmake_** command. 
 

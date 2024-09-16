@@ -1238,6 +1238,527 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     delete resamp;
 }
 
+void nl_we_op_e_td::convert_model(data_t * m, int n, bool forward) const
+{
+    data_t (* pm) [3][n] = (data_t (*) [3][n]) m;
+
+    for (int itm=0; itm<_ntm; itm++){
+        if (forward)
+        {
+            for (int i=0; i<n; i++){
+                pm[itm][0][i] = pm[itm][2][i]*(pm[itm][0][i]*pm[itm][0][i]-2*pm[itm][1][i]*pm[itm][1][i]);
+                pm[itm][1][i] = pm[itm][2][i]* pm[itm][1][i]*pm[itm][1][i];
+            }
+        }
+        else
+        {
+            for (int i=0; i<n; i++){
+                pm[itm][0][i] = sqrt((pm[itm][0][i]+2*pm[itm][1][i])/pm[itm][2][i]);
+                pm[itm][1][i] = sqrt( pm[itm][1][i]/pm[itm][2][i]);
+            }
+        }
+    }
+}
+
+void nl_we_op_e_td::propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, int ntm, data_t dx, data_t dz, data_t dtm, data_t ox, data_t oz, int s) const
+{
+    // wavefields allocations and pointers
+    data_t * u  = new data_t[6*nx*nz];
+    data_t * dux  = new data_t[2*nx*nz];
+    data_t * duz  = new data_t[2*nx*nz];
+    memset(u, 0, 6*nx*nz*sizeof(data_t));
+    memset(dux, 0, 2*nx*nz*sizeof(data_t));
+    memset(duz, 0, 2*nx*nz*sizeof(data_t));
+    data_t (*prev) [nx*nz] = (data_t (*)[nx*nz]) u;
+    data_t (*curr) [nx*nz] = (data_t (*)[nx*nz]) (u + 2*nx*nz);
+    data_t (*next) [nx*nz] = (data_t (*)[nx*nz]) (u + 4*nx*nz);
+    data_t (*bucket) [nx*nz];
+    data_t (*u_x) [nx*nz] = (data_t (*)[nx*nz]) dux;
+    data_t (*u_z) [nx*nz] = (data_t (*)[nx*nz]) duz;
+    data_t (*u_full) [2][nx*nz];
+    data_t * tmp;
+
+    if (par.sub>0) u_full = (data_t (*) [2][nx*nz]) full_wfld;
+    if (grad != nullptr) 
+    {
+        tmp = new data_t[4*nx*nz];
+        memset(tmp, 0, 4*nx*nz*sizeof(data_t));
+    }
+    else if (par.version==2)
+    {
+        tmp = new data_t[nx*nz];
+        memset(tmp, 0, nx*nz*sizeof(data_t));
+    }
+	const data_t* mod[3] = {model, model+nx*nz, model+2*nx*nz};
+
+    // #############  PML stuff ##################
+    int l = std::max(par.taper_top,par.taper_bottom);
+    l = std::max(l, par.taper_left);
+    l = std::max(l, par.taper_right);
+    data_t * gx; data_t * gz; data_t * gxprime; data_t * gzprime;
+    data_t * top_ac; data_t * top_an; data_t * top_s2;
+    data_t * bottom_ac; data_t * bottom_an; data_t * bottom_s2;
+    data_t * left_ac; data_t * left_an; data_t * left_s2; data_t * left_t2c; data_t * left_t2n; data_t * left_t3c; data_t * left_t3n; data_t * left_s5; data_t * left_s6;
+    data_t * right_ac; data_t * right_an; data_t * right_s2; data_t * right_t2c; data_t * right_t2n; data_t * right_t3c; data_t * right_t3n; data_t * right_s5; data_t * right_s6;
+    
+    if (par.pml) 
+    {
+        pml_allocate(top_ac, top_an, top_s2, bottom_ac, bottom_an, bottom_s2,
+        left_ac, left_an, left_s2, left_t2c, left_t2n, left_t3c, left_t3n, left_s5, left_s6,
+        right_ac, right_an, right_s2, right_t2c, right_t2n, right_t3c, right_t3n, right_s5, right_s6,
+        par.pml_T, par.pml_B, par.pml_L, par.pml_R, nx, nz, l);
+
+        // stretching functions g = (p+1)/(2L)*vmax*log(1/R)(d/L)^p where L is the PML thickness, d=x or z, p is the polynomial power (e.g. =2)
+        gx = new data_t [l];
+        gz = new data_t [l];
+        gxprime = new data_t [l];
+        gzprime = new data_t [l];
+        data_t Lx=l*dx; data_t Lz=dz*l;
+        data_t gx0=(par.p+1)/(2*Lx)*par.vmax*log(1.0/par.R);
+        data_t gz0=(par.p+1)/(2*Lz)*par.vmax*log(1.0/par.R);
+        for (int i=0; i<l; i++)
+        {
+            gx[i]=gx0*pow((1.0*(l-i)/l),par.p); gxprime[i]=par.p/Lx*gx0*pow((1.0*(l-i)/l),par.p-1);
+            gz[i]=gz0*pow((1.0*(l-i)/l),par.p); gzprime[i]=par.p/Lz*gz0*pow((1.0*(l-i)/l),par.p-1);
+        }
+    }
+    // ###########################################
+    
+    // source and receiver components for injection/extraction
+    int ns=par.ns;
+    int nr=par.nr;
+    if (adj)
+    {
+        ns = par.nr;
+        nr = par.ns;
+    }
+    const data_t * srcx[2] = {allsrc, nullptr};
+    const data_t * srcz[2] = {allsrc + ns*par.nt, nullptr};
+    data_t * rcvx[2] = {allrcv, nullptr};
+    data_t * rcvz[2] = {allrcv + nr*par.nt, nullptr};
+    if (par.mt==true)
+    {
+        if (!adj)
+        {
+            srcx[1] = allsrc + 2*ns*par.nt;
+            srcz[0] = allsrc + 2*ns*par.nt;
+            srcz[1] = allsrc + ns*par.nt;
+        }
+        else
+        {
+            rcvx[1] = allrcv + 2*nr*par.nt;
+            rcvz[0] = allrcv + 2*nr*par.nt;
+            rcvz[1] = allrcv + nr*par.nt;
+        }
+    }
+
+    // prev = 1/(2 * rho) * dt2 * src
+    inj->inject(false, srcx, prev[0], nx, nz, par.nt, inj->_ntr, 0, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+    inj->inject(false, srcz, prev[1], nx, nz, par.nt, inj->_ntr, 0, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+    for (int i=0; i<nx*nz; i++)
+    {
+        prev[0][i]  *= 0.5 * par.dt*par.dt/ mod[2][i];
+        prev[1][i]  *= 0.5 * par.dt*par.dt/ mod[2][i];
+    }    
+
+    int pct10 = round(par.nt/10);
+
+    for (int it=0; it<par.nt-1; it++)
+    {
+        // set the proper time dependent model snapshot
+        int itm = std::min((int)(floor(it*par.dt/dtm)), ntm);
+        mod[0] = model+itm*3*nx*nz;
+        mod[1] = model+itm*3*nx*nz+nx*nz;
+        mod[2] = model+itm*3*nx*nz+2*nx*nz;
+
+        // copy the current wfld to the full wfld vector
+        if ((par.sub>0) && (it%par.sub==0) && (grad==nullptr)) memcpy(u_full[it/par.sub], curr, 2*nx*nz*sizeof(data_t));
+
+        // extract receivers
+        if (grad == nullptr)
+        {
+            ext->extract(true, curr[0], rcvx, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+            ext->extract(true, curr[1], rcvz, nx, nz, par.nt, ext->_ntr, it, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+        }
+
+        // compute FWI gradients except for first and last time samples
+        if ((grad != nullptr) && ((par.nt-1-it)%par.sub==0) && it!=0) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, (par.nt-1-it)/par.sub, dx, dz, par.sub*par.dt);
+
+        // apply spatial SBP operators
+        if (par.version==1)
+        {
+            Dxx_var<expr4a>(false, curr[0], next[0], nx, nz, dx, 0, nx, 0, nz, mod, 1.0);
+            Dzz_var<expr4a>(false, curr[1], next[1], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
+        }
+        else
+        {
+            Dxx_var<expr4b>(false, curr[0], next[0], nx, nz, dx, 0, nx, 0, nz, mod, 1.0);
+            Dzz_var<expr4b>(false, curr[1], next[1], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
+        }
+        
+        Dxx_var<expr2>(true, curr[1], next[1], nx, nz, dx, 0, nx, 0, nz, mod, 1.0);
+        Dzz_var<expr2>(true, curr[0], next[0], nx, nz, dz, 0, nx, 0, nz, mod, 1.0);
+        
+        Dx(false, curr[0], u_x[0], nx, nz, dx, 0, nx, 0, nz);
+        Dz(false, curr[1], u_z[1], nx, nz, dz, 0, nx, 0, nz);
+        
+        if (par.version==2)
+        {
+            #pragma omp parallel for
+            for (int i=0; i<nx*nz; i++)
+            {
+                tmp[i] = u_x[0][i] + u_z[1][i];
+            }
+            mult_Dx(true, tmp, next[0], nx, nz, dx, 0, nx, 0, nz, mod[0], 1.0);
+            mult_Dz(true, tmp, next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
+        }
+        else
+        {
+            mult_Dx(true, u_z[1], next[0], nx, nz, dx, 0, nx, 0, nz, mod[0], 1.0);
+            mult_Dz(true, u_x[0], next[1], nx, nz, dz, 0, nx, 0, nz, mod[0], 1.0);
+        }
+
+        Dx(false, curr[1], u_x[1], nx, nz, dx, 0, nx, 0, nz);
+        Dz(false, curr[0], u_z[0], nx, nz, dz, 0, nx, 0, nz);
+        
+        mult_Dx(true, u_z[0], next[1], nx, nz, dx, 0, nx, 0, nz, mod[1], 1.0);
+        mult_Dz(true, u_x[1], next[0], nx, nz, dz, 0, nx, 0, nz, mod[1], 1.0);
+
+        // inject sources
+        inj->inject(true, srcx, next[0], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+        inj->inject(true, srcz, next[1], nx, nz, par.nt, inj->_ntr, it, 0, inj->_ntr, inj->_xind.data(), inj->_zind.data(), inj->_xw.data(), inj->_zw.data());
+
+        // apply boundary conditions
+        if (par.bc_top==1)
+        {
+            const data_t * in[2] = {curr[1],curr[0]};
+            esat_neumann_top<expr2,expr2>(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            in[0] = curr[0]; in[1] = curr[1];
+            if (par.version==1) esat_neumann_top<expr1,expr4a>(true, in, next[1], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            else
+            {
+                esat_neumann_top<expr1,expr4b>(true, in, next[1], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+                esat_Dz_top<expr1>(true, curr[1], next[1], nx, nz, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+        }
+        else if (par.bc_top==2)
+        {
+            const data_t * in[3] = {curr[1],curr[0],prev[0]};
+            esat_absorbing_top<expr2,expr2,expr5>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            in[0] = curr[0]; in[1] = curr[1]; in[2] = prev[1];
+            if (par.version==1) esat_absorbing_top<expr1,expr4a,expr6>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            else
+            {
+                esat_absorbing_top<expr1,expr4b,expr6>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+                esat_Dz_top<expr1>(true, curr[1], next[1], nx, nz, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+        }
+        if (par.bc_bottom==1)
+        {
+            const data_t * in[2] = {curr[1],curr[0]};
+            esat_neumann_bottom<expr2,expr2>(true, in, next[0], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            in[0] = curr[0]; in[1] = curr[1];
+            if (par.version==1) esat_neumann_bottom<expr1,expr4a>(true, in, next[1], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            else
+            {
+                esat_neumann_bottom<expr1,expr4b>(true, in, next[1], nx, nz, dx, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+                esat_Dz_bottom<expr1>(true, curr[1], next[1], nx, nz, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+        }
+        else if (par.bc_bottom==2)
+        {
+            const data_t * in[3] = {curr[1],curr[0],prev[0]};
+            esat_absorbing_bottom<expr2,expr2,expr5>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            in[0] = curr[0]; in[1] = curr[1]; in[2] = prev[1];
+            if (par.version==1) esat_absorbing_bottom<expr1,expr4a,expr6>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            else
+            {
+                esat_absorbing_bottom<expr1,expr4b,expr6>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+                esat_Dz_bottom<expr1>(true, curr[1], next[1], nx, nz, dz, par.pml_L*l, nx-par.pml_R*l, mod, 1.0);
+            }
+        }
+        if (par.bc_left==1)
+        {
+            const data_t * in[2] = {curr[1],curr[0]};
+            if (par.version==1) esat_neumann_left<expr1,expr4a>(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            else
+            {
+                esat_neumann_left<expr1,expr4b>(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+                esat_Dx_left<expr1>(true, curr[0], next[0], nx, nz, dx, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            in[0] = curr[0]; in[1] = curr[1];
+            esat_neumann_left<expr2,expr2>(true, in, next[1], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+        else if (par.bc_left==2)
+        {
+            const data_t * in[3] = {curr[1],curr[0],prev[0]};
+            if (par.version==1) esat_absorbing_left<expr1,expr4a,expr6>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            else
+            {
+                esat_absorbing_left<expr1,expr4b,expr6>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+                esat_Dx_left<expr1>(true, curr[0], next[0], nx, nz, dx, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            in[0] = curr[0]; in[1] = curr[1]; in[2] = prev[1];
+            esat_absorbing_left<expr2,expr2,expr5>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+        if (par.bc_right==1)
+        {
+            const data_t * in[2] = {curr[1],curr[0]};
+            if (par.version==1) esat_neumann_right<expr1,expr4a>(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            else
+            {
+                esat_neumann_right<expr1,expr4b>(true, in, next[0], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+                esat_Dx_right<expr1>(true, curr[0], next[0], nx, nz, dx, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            in[0] = curr[0]; in[1] = curr[1];
+            esat_neumann_right<expr2,expr2>(true, in, next[1], nx, nz, dx, dz, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+        else if (par.bc_right==2)
+        {
+            const data_t * in[3] = {curr[1],curr[0],prev[0]};
+            if (par.version==1) esat_absorbing_right<expr1,expr4a,expr6>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            else
+            {
+                esat_absorbing_right<expr1,expr4b,expr6>(true, in, next[0], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+                esat_Dx_right<expr1>(true, curr[0], next[0], nx, nz, dx, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+            }
+            in[0] = curr[0]; in[1] = curr[1]; in[2] = prev[1];
+            esat_absorbing_right<expr2,expr2,expr5>(true, in, next[1], nx, nz, dx, dz, par.dt, par.pml_T*l, nz-par.pml_B*l, mod, 1.0);
+        }
+
+        // update wfld with the 2 steps time recursion
+        #pragma omp parallel for
+        for (int i=0; i<nx*nz; i++)
+        {
+            next[0][i] = par.dt*par.dt*next[0][i]/mod[2][i] + 2*curr[0][i] - prev[0][i];
+            next[1][i] = par.dt*par.dt*next[1][i]/mod[2][i] + 2*curr[1][i] - prev[1][i];
+        }
+
+        // scale boundaries when relevant (for locally absorbing BC only)
+        data_t * in[2] = {next[0],next[1]};
+        esat_scale_boundaries(in, nx, nz, dx, dz, 0, nx, 0, nz, mod, par.dt, par.bc_top==2, par.bc_bottom==2, par.bc_left==2, par.bc_right==2);
+        
+        // apply PML or taper when relevant
+        if (par.pml==true)
+        {
+            if (par.pml_T) pml_top(curr[0], next[0], dux, duz, top_ac, top_an, top_s2, model, gz, gzprime, nx, nz, l, par.pml_L*l, nx-par.pml_R*l, dx, dz, par.dt,par.version);
+            if (par.pml_B) pml_bottom(curr[0], next[0], dux, duz, bottom_ac, bottom_an, bottom_s2, model, gz, gzprime, nx, nz, l, par.pml_L*l, nx-par.pml_R*l, dx, dz, par.dt,par.version);
+            if (par.pml_L) pml_left(curr[0], next[0], dux, duz, left_ac, left_an, left_s2, left_t2c, left_t2n, left_t3c, left_t3n, left_s5, left_s6, true, true, model, gx, gxprime, nx, nz, l, 0, nz, dx, dz, par.dt,par.version);
+            if (par.pml_R) pml_right(curr[0], next[0], dux, duz, right_ac, right_an, right_s2, right_t2c, right_t2n, right_t3c, right_t3n, right_s5, right_s6, true, true, model, gx, gxprime, nx, nz, l, 0, nz, dx, dz, par.dt,par.version);
+        }
+        else
+        {
+            taperz(curr[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+            taperz(curr[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+            taperx(curr[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+            taperx(curr[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+            taperz(curr[1], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+            taperz(curr[1], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+            taperx(curr[1], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+            taperx(curr[1], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+            taperz(next[0], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+            taperz(next[0], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+            taperx(next[0], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+            taperx(next[0], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+            taperz(next[1], nx, nz, 0, nx, par.taper_top, 0, par.taper_strength);
+            taperz(next[1], nx, nz, 0, nx, nz-par.taper_bottom, nz, par.taper_strength);
+            taperx(next[1], nx, nz, 0, nz, par.taper_left, 0, par.taper_strength);
+            taperx(next[1], nx, nz, 0, nz, nx-par.taper_right, nx, par.taper_strength);
+        }
+
+        bucket=prev;
+        prev=curr;
+        curr=next;
+        next=bucket;
+
+        if ((it+1) % pct10 == 0 && par.verbose>2) fprintf(stderr,"Propagation progress = %d\%\n",100*(it+1)/(par.nt-1));
+        else if (it == par.nt-2 && par.verbose>2) fprintf(stderr,"Propagation progress = 100\%\n");
+    }
+
+    // copy the last wfld to the full wfld vector
+    if ((par.sub>0) && ((par.nt-1)%par.sub==0) && (grad==nullptr)) memcpy(u_full[(par.nt-1)/par.sub], curr, 2*nx*nz*sizeof(data_t));
+
+    // extract receivers last sample
+    if (grad == nullptr)
+    {
+        ext->extract(true, curr[0], rcvx, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+        ext->extract(true, curr[1], rcvz, nx, nz, par.nt, ext->_ntr, par.nt-1, 0, ext->_ntr, ext->_xind.data(), ext->_zind.data(), ext->_xw.data(), ext->_zw.data());
+    }
+
+    // last sample gradient
+    if ( grad != nullptr ) compute_gradients(model, full_wfld, curr[0], u_x[0], u_z[0], tmp, grad, par, nx, nz, 0, dx, dz, par.sub*par.dt);
+    
+    delete [] u;
+    delete [] dux;
+    delete [] duz;
+    if (grad != nullptr || par.version==2) delete [] tmp;
+    if (par.pml==true)
+    {
+        pml_deallocate(top_ac, top_an, top_s2, bottom_ac, bottom_an, bottom_s2,
+        left_ac, left_an, left_s2, left_t2c, left_t2n, left_t3c, left_t3n, left_s5, left_s6,
+        right_ac, right_an, right_s2, right_t2c, right_t2n, right_t3c, right_t3n, right_s5, right_s6,
+        par.pml_T, par.pml_B, par.pml_L, par.pml_R, nx, nz, l);
+
+        delete [] gx;
+        delete [] gz;
+        delete [] gxprime;
+        delete [] gzprime;
+    }
+}
+
+void nl_we_op_e_td::apply_forward(bool add, const data_t * pmod, data_t * pdat)
+{
+//    if (_par.verbose>1) fprintf(stderr,"Start forward propagation\n");
+
+    std::shared_ptr<vecReg<data_t> > model = std::make_shared<vecReg<data_t> >(_domain);
+    memcpy(model->getVals(), pmod, _domain.getN123()*sizeof(data_t));
+    analyzeModel(*_allsrc->getHyper(),model,_par);
+    convert_model(model->getVals(), model->getN123()/_par.nmodels, true);
+    const data_t * pm = model->getCVals();
+
+    int nx = _domain.getAxis(2).n;
+    int nz = _domain.getAxis(1).n;
+    data_t dx = _domain.getAxis(2).d;
+    data_t dz = _domain.getAxis(1).d;
+    data_t ox = _domain.getAxis(2).o;
+    data_t oz = _domain.getAxis(1).o;
+    hypercube<data_t> domain = *_allsrc->getHyper();
+
+    if (_par.sub>0){
+        if (_par.nmodels>=3) _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2),axis<data_t>(2,0,1), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
+        else _full_wfld=std::make_shared<vecReg<data_t> > (hypercube<data_t>(_domain.getAxis(1),_domain.getAxis(2), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub), axis<data_t>(_par.ns,0,1)));
+        if (_par.acoustic_elastic && _par.acoustic_wavefield) {
+            _full_wflda=std::make_shared<vecReg<data_t> > (hypercube<data_t>(axis<data_t>(_par.nza,0,dz),_domain.getAxis(2), axis<data_t>(1+_par.nt/_par.sub,0,_par.dt*_par.sub)));
+        }
+    }
+
+    // setting up and apply the time resampling operator
+    resampler * resamp;
+
+    axis<data_t> T = domain.getAxis(1);
+    axis<data_t> Xs = domain.getAxis(2);
+    axis<data_t> Xr0 = _range.getAxis(2);
+    axis<data_t> Cr0 = _range.getAxis(3);
+    axis<data_t> Xr(2*Xr0.n,0,1);
+    int ncomp=2;
+    if (_par.nmodels==2) {Xr.n = Xr0.n; ncomp=1;}
+    if (_par.acoustic_elastic) {Xr.n = 3*Xr0.n; ncomp=3;}
+    Xs.n = domain.getN123()/T.n;
+    data_t alpha = _par.dt/T.d; // ratio between sampling rates
+    T.n = _par.nt;
+    T.d = _par.dt;
+    hypercube<data_t> hyper_s(T,Xs);
+    hypercube<data_t> hyper_r(T,Xr);
+    hypercube<data_t> hyper_r0(T,Xr0,Cr0);
+    std::shared_ptr<vecReg<data_t> > allsrc = std::make_shared<vecReg<data_t> >(hyper_s);
+    std::shared_ptr<vecReg<data_t> > allrcv = std::make_shared<vecReg<data_t> >(hyper_r);
+    allsrc->zero();
+    allrcv->zero();
+
+    if (_par.resampling == "linear") resamp = new linear_resampler(domain, hyper_s);
+    else resamp = new sinc_resampler(domain, hyper_s, _par.sinc_half_length);
+
+    // resample in time (interpolation)
+    //fprintf(stderr,"Resample in time all source traces\n");
+    resamp->apply_forward(false,_allsrc->getCVals(),allsrc->getVals());
+
+    int size=1, rank=0, rank0=0;
+#ifdef ENABLE_MPI
+    if (!_par.skip_mpi){
+        MPI_Comm_size(MPI_COMM_WORLD,&size);
+        MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+    }
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank0);
+#endif
+
+    // loop over shots
+    for (int s=rank; s<_par.ns; s += size)
+    {
+        if (_par.verbose>1) fprintf(stderr,"Start propagating shot %d by process %d\n",s,rank0);
+
+        // cumulative number of receivers
+        int nr=0;
+        if (s>0) {for (int i=0; i<s; i++) nr += _par.rxz[i].size();}
+
+        // setting up the injection and extraction operators
+        injector * inj;
+        if (_par.mt==true) inj = new ddelta_m3(_domain,{_par.sxz[s]});
+        else inj = new delta_m3(_domain,{_par.sxz[s]});
+
+        injector * ext;
+        if (_par.gl<=0) ext = new delta_m3(_domain,_par.rxz[s]);
+        else ext = new dipole_m3(_domain,_par.rxz[s],_par.gl);
+
+        // perform the wave propagation
+        data_t * full = nullptr;
+        if (_par.sub>0) {
+            if (_par.nmodels>=3) full = _full_wfld->getVals() + s*nx*nz*2*(1+_par.nt/_par.sub);
+            else full = _full_wfld->getVals() + s*nx*nz*(1+_par.nt/_par.sub);
+        }
+
+#ifdef CUDA
+        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, _ntm, dx, dz, _dtm, ox, oz, s);
+#else
+        propagate(false, pm, allsrc->getCVals()+s*_par.nt, allrcv->getVals()+nr*_par.nt, inj, ext, full, nullptr, _par, nx, nz, _ntm, dx, dz, _dtm, ox, oz, s);
+#endif
+
+        if (_par.verbose>1) fprintf(stderr,"Finish propagating shot %d by process %d\n",s, rank0);
+
+        delete inj;
+        delete ext;
+    }
+
+#ifdef ENABLE_MPI
+    if (!_par.skip_mpi && size>1){
+        data_t * temp;
+        if (rank==0) temp = new data_t[allrcv->getN123()];
+        if (sizeof(data_t)==8) MPI_Reduce(allrcv->getCVals(), temp, allrcv->getN123(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+        else MPI_Reduce(allrcv->getCVals(), temp, allrcv->getN123(), MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+        if (rank==0) {
+            memcpy(allrcv->getVals(), temp, allrcv->getN123()*sizeof(data_t));
+            delete [] temp;
+        }
+
+        if (_par.sub>0){
+            data_t * temp;
+            if (rank==0) temp = new data_t[_full_wfld->getN123()];
+            if (sizeof(data_t)==8) MPI_Reduce(_full_wfld->getCVals(), temp, _full_wfld->getN123(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+            else MPI_Reduce(_full_wfld->getCVals(), temp, _full_wfld->getN123(), MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+            if (rank==0) {
+                memcpy(_full_wfld->getVals(), temp, _full_wfld->getN123()*sizeof(data_t));
+                delete [] temp;
+            }
+        }
+    }
+#endif              
+
+    // convert to DAS (strain) data when relevant
+    if (_par.gl>0) 
+    {
+        //fprintf(stderr,"Convert 2-components dipole data to strain\n");
+        if (!_par.acoustic_elastic) dipole_to_strain(false, allrcv->getVals(), _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
+        else dipole_to_strain(false, allrcv->getVals()+T.n*Xr0.n, _par.rdip.data(), Xr0.n, T.n, 0, Xr0.n, _par.gl);
+    }
+
+    // convert to particle velocity or strain rate or pressure when relevant: forward  mode
+    if (_par.seismotype==1)
+    {
+        std::shared_ptr<vecReg<data_t> > allrcv_dt = std::make_shared<vecReg<data_t> >(hyper_r);
+        allrcv_dt->zero();
+        Dt(false, false, allrcv->getCVals(), allrcv_dt->getVals(), Xr.n, T.n, T.d, 0, Xr.n);
+        allrcv = allrcv_dt;
+        if (_par.acoustic_elastic) allrcv->scale(-1,0,Xr0.n*T.n);
+    }
+
+    // resample in time (decimation)
+    //fprintf(stderr,"Resample in time all receiver traces\n");
+    allrcv->scale(alpha);
+    resamp->setDomainRange(_range, hyper_r0);
+    resamp->apply_adjoint(add, pdat, allrcv->getCVals());
+        
+    delete resamp;
+}
+
 void l_we_op_e::apply_forward(bool add, const data_t * pmod, data_t * pdat)
 {
     if (_par.verbose>1) fprintf(stderr,"Start forward propagation\n");

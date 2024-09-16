@@ -74,6 +74,9 @@ endif()
 add_executable(WE_MODELING.x ${MAIN_DIR}/we_modeling.cpp)
 target_link_libraries(WE_MODELING.x fwi2d sep)
 
+add_executable(WE_MODELING_TD.x ${MAIN_DIR}/we_modeling_td.cpp)
+target_link_libraries(WE_MODELING_TD.x fwi2d sep)
+
 add_executable(BORN.x ${MAIN_DIR}/born.cpp)
 target_link_libraries(BORN.x fwi2d sep)
 
@@ -136,6 +139,7 @@ install(FILES ${PYTHON}
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
         DESTINATION bin)
 install(TARGETS WE_MODELING.x
+                WE_MODELING_TD.x
                 BORN.x
                 LSRTM.x
                 FWI2D.x

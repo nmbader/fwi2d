@@ -85,6 +85,45 @@ public:
     virtual void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat);
 };
 
+// non-linear isotropic elastic wave equation operator: taking a time-dependent elastic model and computing data
+class nl_we_op_e_td : virtual public nl_we_op {
+protected:
+    int _ntm; // ntm is the number of time snapshots of the model
+    int _dtm;
+public:
+    nl_we_op_e_td(){}
+    virtual ~nl_we_op_e_td(){}
+    nl_we_op_e_td(const hypercube<data_t> &domain, const std::shared_ptr<vecReg<data_t> > allsrc, param &par, int ntm, data_t dtm){
+        _allsrc = allsrc;
+        _domain = domain;
+        _par = par;
+        _ntm = ntm;
+        _dtm = dtm;
+        axis<data_t> X(par.nr,0,1);
+        axis<data_t> C(2,0,1);
+        if (par.gl>0) C.n = 1;
+        _range = hypercube<data_t>(allsrc->getHyper()->getAxis(1),X,C);
+    }
+    nl_we_op_e_td * clone() const {
+        param par = _par;
+        nl_we_op_e_td * op = new nl_we_op_e_td(_domain,_allsrc,par,_ntm,_dtm);
+        return op;
+    }
+    
+    // convert Vp, Vs, rho to lambda, mu, rho and vice versa
+    // mu = rho.vs2
+    // lambda = rho.(vp2 - 2.vs2)
+    void convert_model(data_t * m, int n, bool forward) const;
+    void compute_gradients(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) const {}
+    void propagate(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, int ntm, data_t dx, data_t dz, data_t dtm, data_t ox, data_t oz, int s) const;
+
+    // void compute_gradients_gpu(const data_t * model, const data_t * u_full, const data_t * curr, const data_t * u_x, const data_t * u_z, data_t * tmp, data_t * grad, const param &par, int nx, int nz, int it, data_t dx, data_t dz, data_t dt) {}
+    // virtual void propagate_gpu(bool adj, const data_t * model, const data_t * allsrc, data_t * allrcv, const injector * inj, const injector * ext, data_t * full_wfld, data_t * grad, const param &par, int nx, int nz, int ntm, data_t dx, data_t dz, data_t dtm, data_t ox, data_t oz, int s) const;
+
+    void apply_forward(bool add, const data_t * pmod, data_t * pdat);
+    void apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, const data_t * pdat){}
+};
+
 // linear isotropic elastic wave equation operator: taking a source function and computing data
 class l_we_op_e : virtual public loper, virtual public nl_we_op_e {
     
@@ -396,7 +435,7 @@ public:
 
 
 
-// Acooustic (constant density) Born operator, taking reflectivity (slowness squared) and generating data
+// Acoustic (constant density) Born operator, taking reflectivity (slowness squared) and generating data
 class born_op_a : virtual public loper {
 public:
     param _par;
