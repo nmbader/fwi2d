@@ -1371,7 +1371,7 @@ void nl_we_op_e_td::propagate(bool adj, const data_t * model, const data_t * all
     for (int it=0; it<par.nt-1; it++)
     {
         // set the proper time dependent model snapshot
-        int itm = std::min((int)(floor(it*par.dt/dtm)), ntm);
+        int itm = std::min((int)(floor(it*par.dt/dtm)), ntm-1);
         if (itm != itm0) {
             if (par.verbose > 2) fprintf(stderr,"Switch to model %d\n", itm);
             itm0 = itm;
