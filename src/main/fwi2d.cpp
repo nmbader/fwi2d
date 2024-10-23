@@ -344,6 +344,8 @@ if (par.bsplines)
     lsearch * ls;
     if (par.lsearch=="weak_wolfe") ls = new weak_wolfe(par.ls_c1, par.ls_a0, par.ls_a1, par.ls_version);
     else if(par.lsearch=="strong_wolfe") ls = new strong_wolfe(par.ls_c1, par.ls_c2, par.ls_a0, par.ls_a1, par.ls_max_step, par.ls_version);
+    else if(par.lsearch=="static") ls = new static_ls(par.ls_a0, par.ls_a1, par.ls_a2);
+    else if(par.lsearch=="quadratic") ls = new quadratic_ls(par.ls_a0, par.ls_a1, par.ls_version);
     else ls = new regular_wolfe(par.ls_c1, par.ls_c2, par.ls_a0, par.ls_a1, par.ls_max_step, par.ls_version);
 
     nlsolver * solver;

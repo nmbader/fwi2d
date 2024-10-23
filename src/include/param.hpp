@@ -69,7 +69,7 @@ struct param{
     int dpower=2; data_t dwidthx=0, dwidthz=0, dfloor=0, xextension=-1, zextension=-1; // damping width, power and extension
 
     // advanced line search parameters (check nlsolver.hpp)
-    data_t ls_a0=1, ls_a1=0, ls_c1=1e-4, ls_c2=0.9, ls_max_step=1e6;
+    data_t ls_a0=1, ls_a1=0, ls_a2=0, ls_c1=1e-4, ls_c2=0.9, ls_max_step=1e6;
     bool ls_version=0;
 
     // miscallenous

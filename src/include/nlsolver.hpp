@@ -25,6 +25,93 @@ public:
                         bool verbose) = 0;
 };
 
+// Static line search with constant or scaled step size at every iteration
+class static_ls : public lsearch{
+protected:
+    data_t _a0; // multiplier of the step length (yields step=a0/|g|)
+    data_t _a1; // desired fraction of model update (yields step=a1*|m|/|g|), may overwrite a0 if a1>0 and |m|>0
+    data_t _a2; // multiplier of the initial step length to be used in subsequent iterations (yields step=a2*step0), may overwite a1 if a2>0
+    data_t _stp0; // first step length
+
+public:
+    static_ls(data_t a0=1, data_t a1=0, data_t a2=0){
+        _a0 = a0;
+        _a1 = a1;
+        _a2 = a2;
+        _stp0=0;
+        _flag_g=true;
+    }
+    ~static_ls(){}
+
+    static_ls * clone() const{
+        static_ls * ls = new static_ls(_a0,_a1,_a2);
+        return ls;
+    }
+
+    void reset(){
+        _stp0=0;
+    }
+
+    bool lineSearch(optimization * prob,
+                        std::shared_ptr<vecReg<data_t> >m0,
+                        std::shared_ptr<vecReg<data_t> >p,
+                        int iter,
+                        int max_trial,
+                        int &feval,
+                        int &geval,
+                        data_t &gnorm,
+                        bool verbose);
+};
+
+// Quadratic line search
+class quadratic_ls : public lsearch{
+protected:
+    data_t _a0; // multiplier of the initial step length @ iter=0 (yields step0=a0/|g|)
+    data_t _a1; // desired fraction of model update for the initial step length @ iter=0 (yields step0=a1*|m|/|g|), may overwrite a0 if a1>0 and |m|>0
+    data_t _stp0; // most recent trial step
+    data_t _stp; // most recent step length
+    data_t _f, _df; // function and its derivative (with respect to step length) from current iteration
+    data_t _f0; // most recent trial function evaluations
+    bool _version; // defines the method for initializing the trial step length @ iter>0
+
+public:
+    quadratic_ls(data_t a0=1, data_t a1=0, bool version = 0){
+        _a0 = a0;
+        _a1 = a1;
+        _version = version;
+        _stp0 = 0;
+        _stp = 0;
+        _f=0;
+        _df=0;
+        _f0=0;
+        _flag_g=true;
+    }
+    ~quadratic_ls(){}
+
+    quadratic_ls * clone() const{
+        quadratic_ls * ls = new quadratic_ls(_a0,_a1, _version);
+        return ls;
+    }
+
+    void reset(){
+        _stp0 = 0;
+        _stp = 0;
+        _f=0;
+        _df=0;
+        _f0=0;
+    }
+
+    bool lineSearch(optimization * prob,
+                        std::shared_ptr<vecReg<data_t> >m0,
+                        std::shared_ptr<vecReg<data_t> >p,
+                        int iter,
+                        int max_trial,
+                        int &feval,
+                        int &geval,
+                        data_t &gnorm,
+                        bool verbose);
+};
+
 // Line search using quadratic/cubic interpolation and satisfying the sufficient descrease condition (Armijo condition)
 class weak_wolfe : public lsearch{
 protected:

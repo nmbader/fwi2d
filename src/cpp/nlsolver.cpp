@@ -34,6 +34,195 @@ data_t cubic(data_t f, data_t df, data_t stp0, data_t f0, data_t stp1, data_t f1
     return ans;
 }
 
+bool static_ls::lineSearch(optimization * prob,
+                        std::shared_ptr<vecReg<data_t> >m0,
+                        std::shared_ptr<vecReg<data_t> >p,
+                        int iter,
+                        int max_trial,
+                        int &feval,
+                        int &geval,
+                        data_t &gnorm,
+                        bool verbose){
+
+    std::shared_ptr<vecReg<data_t> > m = prob->getMod();
+    std::shared_ptr<vecReg<data_t> > g = prob->getGrad();
+    int n = m->getN123();
+    data_t * pm = m->getVals();
+    data_t * pm0 = m0->getVals();
+    data_t * pp = p->getVals();
+    data_t alpha=0,df0=0,f=0;
+
+    // first iteration
+    if (iter == 0) {
+        _stp0 = _a0/gnorm;
+        if (_a1>0) _stp0 = std::max(_stp0,_a1*m->norm()/gnorm);
+        alpha=_stp0;
+        iter++;
+    }
+    // subsequent iterations
+    else {
+        alpha = _a0/gnorm;
+        if (_a2>0) alpha = _a2 * _stp0;
+        else if (_a1>0) alpha = std::max(alpha,_a1*m->norm()/gnorm);
+        iter++;
+    }
+
+    // update the model
+    #pragma omp parallel for
+    for (int i=0; i<n; i++) pm[i] = pm0[i] + alpha*pp[i];
+
+    //update residuals
+    prob->res();
+
+    //compute objective function
+    feval++;
+    f = prob->getFunc();
+
+    if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+    if (verbose){
+        fprintf(stderr,"==============================\n");
+        fprintf(stderr,"Iteration = %d\n",iter);
+        fprintf(stderr,"Step length = %.10f\n",alpha);
+        fprintf(stderr,"Function value = %.10f\n",f);
+        fprintf(stderr,"Last gradient norm = %f\n",gnorm);
+    }
+
+    if (f<=ZERO){
+        if (verbose){
+            fprintf(stderr,"==============================\n");
+            fprintf(stderr,"Function value became too small\n");
+            fprintf(stderr,"==============================\n");
+        }
+        return false;
+    }
+    return true;
+}
+
+bool quadratic_ls::lineSearch(optimization * prob,
+                        std::shared_ptr<vecReg<data_t> >m0,
+                        std::shared_ptr<vecReg<data_t> >p,
+                        int iter,
+                        int max_trial,
+                        int &feval,
+                        int &geval,
+                        data_t &gnorm,
+                        bool verbose){
+
+    std::shared_ptr<vecReg<data_t> > m = prob->getMod();
+    std::shared_ptr<vecReg<data_t> > g = prob->getGrad();
+    int n = m->getN123();
+    data_t * pm = m->getVals();
+    data_t * pm0 = m0->getVals();
+    data_t * pp = p->getVals();
+    data_t alpha=0,df0=0,f=0;
+
+    int trial=0;
+    while (true) {
+        // first trial
+        if (trial == 0){
+            df0 = _df;
+            _f = prob->getFunc();
+            _df = g->dot(p);
+            f=_f;
+
+            // first iteration
+            if (iter == 0) {
+                _stp0 = _a0/gnorm;
+                if (_a1>0) _stp0 = std::max(_stp0,_a1*m->norm()/gnorm);
+                trial++;
+                alpha=_stp0;
+                continue;
+            }
+
+            // subsequent iterations
+            else {
+                _stp0 = _stp*df0/_df;
+                if (_version==1){
+                    _stp0 = 2*(_f - _f0)/_df;
+                    _stp0 = std::min(1.0,1.00001*_stp0);
+                }
+                trial++;
+                alpha=_stp0;
+                continue;
+            }
+        }
+        
+        // second trial
+        else if (trial==1){
+            // update the model
+            #pragma omp parallel for
+            for (int i=0; i<n; i++) pm[i] = pm0[i] + alpha*pp[i];
+
+            //update residuals
+            prob->res();
+
+            //compute objective function
+            feval++;
+            f = prob->getFunc();
+            _f0=f;
+
+            if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+            if (verbose){
+                fprintf(stderr,"==============================\n");
+                fprintf(stderr,"Trial = %d\n",trial);
+                fprintf(stderr,"Step length = %.10f\n",alpha);
+                fprintf(stderr,"Function value = %.10f\n",f);
+                fprintf(stderr,"Last gradient norm = %f\n",gnorm);
+            }
+
+            if (f<=ZERO){
+                if (verbose){
+                    fprintf(stderr,"==============================\n");
+                    fprintf(stderr,"Function value became too small\n");
+                    fprintf(stderr,"==============================\n");
+                }
+                return false;
+            }
+            else{
+                alpha = quadratic(_f,_df,_stp0,_f0);
+                trial++;
+                continue;
+            }
+        }
+
+        // take the quadratic step and update the model
+        else {
+            // update the model
+            #pragma omp parallel for
+            for (int i=0; i<n; i++) pm[i] = pm0[i] + alpha*pp[i];
+
+            //update residuals
+            prob->res();
+
+            //compute objective function
+            feval++;
+            f = prob->getFunc();
+
+            if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
+            if (verbose){
+                fprintf(stderr,"==============================\n");
+                fprintf(stderr,"Trial = %d\n",trial);
+                fprintf(stderr,"Step length = %.10f\n",alpha);
+                fprintf(stderr,"Function value = %.10f\n",f);
+                fprintf(stderr,"Last gradient norm = %f\n",gnorm);
+            }
+
+            _f0 = _f;
+            _f=f;
+            _stp=alpha;
+            if (f<=ZERO){
+                if (verbose){
+                    fprintf(stderr,"==============================\n");
+                    fprintf(stderr,"Function value became too small\n");
+                    fprintf(stderr,"==============================\n");
+                }
+                return false;
+            }
+            else return true;
+        }
+    }
+}
+
 bool weak_wolfe::lineSearch(optimization * prob,
                         std::shared_ptr<vecReg<data_t> >m0,
                         std::shared_ptr<vecReg<data_t> >p,

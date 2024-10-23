@@ -134,6 +134,7 @@ void readParam(int argc, char **argv, param &par){
     readParam<data_t>(argc, argv, "zextension", par.zextension);
     readParam<data_t>(argc, argv, "ls_a0", par.ls_a0);
     readParam<data_t>(argc, argv, "ls_a1", par.ls_a1);
+    readParam<data_t>(argc, argv, "ls_a2", par.ls_a2);
     readParam<data_t>(argc, argv, "ls_c1", par.ls_c1);
     readParam<data_t>(argc, argv, "ls_c2", par.ls_c2);
     readParam<data_t>(argc, argv, "ls_max_step", par.ls_max_step);
