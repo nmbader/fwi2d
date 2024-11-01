@@ -52,20 +52,12 @@ bool static_ls::lineSearch(optimization * prob,
     data_t * pp = p->getVals();
     data_t alpha=0,df0=0,f=0;
 
-    // first iteration
-    if (iter == 0) {
-        _stp0 = _a0/gnorm;
-        if (_a1>0) _stp0 = std::max(_stp0,_a1*m->norm()/gnorm);
-        alpha=_stp0;
-        iter++;
-    }
-    // subsequent iterations
-    else {
-        alpha = _a0/gnorm;
-        if (_a2>0) alpha = _a2 * _stp0;
-        else if (_a1>0) alpha = std::max(alpha,_a1*m->norm()/gnorm);
-        iter++;
-    }
+    alpha = _a0/gnorm;
+    int trial=0;
+    if (_a2>0) alpha = _a2 / p->absMax();
+    else if (_a1>0) alpha = std::max(alpha,_a1*m->norm()/p->norm());
+    if (iter == 0) _stp0 = alpha;
+    trial++;
 
     // update the model
     #pragma omp parallel for
@@ -81,7 +73,7 @@ bool static_ls::lineSearch(optimization * prob,
     if (f!=f) throw std::runtime_error("==============================\nERROR: the objective function is NaN.\n==============================\n");
     if (verbose){
         fprintf(stderr,"==============================\n");
-        fprintf(stderr,"Iteration = %d\n",iter);
+        fprintf(stderr,"Trial = %d\n",trial);
         fprintf(stderr,"Step length = %.10f\n",alpha);
         fprintf(stderr,"Function value = %.10f\n",f);
         fprintf(stderr,"Last gradient norm = %f\n",gnorm);

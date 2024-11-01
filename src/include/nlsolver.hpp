@@ -29,8 +29,8 @@ public:
 class static_ls : public lsearch{
 protected:
     data_t _a0; // multiplier of the step length (yields step=a0/|g|)
-    data_t _a1; // desired fraction of model update (yields step=a1*|m|/|g|), may overwrite a0 if a1>0 and |m|>0
-    data_t _a2; // multiplier of the initial step length to be used in subsequent iterations (yields step=a2*step0), may overwite a1 if a2>0
+    data_t _a1; // desired fraction of model update (yields step=a1*|m|/|p|), may overwrite a0 if a1>0 and |m|>0
+    data_t _a2; // maximum absolute value of model update (yields step=a2/max|p|), may overwite a0 and a1 if a2>0
     data_t _stp0; // first step length
 
 public:
