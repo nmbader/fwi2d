@@ -1462,10 +1462,10 @@ __global__ void cudaComputeGradientsVTI(const data_t * model, const data_t * u_f
     const data_t *padjx_z = u_z, *padjz_z=u_z+nxz;
     data_t *pforx_x=tmp, *pforz_z=tmp+nxz, *pforz_x=tmp+2*nxz, *pforx_z=tmp+3*nxz;
     data_t *gla = grad, *gmu=grad+nxz, *grho=grad+2*nxz;
-    // data_t *gc13=grad+3*nxz, *geps=grad+4*nxz;
+    data_t *gdel=grad+3*nxz, *geps=grad+4*nxz;
     const data_t *pm0 = model, *pm1=model+nxz, *pm3=model+3*nxz, *pm4=model+4*nxz;
 
-    data_t val1=0, val2=0, val3=0, del=0;
+    data_t val1=0, val2=0, val3=0, val4=0, del=0;
     int i=0;
     if (ix<nx && iz<nz)
     {
@@ -1474,26 +1474,27 @@ __global__ void cudaComputeGradientsVTI(const data_t * model, const data_t * u_f
         val1 = sqrt(2*(pm0[i]+2*pm1[i])*(pm0[i]+pm1[i])*del + (pm0[i]+pm1[i])*(pm0[i]+pm1[i]));
         val2 = ((1+2*del)*pm0[i] + (1+3*del)*pm1[i])/val1; // d(C13)/d(lambda)
         val3 = ((1+3*del)*pm0[i] + (1+4*del)*pm1[i])/val1 - 1; // d(C13)/d(mu)
+        val4 = (pm0[i]+2*pm1[i])*(pm0[i]+pm1[i])/val1; // d(C13)/d(delta)
         if (it>0 && it<nt/sub){
             gla[i] += dt*((1+2*pm4[i])*padjx_x[i]*pforx_x[i] + padjz_z[i]*pforz_z[i] + val2*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // lambda gradient
             gmu[i] += dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*(1+2*pm4[i])*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i] + val3*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // mu gradient
             grho[i] += 1.0/dt*(padjx[i]*(pfor2x[i]-2*pfor1x[i]+pfor0x[i]) + padjz[i]*(pfor2z[i]-2*pfor1z[i]+pfor0z[i])); // rho gradient
-            // gc13[i] = 0;
-            // geps[i] = 0;
+            gdel[i] += dt*val4*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i]); // delta gradient
+            geps[i] += dt*2*(pm0[i]+2*pm1[i])*padjx_x[i]*pforx_x[i]; // epsilon gradient
         }
         else if (it==0) {
             gla[i] += 0.5*dt*((1+2*pm4[i])*padjx_x[i]*pforx_x[i] + padjz_z[i]*pforz_z[i] + val2*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // lambda gradient
             gmu[i] += 0.5*dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*(1+2*pm4[i])*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i] + val3*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // mu gradient
             grho[i] += 1.0/dt*(padjx[i]*(pfor2x[i]-pfor1x[i]) + padjz[i]*(pfor2z[i]-pfor1z[i])); // rho gradient
-            // gc13[i] = 0;
-            // geps[i] = 0;
+            gdel[i] += 0.5*dt*val4*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i]); // delta gradient
+            geps[i] += 0.5*dt*2*(pm0[i]+2*pm1[i])*padjx_x[i]*pforx_x[i]; // epsilon gradient
         }
         else{
             gla[i] += dt*((1+2*pm4[i])*padjx_x[i]*pforx_x[i] + padjz_z[i]*pforz_z[i] + val2*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // lambda gradient
             gmu[i] += dt*((padjx_z[i] + padjz_x[i])*(pforz_x[i] + pforx_z[i]) + 2*(1+2*pm4[i])*padjx_x[i]*pforx_x[i] + 2*padjz_z[i]*pforz_z[i] + val3*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i])); // mu gradient
             grho[i] += 1.0/dt*(padjx[i]*(-pfor1x[i]+pfor0x[i]) + padjz[i]*(-pfor1z[i]+pfor0z[i])); // rho gradient
-            // gc13[i] = 0;
-            // geps[i] = 0;
+            gdel[i] += dt*val4*(padjx_x[i]*pforz_z[i] + padjz_z[i]*pforx_x[i]); // delta gradient
+            geps[i] += dt*2*(pm0[i]+2*pm1[i])*padjx_x[i]*pforx_x[i]; // epsilon gradient
         }
     }
 }

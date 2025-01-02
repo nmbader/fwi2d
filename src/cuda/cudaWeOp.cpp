@@ -471,10 +471,10 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
     if (grad != nullptr) 
     {
         cudaCheckError( cudaMalloc((void**)&dev_tmp, 4*nxz*sizeof(data_t)) );
-        cudaCheckError( cudaMalloc((void**)&dev_grad, 3*nxz*sizeof(data_t)) );
+        cudaCheckError( cudaMalloc((void**)&dev_grad, 5*nxz*sizeof(data_t)) );
         cudaCheckError( cudaMalloc((void**)&dev_u_for, 6*nxz*sizeof(data_t)) );
         cudaCheckError( cudaMemset(dev_tmp, 0, 4*nxz*sizeof(data_t)) );
-        cudaCheckError( cudaMemset(dev_grad, 0, 3*nxz*sizeof(data_t)) );
+        cudaCheckError( cudaMemset(dev_grad, 0, 5*nxz*sizeof(data_t)) );
     }
 
     // copy model to device
@@ -820,7 +820,7 @@ void nl_we_op_vti::propagate_gpu(bool adj, const data_t * model, const data_t * 
         cudaCheckError( cudaMemcpyAsync(dev_u_for + 2*nxz, u_full[0], 4*nxz*sizeof(data_t), cudaMemcpyHostToDevice, streams[0]) );
         compute_gradients_gpu(dev_model, dev_u_for, dev_u_curr, dev_dux, dev_duz, dev_tmp, dev_grad, par, nx, nz, 0, dx, dz, par.sub*par.dt);
         cudaDeviceSynchronize();
-        cudaCheckError( cudaMemcpy(grad, dev_grad, 3*nxz*sizeof(data_t), cudaMemcpyDeviceToHost) );
+        cudaCheckError( cudaMemcpy(grad, dev_grad, 5*nxz*sizeof(data_t), cudaMemcpyDeviceToHost) );
     }
     
     cudaCheckError( cudaFree(dev_u_prev) );

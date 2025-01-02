@@ -1076,7 +1076,8 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     hypercube<data_t> domain = *_allsrc->getHyper();
 
     data_t * temp;
-    int nm=std::min(3,_par.nmodels);
+    // int nm=std::min(3,_par.nmodels);
+    int nm=_par.nmodels;
     if (!add) memset(pmod, 0, nm*nx*nz*sizeof(data_t));
     else { // copy pre-existant gradient to a temporary container
         temp = new data_t[nm*nx*nz];
@@ -1193,10 +1194,18 @@ void nl_we_op_e::apply_jacobianT(bool add, data_t * pmod, const data_t * pmod0, 
     int nxz=nx*nz;
     applyHz(false, false, pmod, pmod, nx, nz, dz, 0, nx, 0, nz);
     applyHz(false, false, pmod+nxz, pmod+nxz, nx, nz, dz, 0, nx, 0, nz);
-    if (nm==3) applyHz(false, false, pmod+2*nxz, pmod+2*nxz, nx, nz, dz, 0, nx, 0, nz);
+    if (nm>=3) applyHz(false, false, pmod+2*nxz, pmod+2*nxz, nx, nz, dz, 0, nx, 0, nz);
+    if (nm>3) {
+        applyHz(false, false, pmod+3*nxz, pmod+3*nxz, nx, nz, dz, 0, nx, 0, nz);
+        applyHz(false, false, pmod+4*nxz, pmod+4*nxz, nx, nz, dz, 0, nx, 0, nz);
+    }
     applyHx(false, false, pmod, pmod, nx, nz, dx, 0, nx, 0, nz);
     applyHx(false, false, pmod+nxz, pmod+nxz, nx, nz, dx, 0, nx, 0, nz);
-    if (nm==3) applyHx(false, false, pmod+2*nxz, pmod+2*nxz, nx, nz, dx, 0, nx, 0, nz);
+    if (nm>=3) applyHx(false, false, pmod+2*nxz, pmod+2*nxz, nx, nz, dx, 0, nx, 0, nz);
+    if (nm>3) {
+        applyHx(false, false, pmod+3*nxz, pmod+3*nxz, nx, nz, dx, 0, nx, 0, nz);
+        applyHx(false, false, pmod+4*nxz, pmod+4*nxz, nx, nz, dx, 0, nx, 0, nz);
+    }
 
     // convert gradients from lambda, mu, rho, (delta, epsilon) to vp, vs, rho, (delta, epsilon)    or   from K-1, rho-1 to vp, rho
     // Grad_vp = 2.rho.vp.Grad_lambda = 2.sqrt(rho(lambda+2mu)).Grad_lambda
