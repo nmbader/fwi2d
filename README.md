@@ -80,6 +80,9 @@ cmake -DCMAKE_INSTALL_PREFIX=../local -DISPC_PATH=path_to_ispc_binary/ispc ../
 make -j12
 make install
 
+# some libraries not found by cmake may need to be linked, e.g.:
+cmake -DCMAKE_INSTALL_PREFIX=../local -DISPC_PATH=path_to_ispc_binary/ispc -DCMAKE_EXE_LINKER_FLAGS="-ltirpc" ../
+
 # clean up the build directory
 rm -rf *
 ```
